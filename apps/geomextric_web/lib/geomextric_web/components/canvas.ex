@@ -159,6 +159,7 @@ defmodule GeomextricWeb.Canvas do
         }
       }
       let skipScroll = false
+      let resumeScroll= null
       function updateViewBox(e, r, cam, scroller) {
       if(r) {
         r.setAttribute("transform", `rotate(${cam.angle} ${cam.x} ${cam.y})`)
@@ -201,12 +202,17 @@ defmodule GeomextricWeb.Canvas do
                    + (boundingY ) * Math.exp(cam.zoom) / 2
                    + ((cam.y-cY) * cos + (cam.x-cX) * sin) *  Math.exp(cam.zoom))
 
+        clearTimeout(resumeScroll);
         skipScroll = true
         scroller.scrollTo({
                  left: newScrollLeft,
                  top: newScrollTop,
                  behavior: "instant",
                });
+
+        resumeScroll = setTimeout(() => {
+          skipScroll = false;
+        }, 10);
         }
       }
       function rotate({ x, y }, { x: px, y: py }, angle) {
@@ -232,7 +238,6 @@ defmodule GeomextricWeb.Canvas do
 
             if(skipScroll) {
 
-            skipScroll = false
             return
           }
 
