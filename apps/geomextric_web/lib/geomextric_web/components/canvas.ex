@@ -11,7 +11,7 @@ defmodule GeomextricWeb.Canvas do
       svg {
         position: absolute;
         inset: 0;
-        background: #ffddff;
+        background: #58b;
         display: block;
         width: 100%;
         height: 100%;
@@ -71,12 +71,67 @@ defmodule GeomextricWeb.Canvas do
             height={@box.height}
             viewBox={"#{@box.x} #{@box.y} #{@box.width} #{@box.height}"}
           >
+            <defs>
+              <pattern
+                id="grid"
+                width="20"
+                height="20"
+                patternTransform="scale(1)"
+                patternUnits="userSpaceOnUse"
+              >
+                <path
+                  vector-effect="non-scaling-stroke"
+                  shape-rendering="geometricPrecision"
+                  d="M 0 0 L 10 0 M 20 0 L 10 0 M 0 0 L 0 10 M 0 20 L 0 10"
+                  stroke-dasharray="2 2"
+                  fill="none"
+                  opacity="0.8"
+                  stroke="#abc8"
+                  stroke-width="1"
+                />
+              </pattern>
+              <pattern
+                id="grid-sec"
+                width="40"
+                height="40"
+                patternTransform="scale(1)"
+                patternUnits="userSpaceOnUse"
+              >
+                <path
+                  vector-effect="non-scaling-stroke"
+                  shape-rendering="geometricPrecision"
+                  d="M 0 0 L 20 0 M 40 0 L 20 0 M 0 0 L 0 20 M 0 40 L 0 20"
+                  fill="none"
+                  stroke-dasharray="2 2"
+                  stroke="#cdea"
+                  stroke-width="2"
+                />
+              </pattern>
+            </defs>
             <rect
               x={@box.x}
               y={@box.y}
               width={@box.width}
               height={@box.height}
-              fill="#fffa"
+              fill="#fff"
+              stroke="#d0d0d0"
+              vector-effect="non-scaling-stroke"
+              stroke-width="2"
+            />
+            <rect
+              x={@box.x}
+              y={@box.y}
+              width={@box.width}
+              height={@box.height}
+              fill="url(#grid)"
+            />
+
+            <rect
+              x={@box.x}
+              y={@box.y}
+              width={@box.width}
+              height={@box.height}
+              fill="url(#grid-sec)"
             />
 
             {render_slot(@inner_block)}
@@ -110,6 +165,13 @@ defmodule GeomextricWeb.Canvas do
           ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
           `)
 
+        r.style.setProperty('--cam-scale', Math.exp( -cam.zoom))
+        r.style.setProperty('--cam-scale-clamped', Math.exp(Math.max(-2,Math.min(2, -cam.zoom))))
+        r.style.setProperty('--cam-scale-max', Math.exp(Math.max(-2, -cam.zoom)))
+        r.style.setProperty('--cam-scale-min', Math.exp(Math.min(2, -cam.zoom)))
+        const logScale = Math.pow(2, Math.round((-cam.zoom)/Math.log(2)) + 2)
+        scroller.querySelectorAll('pattern').forEach(g => g.setAttribute("patternTransform", `scale(${logScale})`))
+
         if(scroller) {
           const cos = Math.cos(cam.angle / 180 * Math.PI)
           const sin = Math.sin(cam.angle / 180 * Math.PI)
@@ -123,8 +185,13 @@ defmodule GeomextricWeb.Canvas do
                const cXr = cX * cos + cY * sin
                const cYr = cY * cos - cX * sin
 
-          scroller.style.setProperty('--scroll-width',  boundingX * Math.exp(cam.zoom) + scroller.clientWidth * 2 + 'px')
-          scroller.style.setProperty('--scroll-height',  boundingY * Math.exp(cam.zoom) + scroller.clientHeight * 2+ 'px')
+               const scrollWidth = boundingX * Math.exp(cam.zoom) + scroller.clientWidth * 2
+               const scrollHeight = boundingY * Math.exp(cam.zoom) + scroller.clientHeight * 2
+               if(!isNaN(scrollWidth) && !isNaN(scrollHeight)) {
+
+                 scroller.style.setProperty('--scroll-width',  scrollWidth + 'px')
+                 scroller.style.setProperty('--scroll-height',  scrollHeight + 'px')
+        }
         scroller.scrollLeft = 0.5 * scroller.clientWidth +
         (boundingX )  * Math.exp(cam.zoom) / 2
         + ((cam.x-cX) * cos - (cam.y-cY) * sin) *  Math.exp(cam.zoom)
@@ -152,37 +219,38 @@ defmodule GeomextricWeb.Canvas do
           }
           this.scroller  = this.el.closest('[data-scrollbars]')
           this.scrollerBody = this.scroller.firstElementChild
-          this.scroller.addEventListener('scroll', (evt) => {
+          const onScroll = (evt) => {
 
-            const angle = cam.angle * Math.PI / 180;
-            const cos = Math.cos(angle);
-            const sin = Math.sin(angle);
-            const cosabs = Math.abs(cos)
-            const sinabs = Math.abs(sin)
-            const boundingX = this.world.width.baseVal.value * cosabs + this.world.height.baseVal.value* sinabs
-            const boundingY = this.world.width.baseVal.value * sinabs + this.world.height.baseVal.value* cosabs
+                      const angle = cam.angle * Math.PI / 180;
+                      const cos = Math.cos(angle);
+                      const sin = Math.sin(angle);
+                      const cosabs = Math.abs(cos)
+                      const sinabs = Math.abs(sin)
+                      const boundingX = this.world.width.baseVal.value * cosabs + this.world.height.baseVal.value* sinabs
+                      const boundingY = this.world.width.baseVal.value * sinabs + this.world.height.baseVal.value* cosabs
 
-            const s = Math.exp(cam.zoom);
+                      const s = Math.exp(cam.zoom);
 
-                      const cX =this.world.width.baseVal.value/2 + this.world.x.baseVal.value
-                      const cY =this.world.height.baseVal.value/2 + this.world.y.baseVal.value
-            const cXr = cX * cos + cY * sin
-              const cYr = cY * cos - cX * sin
+                                const cX =this.world.width.baseVal.value/2 + this.world.x.baseVal.value
+                                const cY =this.world.height.baseVal.value/2 + this.world.y.baseVal.value
+                      const cXr = cX * cos + cY * sin
+                        const cYr = cY * cos - cX * sin
 
-            const dx =
-                this.scroller.scrollLeft -
-                0.5 * this.scroller.clientWidth -
-                boundingX * s / 2
+                      const dx =
+                          this.scroller.scrollLeft -
+                          0.5 * this.scroller.clientWidth -
+                          boundingX * s / 2
 
-            const dy =
-                this.scroller.scrollTop -
-                0.5 * this.scroller.clientHeight -
-                boundingY * s / 2
-          cam.x = (dx * cos + dy * sin) / s + cX;
-            cam.y = (-dx * sin + dy * cos) / s + cY;
-            updateViewBox(this.el, this.world, cam, this.scroller)
+                      const dy =
+                          this.scroller.scrollTop -
+                          0.5 * this.scroller.clientHeight -
+                          boundingY * s / 2
+                    cam.x = (dx * cos + dy * sin) / s + cX;
+                      cam.y = (-dx * sin + dy * cos) / s + cY;
+                      updateViewBox(this.el, this.world, cam, this.scroller)
 
-          })
+                    }
+          this.scroller.addEventListener('scroll', onScroll)
           const evtToSvg = (evt) => {
             point.x = evt.clientX;
             point.y = evt.clientY;
@@ -213,7 +281,9 @@ defmodule GeomextricWeb.Canvas do
             } else if(evt.ctrlKey) {
               evt.preventDefault()
             const oldZoom = Math.exp(cam.zoom)
-              cam.zoom -= evt.deltaY/1000
+              cam.zoom -=  evt.deltaY/1000
+
+              cam.zoom = Math.max(-8, Math.min(8, cam.zoom))
               const newZoom = Math.exp(cam.zoom)
                 const factor = oldZoom / newZoom;
 
@@ -258,13 +328,14 @@ defmodule GeomextricWeb.Canvas do
           this.el.addEventListener('pointerdown', onPointerDown);
           this.el.addEventListener('pointermove', onPointerMove);
           this.el.addEventListener('wheel', onWheel)
-          this.el.addEventListener('dblclick', onDblClick )
+          this.el.addEventListener('click', onDblClick )
 
           this.listeners = {
             pointerdown: onPointerDown,
             pointermove: onPointerMove,
             wheel: onWheel,
-            dblclick: onDblClick,
+            click: onDblClick,
+            scroll: onScroll
           }
 
           updateViewBox(this.el, this.world, cam, this.scroller)
@@ -273,7 +344,9 @@ defmodule GeomextricWeb.Canvas do
           this.el.removeEventListener('pointerdown', this.listeners.pointerdown);
           this.el.removeEventListener('pointermove', this.listeners.pointermove);
           this.el.removeEventListener('wheel', this.listeners.wheel)
-          this.el.removeEventListener('dblclick', this.listeners.dblclick)
+          this.el.removeEventListener('click', this.listeners.dblclick)
+
+          this.scroller.removeEventListener('scroll', this.listeners.scroll)
         },
         updated()  {
           updateViewBox(this.el, this.world, cam, this.scroller)

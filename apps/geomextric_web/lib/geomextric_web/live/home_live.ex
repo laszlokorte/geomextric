@@ -67,9 +67,26 @@ defmodule GeomextricWeb.HomeLive do
       })
 
     ~H"""
+    <style rel="stylesheet" :type={GeomextricWeb.ColocatedCSS}>
+       .origin {
+      scale: var(--cam-scale);
+      transform-box: fill-box;
+      transform-origin: 50% 50%;
+      }
+
+      circle {
+            scale: var(--cam-scale-min);
+            transform-box: fill-box;
+            transform-origin: 50% 50%;
+            }
+            circle:hover {
+            transform: scale(150%);
+            }
+    </style>
     <.canvas box={@box}>
+      <circle class="origin" cx={0} cy={0} r={3} fill="#d0d0d0" vector-effect="non-scaling" />
       <%= for {{x,y}, i} <- @dots |> Enum.with_index() do %>
-        <.circle id={"d-#{i}"} x={x} y={y} r={50.0} fill="magenta" />
+        <.circle id={"d-#{i}"} x={x} y={y} r={10.0} fill="magenta" />
       <% end %>
     </.canvas>
     """

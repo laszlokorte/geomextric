@@ -98,6 +98,7 @@ defmodule GeomextricWeb.Circle do
                                         }
                                       }
           this.el.addEventListener('pointerdown', onPointerDown);
+          this.el.addEventListener('click', evt => evt.stopPropagation());
           this.el.addEventListener('pointermove', onPointerMove);
           this.el.addEventListener('pointerup', onPointerUp);
           this.listeners = {
