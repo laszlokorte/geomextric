@@ -9,7 +9,8 @@ defmodule Geomextric.Application do
   def start(_type, _args) do
     children = [
       {DNSCluster, query: Application.get_env(:geomextric, :dns_cluster_query) || :ignore},
-      {Phoenix.PubSub, name: Geomextric.PubSub}
+      {Phoenix.PubSub, name: Geomextric.PubSub},
+      {Geomextric.Canvas, name: Geomextric.Canvas}
       # Start a worker by calling: Geomextric.Worker.start_link(arg)
       # {Geomextric.Worker, arg}
     ]

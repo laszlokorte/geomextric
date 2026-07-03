@@ -10,8 +10,9 @@ defmodule GeomextricWeb.Circle do
 
   def circle(assigns) do
     ~H"""
-    <circle cx={@x} cy={@y} r={@r} fill="rebeccapurple"></circle>
+    <circle data-non-scaling cx={@x} cy={@y} r={@r} fill="rebeccapurple"></circle>
     <circle
+      data-non-scaling
       id={@id}
       phx-hook=".Circle"
       cx={@x}
@@ -48,6 +49,10 @@ defmodule GeomextricWeb.Circle do
             (x,y) =>  this.pushEvent("move", {id: this.el.id, x,y}), 60,
             debounce((x,y) => this.pushEvent("move", {id: this.el.id, x,y}), 500)
           )
+          const del= throttle(
+                     (x,y) =>  this.pushEvent("delete", {id: this.el.id,}), 60,
+                     debounce((x,y) => this.pushEvent("delete", {id: this.el.id}), 500)
+                   )
 
           const svg = this.el.ownerSVGElement;
           const point = svg.createSVGPoint();
@@ -82,6 +87,7 @@ defmodule GeomextricWeb.Circle do
                         const x = px - offset.x
                         const y = py - offset.y
 
+                        move(x,y)
                         this.el.setAttribute('cx', x);
                         this.el.setAttribute('cy', y );
                       }
@@ -99,6 +105,7 @@ defmodule GeomextricWeb.Circle do
                                       }
           this.el.addEventListener('pointerdown', onPointerDown);
           this.el.addEventListener('click', evt => evt.stopPropagation());
+          this.el.addEventListener('dblclick', evt => del());
           this.el.addEventListener('pointermove', onPointerMove);
           this.el.addEventListener('pointerup', onPointerUp);
           this.listeners = {

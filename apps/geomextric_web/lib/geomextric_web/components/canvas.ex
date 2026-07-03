@@ -85,7 +85,6 @@ defmodule GeomextricWeb.Canvas do
                   d="M 0 0 L 10 0 M 20 0 L 10 0 M 0 0 L 0 10 M 0 20 L 0 10"
                   stroke-dasharray="2 2"
                   fill="none"
-                  opacity="0.8"
                   stroke="#abc8"
                   stroke-width="1"
                 />
@@ -124,6 +123,7 @@ defmodule GeomextricWeb.Canvas do
               width={@box.width}
               height={@box.height}
               fill="url(#grid)"
+              opacity="0.8"
             />
 
             <rect
@@ -221,48 +221,48 @@ defmodule GeomextricWeb.Canvas do
           this.scrollerBody = this.scroller.firstElementChild
           const onScroll = (evt) => {
 
-                      const angle = cam.angle * Math.PI / 180;
-                      const cos = Math.cos(angle);
-                      const sin = Math.sin(angle);
-                      const cosabs = Math.abs(cos)
-                      const sinabs = Math.abs(sin)
-                      const boundingX = this.world.width.baseVal.value * cosabs + this.world.height.baseVal.value* sinabs
-                      const boundingY = this.world.width.baseVal.value * sinabs + this.world.height.baseVal.value* cosabs
+            const angle = cam.angle * Math.PI / 180;
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+            const cosabs = Math.abs(cos)
+            const sinabs = Math.abs(sin)
+            const boundingX = this.world.width.baseVal.value * cosabs + this.world.height.baseVal.value* sinabs
+            const boundingY = this.world.width.baseVal.value * sinabs + this.world.height.baseVal.value* cosabs
 
-                      const s = Math.exp(cam.zoom);
+            const s = Math.exp(cam.zoom);
 
-                                const cX =this.world.width.baseVal.value/2 + this.world.x.baseVal.value
-                                const cY =this.world.height.baseVal.value/2 + this.world.y.baseVal.value
-                      const cXr = cX * cos + cY * sin
-                        const cYr = cY * cos - cX * sin
+                      const cX =this.world.width.baseVal.value/2 + this.world.x.baseVal.value
+                      const cY =this.world.height.baseVal.value/2 + this.world.y.baseVal.value
+            const cXr = cX * cos + cY * sin
+              const cYr = cY * cos - cX * sin
 
-                      const dx =
-                          this.scroller.scrollLeft -
-                          0.5 * this.scroller.clientWidth -
-                          boundingX * s / 2
+            const dx =
+                this.scroller.scrollLeft -
+                0.5 * this.scroller.clientWidth -
+                boundingX * s / 2
 
-                      const dy =
-                          this.scroller.scrollTop -
-                          0.5 * this.scroller.clientHeight -
-                          boundingY * s / 2
-                    cam.x = (dx * cos + dy * sin) / s + cX;
-                      cam.y = (-dx * sin + dy * cos) / s + cY;
-                      updateViewBox(this.el, this.world, cam, this.scroller)
+            const dy =
+                this.scroller.scrollTop -
+                0.5 * this.scroller.clientHeight -
+                boundingY * s / 2
+              cam.x = (dx * cos + dy * sin) / s + cX;
+              cam.y = (-dx * sin + dy * cos) / s + cY;
+              updateViewBox(this.el, this.world, cam, this.scroller)
 
-                    }
-          this.scroller.addEventListener('scroll', onScroll)
-          const evtToSvg = (evt) => {
-            point.x = evt.clientX;
-            point.y = evt.clientY;
-            const svgGlobal = point.matrixTransform(this.world.getScreenCTM().inverse());
-            return{
-                x: svgGlobal.x,
-                y: svgGlobal.y,
-              }
+            }
+            this.scroller.addEventListener('scroll', onScroll)
+            const evtToSvg = (evt) => {
+              point.x = evt.clientX;
+              point.y = evt.clientY;
+              const svgGlobal = point.matrixTransform(this.world.getScreenCTM().inverse());
+              return{
+                  x: svgGlobal.x,
+                  y: svgGlobal.y,
+                }
           }
 
-          const wr = this.el.viewBox.baseVal.width / window.innerWidth
-          const hr = this.el.viewBox.baseVal.height / window.innerHeight
+          const wr = this.el.viewBox.baseVal.width / window.innerWidth * 1.1
+          const hr = this.el.viewBox.baseVal.height / window.innerHeight * 1.1
           cam.zoom = -Math.log(Math.max(wr, hr))
           cam.x = this.el.viewBox.baseVal.width / 2 + this.el.viewBox.baseVal.x
           cam.y = this.el.viewBox.baseVal.height / 2 + this.el.viewBox.baseVal.y
@@ -321,6 +321,9 @@ defmodule GeomextricWeb.Canvas do
           const onDblClick = (evt) => {
             this.pushEvent("create", evtToSvg(evt))
           }
+          const onDrop = (evt) => {
+                    this.pushEvent("create", evtToSvg(evt))
+                  }
           const svg = this.el;
           const point = svg.createSVGPoint();
 
@@ -329,13 +332,15 @@ defmodule GeomextricWeb.Canvas do
           this.el.addEventListener('pointermove', onPointerMove);
           this.el.addEventListener('wheel', onWheel)
           this.el.addEventListener('click', onDblClick )
+          this.el.addEventListener('drop', onDrop )
 
           this.listeners = {
             pointerdown: onPointerDown,
             pointermove: onPointerMove,
             wheel: onWheel,
             click: onDblClick,
-            scroll: onScroll
+            scroll: onScroll,
+            drop: onDrop,
           }
 
           updateViewBox(this.el, this.world, cam, this.scroller)
@@ -345,6 +350,7 @@ defmodule GeomextricWeb.Canvas do
           this.el.removeEventListener('pointermove', this.listeners.pointermove);
           this.el.removeEventListener('wheel', this.listeners.wheel)
           this.el.removeEventListener('click', this.listeners.dblclick)
+          this.el.removeEventListener('drop', this.listeners.drop)
 
           this.scroller.removeEventListener('scroll', this.listeners.scroll)
         },

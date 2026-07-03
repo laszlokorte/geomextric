@@ -37,6 +37,7 @@ defmodule Geomextric.MixProject do
   defp deps do
     [
       {:dns_cluster, "~> 0.2.0"},
+      {:uuid, "~> 1.1"},
       {:phoenix_pubsub, "~> 2.1"}
     ]
   end
