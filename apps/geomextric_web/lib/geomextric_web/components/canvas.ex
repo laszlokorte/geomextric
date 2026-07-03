@@ -311,7 +311,7 @@ defmodule GeomextricWeb.Canvas do
             const oldZoom = Math.exp(cam.zoom)
               cam.zoom -=  evt.deltaY/1000
 
-              cam.zoom = Math.max(-8, Math.min(8, cam.zoom))
+              cam.zoom = Math.max(-6, Math.min(6, cam.zoom))
               const newZoom = Math.exp(cam.zoom)
                 const factor = oldZoom / newZoom;
 
