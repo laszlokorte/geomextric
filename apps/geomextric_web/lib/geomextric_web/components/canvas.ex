@@ -65,6 +65,7 @@ defmodule GeomextricWeb.Canvas do
           <svg
             data-world
             overflow="visible"
+            preserveAspectRatio="xMidYMid meet"
             x={@box.x}
             y={@box.y}
             width={@box.width}
@@ -76,7 +77,7 @@ defmodule GeomextricWeb.Canvas do
                 id="grid"
                 width="20"
                 height="20"
-                patternTransform="scale(1)"
+                patternTransform="scale(0)"
                 patternUnits="userSpaceOnUse"
               >
                 <path
@@ -93,7 +94,7 @@ defmodule GeomextricWeb.Canvas do
                 id="grid-sec"
                 width="40"
                 height="40"
-                patternTransform="scale(1)"
+                patternTransform="scale(0)"
                 patternUnits="userSpaceOnUse"
               >
                 <path
@@ -264,7 +265,7 @@ defmodule GeomextricWeb.Canvas do
               updateViewBox(this.el, this.world, cam, this.scroller)
 
             }
-            this.scroller.addEventListener('scroll', onScroll)
+            this.scroller.addEventListener('scroll', onScroll, {passive: true})
             const evtToSvg = (evt) => {
               point.x = evt.clientX;
               point.y = evt.clientY;
@@ -275,8 +276,8 @@ defmodule GeomextricWeb.Canvas do
                 }
           }
 
-          const wr = this.el.viewBox.baseVal.width / window.innerWidth * 1.1
-          const hr = this.el.viewBox.baseVal.height / window.innerHeight * 1.1
+          const wr = this.world.viewBox.baseVal.width / window.innerWidth * 1
+          const hr = this.world.viewBox.baseVal.height / window.innerHeight * 1
           cam.zoom = -Math.log(Math.max(wr, hr))
           cam.x = this.el.viewBox.baseVal.width / 2 + this.el.viewBox.baseVal.x
           cam.y = this.el.viewBox.baseVal.height / 2 + this.el.viewBox.baseVal.y
@@ -298,6 +299,8 @@ defmodule GeomextricWeb.Canvas do
               cam.angle += evt.deltaY/10
               cam.x = nx
               cam.y = ny
+
+              updateViewBox(this.el, this.world, cam, this.scroller)
             } else if(evt.ctrlKey) {
               evt.preventDefault()
             const oldZoom = Math.exp(cam.zoom)
@@ -309,8 +312,9 @@ defmodule GeomextricWeb.Canvas do
 
               cam.x = piv.x - (piv.x - cam.x) * factor;
               cam.y = piv.y - (piv.y - cam.y) * factor;
+
+              updateViewBox(this.el, this.world, cam, this.scroller)
             }
-            updateViewBox(this.el, this.world, cam, this.scroller)
           }
           const onPointerMove = (evt) => {
                               if(evt.currentTarget.hasPointerCapture(evt.pointerId)) {
@@ -375,7 +379,7 @@ defmodule GeomextricWeb.Canvas do
           this.el.removeEventListener('click', this.listeners.dblclick)
           this.el.removeEventListener('drop', this.listeners.drop)
 
-          this.scroller.removeEventListener('scroll', this.listeners.scroll)
+          this.scroller.removeEventListener('scroll', this.listeners.scroll, {passive: true})
 
           window.removeEventListener('resize', resize)
         },

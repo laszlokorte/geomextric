@@ -10,17 +10,19 @@ defmodule GeomextricWeb.Circle do
 
   def circle(assigns) do
     ~H"""
-    <circle data-non-scaling cx={@x} cy={@y} r={@r} fill="rebeccapurple"></circle>
-    <circle
-      data-non-scaling
-      id={@id}
-      phx-hook=".Circle"
-      cx={@x}
-      cy={@y}
-      r={@r}
-      fill={@fill}
-      opacity="0.1"
-    />
+    <g id={"g-#{@id}"} overflow="visible">
+      <circle data-non-scaling cx={@x} cy={@y} r={@r} fill="rebeccapurple"></circle>
+      <circle
+        data-non-scaling
+        id={@id}
+        phx-hook=".Circle"
+        cx={@x}
+        cy={@y}
+        r={@r}
+        fill={@fill}
+        opacity="0.1"
+      />
+    </g>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".Circle">
       function throttle(fun, delay, fallback) {
           let lastTime = 0;

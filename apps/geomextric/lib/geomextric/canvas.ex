@@ -28,6 +28,10 @@ defmodule Geomextric.Canvas do
     GenServer.call(server, :get_all)
   end
 
+  def get_box(server) do
+    GenServer.call(server, :get_box)
+  end
+
   ## Server callbacks
 
   @impl true
@@ -47,7 +51,8 @@ defmodule Geomextric.Canvas do
 
   @impl true
   def handle_cast({:delete, id}, state) do
-    {:noreply, Map.delete(state, id), {:continue, {:broadcast_delete, id}}}
+    old = Map.get(state, id)
+    {:noreply, Map.delete(state, id), {:continue, {:broadcast_delete, id, old}}}
   end
 
   @impl true
@@ -58,6 +63,45 @@ defmodule Geomextric.Canvas do
   @impl true
   def handle_call(:get_all, _from, state) do
     {:reply, state, state}
+  end
+
+  @impl true
+  def handle_call(:get_box, _from, state) do
+    minX =
+      state
+      |> Enum.map(fn {_, {x, _}} -> x end)
+      |> Enum.min(fn -> 0 end)
+      |> then(&(&1 - 500))
+      |> min(-500)
+
+    minY =
+      state
+      |> Enum.map(fn {_, {_, y}} -> y end)
+      |> Enum.min(fn -> 0 end)
+      |> then(&(&1 - 500))
+      |> min(-500)
+
+    maxX =
+      state
+      |> Enum.map(fn {_, {x, _}} -> x end)
+      |> Enum.max(fn -> 0 end)
+      |> then(&(&1 + 500))
+      |> max(500)
+
+    maxY =
+      state
+      |> Enum.map(fn {_, {_, y}} -> y end)
+      |> Enum.max(fn -> 0 end)
+      |> then(&(&1 + 500))
+      |> max(500)
+
+    {:reply,
+     %{
+       x: minX,
+       y: minY,
+       width: maxX - minX,
+       height: maxY - minY
+     }, state}
   end
 
   @impl true
@@ -94,11 +138,11 @@ defmodule Geomextric.Canvas do
   end
 
   @impl true
-  def handle_continue({:broadcast_delete, id}, state) do
+  def handle_continue({:broadcast_delete, id, {x, y}}, state) do
     Phoenix.PubSub.broadcast(
       Geomextric.PubSub,
       @topic,
-      {:delete, id}
+      {:delete, id, {x, y}}
     )
 
     {:noreply, state}

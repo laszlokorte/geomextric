@@ -9,7 +9,8 @@ defmodule GeomextricWeb.HomeLive do
 
     {:ok,
      socket
-     |> assign(:dots, Geomextric.Canvas.get_all(Geomextric.Canvas))}
+     |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
+     |> assign(:dots, Geomextric.Canvas.get_all(Geomextric.Canvas) |> Enum.sort_by(&elem(&1, 0)))}
   end
 
   def handle_event("move", %{"id" => <<"d-", id::binary>>, "x" => x, "y" => y}, socket) do
@@ -33,64 +34,52 @@ defmodule GeomextricWeb.HomeLive do
   end
 
   def handle_info({:inserted, id, {x, y}}, socket) do
-    {:noreply, socket |> update(:dots, &Map.put(&1, id, {x, y}))}
+    {:noreply,
+     socket
+     |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
+     |> update(:dots, &[{id, {x, y}} | &1])}
   end
 
   def handle_info({:moved, id, {x, y}}, socket) do
-    {:noreply, socket |> update(:dots, &Map.replace(&1, id, {x, y}))}
+    {:noreply,
+     socket
+     |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
+     |> update(
+       :dots,
+       &Enum.map(&1, fn
+         {^id, _} -> {id, {x, y}}
+         e -> e
+       end)
+     )}
   end
 
-  def handle_info({:delete, id}, socket) do
-    {:noreply, socket |> update(:dots, &Map.delete(&1, id))}
+  def handle_info({:delete, id, _}, socket) do
+    {:noreply,
+     socket
+     |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
+     |> update(
+       :dots,
+       &Enum.filter(&1, fn
+         {^id, _} -> false
+         _ -> true
+       end)
+     )}
   end
 
   def handle_info(:clear, socket) do
-    {:noreply, socket |> assign(:dots, Map.new())}
+    {:noreply,
+     socket
+     |> assign(:dots, [])
+     |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))}
   end
 
   def render(assigns) do
-    minX =
-      assigns.dots
-      |> Map.values()
-      |> Enum.map(fn {x, _} -> x end)
-      |> Enum.min(fn -> 0 end)
-      |> then(&(&1 - 500))
-      |> min(-500)
-
-    minY =
-      assigns.dots
-      |> Map.values()
-      |> Enum.map(fn {_, y} -> y end)
-      |> Enum.min(fn -> 0 end)
-      |> then(&(&1 - 500))
-      |> min(-500)
-
-    maxX =
-      assigns.dots
-      |> Map.values()
-      |> Enum.map(fn {x, _} -> x end)
-      |> Enum.max(fn -> 0 end)
-      |> then(&(&1 + 500))
-      |> max(500)
-
-    maxY =
-      assigns.dots
-      |> Map.values()
-      |> Enum.map(fn {_, y} -> y end)
-      |> Enum.max(fn -> 0 end)
-      |> then(&(&1 + 500))
-      |> max(500)
-
-    assigns =
-      assign(assigns, :box, %{
-        x: minX,
-        y: minY,
-        width: maxX - minX,
-        height: maxY - minY
-      })
-
     ~H"""
     <style rel="stylesheet" :type={GeomextricWeb.ColocatedCSS}>
+      @keyframes enter {
+        from { transform: scale(0); }
+        to   { transform: scale(1); }
+      }
        .origin {
       scale: var(--cam-scale);
       transform-box: fill-box;
@@ -135,7 +124,7 @@ defmodule GeomextricWeb.HomeLive do
     <nav>
       <div id="drag-circle" phx-hook=".Draggable" draggable="true">
         <svg viewBox="-10 -10 20 20" width="32" height="32">
-          <circle cx="0" cy="0" r={8} fill="#0fa" stroke="white" stroke-width="2" />
+          <circle cx="0" cy="0" r={8} fill="rebeccapurple" stroke="white" stroke-width="2" />
         </svg>
       </div>
 
@@ -143,9 +132,14 @@ defmodule GeomextricWeb.HomeLive do
     </nav>
     <.canvas box={@box}>
       <circle class="origin" cx={0} cy={0} r={3} fill="#d0d0d0" data-non-scaling />
-      <%= for {id, {x,y}} <- @dots  do %>
-        <.circle id={"d-#{id}"} x={x} y={y} r={10.0} fill="magenta" />
-      <% end %>
+      <.circle
+        :for={{id, {x, y}} <- @dots}
+        id={"d-#{id}"}
+        x={x}
+        y={y}
+        r={10.0}
+        fill="magenta"
+      />
     </.canvas>
 
     <script :type={Phoenix.LiveView.ColocatedHook} name=".Draggable">
