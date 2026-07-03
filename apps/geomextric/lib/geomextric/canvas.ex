@@ -51,7 +51,7 @@ defmodule Geomextric.Canvas do
   end
 
   @impl true
-  def handle_cast(:clear, state) do
+  def handle_cast(:clear, _state) do
     {:noreply, Map.new(), {:continue, :broadcast_clear}}
   end
 

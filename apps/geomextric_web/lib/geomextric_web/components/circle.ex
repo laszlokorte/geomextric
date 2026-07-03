@@ -78,6 +78,7 @@ defmodule GeomextricWeb.Circle do
                         offset.y = y - this.el.getAttribute("cy");
                       }
                     }
+                    let noClick = false
 
           const onPointerMove = (evt) => {
                       if(evt.currentTarget.hasPointerCapture(evt.pointerId)) {
@@ -86,6 +87,7 @@ defmodule GeomextricWeb.Circle do
 
                         const x = px - offset.x
                         const y = py - offset.y
+                        noClick  = true
 
                         move(x,y)
                         this.el.setAttribute('cx', x);
@@ -105,7 +107,15 @@ defmodule GeomextricWeb.Circle do
                                       }
           this.el.addEventListener('pointerdown', onPointerDown);
           this.el.addEventListener('click', evt => evt.stopPropagation());
-          this.el.addEventListener('dblclick', evt => del());
+          this.el.addEventListener('dblclick', evt => {
+
+            if(noClick) {
+              noClick = false
+              return
+          }
+          evt.preventDefault()
+            del()
+          });
           this.el.addEventListener('pointermove', onPointerMove);
           this.el.addEventListener('pointerup', onPointerUp);
           this.listeners = {

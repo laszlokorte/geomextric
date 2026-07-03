@@ -54,7 +54,7 @@ defmodule GeomextricWeb.Canvas do
       touch-action: none;
       }
     </style>
-    <div class="scroller" data-scrollbars>
+    <div class="scroller" data-scrollbars tabindex="-1">
       <div class="scroller-body">
         <svg
           preserveAspectRatio="xMidYMid meet"
@@ -157,6 +157,7 @@ defmodule GeomextricWeb.Canvas do
           height: 0
         }
       }
+      let skipScroll = false
       function updateViewBox(e, r, cam, scroller) {
       if(r) {
         r.setAttribute("transform", `rotate(${cam.angle} ${cam.x} ${cam.y})`)
@@ -185,19 +186,26 @@ defmodule GeomextricWeb.Canvas do
                const cXr = cX * cos + cY * sin
                const cYr = cY * cos - cX * sin
 
-               const scrollWidth = boundingX * Math.exp(cam.zoom) + scroller.clientWidth * 2
+               const scrollWidth  = boundingX * Math.exp(cam.zoom) + scroller.clientWidth * 2
                const scrollHeight = boundingY * Math.exp(cam.zoom) + scroller.clientHeight * 2
                if(!isNaN(scrollWidth) && !isNaN(scrollHeight)) {
 
                  scroller.style.setProperty('--scroll-width',  scrollWidth + 'px')
                  scroller.style.setProperty('--scroll-height',  scrollHeight + 'px')
         }
-        scroller.scrollLeft = 0.5 * scroller.clientWidth +
-        (boundingX )  * Math.exp(cam.zoom) / 2
-        + ((cam.x-cX) * cos - (cam.y-cY) * sin) *  Math.exp(cam.zoom)
-           scroller.scrollTop = 0.5 * scroller.clientHeight
-           + (boundingY ) * Math.exp(cam.zoom) / 2
-           + ((cam.y-cY) * cos + (cam.x-cX) * sin) *  Math.exp(cam.zoom)
+        const newScrollLeft = (0.5 * scroller.clientWidth +
+                (boundingX )  * Math.exp(cam.zoom) / 2
+                + ((cam.x-cX) * cos - (cam.y-cY) * sin) *  Math.exp(cam.zoom))
+        const newScrollTop = (0.5 * scroller.clientHeight
+                   + (boundingY ) * Math.exp(cam.zoom) / 2
+                   + ((cam.y-cY) * cos + (cam.x-cX) * sin) *  Math.exp(cam.zoom))
+
+        skipScroll = true
+        scroller.scrollTo({
+                 left: newScrollLeft,
+                 top: newScrollTop,
+                 behavior: "instant",
+               });
         }
       }
       function rotate({ x, y }, { x: px, y: py }, angle) {
@@ -220,6 +228,12 @@ defmodule GeomextricWeb.Canvas do
           this.scroller  = this.el.closest('[data-scrollbars]')
           this.scrollerBody = this.scroller.firstElementChild
           const onScroll = (evt) => {
+
+            if(skipScroll) {
+
+            skipScroll = false
+            return
+          }
 
             const angle = cam.angle * Math.PI / 180;
             const cos = Math.cos(angle);
@@ -266,7 +280,13 @@ defmodule GeomextricWeb.Canvas do
           cam.zoom = -Math.log(Math.max(wr, hr))
           cam.x = this.el.viewBox.baseVal.width / 2 + this.el.viewBox.baseVal.x
           cam.y = this.el.viewBox.baseVal.height / 2 + this.el.viewBox.baseVal.y
-          cam.screen= {width: window.innerWidth, height: window.innerHeight}
+
+          const resize = () => {
+            cam.screen= {width: window.innerWidth, height: window.innerHeight}
+
+            updateViewBox(this.el, this.world, cam, this.scroller)
+          }
+          resize()
 
           updateViewBox(this.el, this.world, cam, this.scroller)
           const onWheel =  (evt) => {
@@ -334,6 +354,8 @@ defmodule GeomextricWeb.Canvas do
           this.el.addEventListener('click', onDblClick )
           this.el.addEventListener('drop', onDrop )
 
+          window.addEventListener('resize', resize)
+
           this.listeners = {
             pointerdown: onPointerDown,
             pointermove: onPointerMove,
@@ -341,6 +363,7 @@ defmodule GeomextricWeb.Canvas do
             click: onDblClick,
             scroll: onScroll,
             drop: onDrop,
+            resize
           }
 
           updateViewBox(this.el, this.world, cam, this.scroller)
@@ -353,6 +376,8 @@ defmodule GeomextricWeb.Canvas do
           this.el.removeEventListener('drop', this.listeners.drop)
 
           this.scroller.removeEventListener('scroll', this.listeners.scroll)
+
+          window.removeEventListener('resize', resize)
         },
         updated()  {
           updateViewBox(this.el, this.world, cam, this.scroller)
