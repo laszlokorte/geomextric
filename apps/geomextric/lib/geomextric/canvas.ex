@@ -8,8 +8,8 @@ defmodule Geomextric.Canvas do
     GenServer.start_link(__MODULE__, %{}, opts)
   end
 
-  def put(server, x, y) do
-    GenServer.cast(server, {:put, UUID.uuid4(), {x, y}})
+  def put(server, x, y, params = %{} \\ %{}) do
+    GenServer.cast(server, {:put, UUID.uuid4(), {x, y}, params})
   end
 
   def clear(server) do
@@ -40,19 +40,23 @@ defmodule Geomextric.Canvas do
   end
 
   @impl true
-  def handle_cast({:put, id, {x, y} = coords}, state) do
-    {:noreply, Map.put(state, id, coords), {:continue, {:broadcast_insert, id, coords}}}
+  def handle_cast({:put, id, {x, y} = coords, attrs}, state) do
+    new = %{pos: coords, attrs: %{color: Map.get(attrs, "color", "rebeccapurple")}}
+    {:noreply, Map.put(state, id, new), {:continue, {:broadcast_insert, id, new}}}
   end
 
   @impl true
   def handle_cast({:move, id, {x, y} = coords}, state) do
-    {:noreply, Map.replace(state, id, {x, y}), {:continue, {:broadcast_move, id, coords}}}
+    {:noreply,
+     case state do
+       %{^id => old} -> %{state | id => %{old | pos: coords}}
+       %{} -> state
+     end, {:continue, {:broadcast_move, id, coords}}}
   end
 
   @impl true
   def handle_cast({:delete, id}, state) do
-    old = Map.get(state, id)
-    {:noreply, Map.delete(state, id), {:continue, {:broadcast_delete, id, old}}}
+    {:noreply, Map.delete(state, id), {:continue, {:broadcast_delete, id}}}
   end
 
   @impl true
@@ -69,28 +73,28 @@ defmodule Geomextric.Canvas do
   def handle_call(:get_box, _from, state) do
     minX =
       state
-      |> Enum.map(fn {_, {x, _}} -> x end)
+      |> Enum.map(fn {_, %{pos: {x, _}}} -> x end)
       |> Enum.min(fn -> 0 end)
       |> then(&(&1 - 500))
       |> min(-500)
 
     minY =
       state
-      |> Enum.map(fn {_, {_, y}} -> y end)
+      |> Enum.map(fn {_, %{pos: {_, y}}} -> y end)
       |> Enum.min(fn -> 0 end)
       |> then(&(&1 - 500))
       |> min(-500)
 
     maxX =
       state
-      |> Enum.map(fn {_, {x, _}} -> x end)
+      |> Enum.map(fn {_, %{pos: {x, _}}} -> x end)
       |> Enum.max(fn -> 0 end)
       |> then(&(&1 + 500))
       |> max(500)
 
     maxY =
       state
-      |> Enum.map(fn {_, {_, y}} -> y end)
+      |> Enum.map(fn {_, %{pos: {_, y}}} -> y end)
       |> Enum.max(fn -> 0 end)
       |> then(&(&1 + 500))
       |> max(500)
@@ -105,11 +109,11 @@ defmodule Geomextric.Canvas do
   end
 
   @impl true
-  def handle_continue({:broadcast_insert, id, coords}, state) do
+  def handle_continue({:broadcast_insert, id, new}, state) do
     Phoenix.PubSub.broadcast(
       Geomextric.PubSub,
       @topic,
-      {:inserted, id, coords}
+      {:inserted, id, new}
     )
 
     {:noreply, state}
@@ -138,11 +142,11 @@ defmodule Geomextric.Canvas do
   end
 
   @impl true
-  def handle_continue({:broadcast_delete, id, {x, y}}, state) do
+  def handle_continue({:broadcast_delete, id}, state) do
     Phoenix.PubSub.broadcast(
       Geomextric.PubSub,
       @topic,
-      {:delete, id, {x, y}}
+      {:delete, id}
     )
 
     {:noreply, state}

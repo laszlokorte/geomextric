@@ -11,7 +11,7 @@ defmodule GeomextricWeb.Circle do
   def circle(assigns) do
     ~H"""
     <g id={"g-#{@id}"} overflow="visible">
-      <circle data-non-scaling cx={@x} cy={@y} r={@r} fill="rebeccapurple"></circle>
+      <circle data-non-scaling cx={@x} cy={@y} r={@r} fill={@fill}></circle>
       <circle
         data-non-scaling
         id={@id}
@@ -20,7 +20,7 @@ defmodule GeomextricWeb.Circle do
         cy={@y}
         r={@r}
         fill={@fill}
-        opacity="0.1"
+        opacity="0.3"
       />
     </g>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".Circle">

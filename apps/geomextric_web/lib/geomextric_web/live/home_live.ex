@@ -23,8 +23,8 @@ defmodule GeomextricWeb.HomeLive do
     {:noreply, socket}
   end
 
-  def handle_event("create", %{"x" => x, "y" => y}, socket) do
-    Geomextric.Canvas.put(Geomextric.Canvas, x, y)
+  def handle_event("create", %{"pos" => %{"x" => x, "y" => y}} = params, socket) do
+    Geomextric.Canvas.put(Geomextric.Canvas, x, y, params)
     {:noreply, socket}
   end
 
@@ -33,11 +33,11 @@ defmodule GeomextricWeb.HomeLive do
     {:noreply, socket}
   end
 
-  def handle_info({:inserted, id, {x, y}}, socket) do
+  def handle_info({:inserted, id, new}, socket) do
     {:noreply,
      socket
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
-     |> update(:dots, &[{id, {x, y}} | &1])}
+     |> update(:dots, &[{id, new} | &1])}
   end
 
   def handle_info({:moved, id, {x, y}}, socket) do
@@ -47,13 +47,13 @@ defmodule GeomextricWeb.HomeLive do
      |> update(
        :dots,
        &Enum.map(&1, fn
-         {^id, _} -> {id, {x, y}}
+         {^id, %{} = old} -> {id, %{old | pos: {x, y}}}
          e -> e
        end)
      )}
   end
 
-  def handle_info({:delete, id, _}, socket) do
+  def handle_info({:delete, id}, socket) do
     {:noreply,
      socket
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
@@ -122,9 +122,21 @@ defmodule GeomextricWeb.HomeLive do
       }
     </style>
     <nav>
-      <div id="drag-circle" phx-hook=".Draggable" draggable="true">
-        <svg viewBox="-10 -10 20 20" width="32" height="32">
-          <circle cx="0" cy="0" r={8} fill="rebeccapurple" stroke="white" stroke-width="2" />
+      <div id="drag-circle-a" phx-hook=".Draggable" draggable="true">
+        <svg viewBox="-10 -10 20 20" fill="rebeccapurple" width="32" height="32">
+          <circle cx="0" cy="0" r={8} stroke="white" stroke-width="2" />
+        </svg>
+      </div>
+
+      <div id="drag-circle-b" phx-hook=".Draggable" draggable="true">
+        <svg viewBox="-10 -10 20 20" fill="cyan" width="32" height="32">
+          <circle cx="0" cy="0" r={8} stroke="white" stroke-width="2" />
+        </svg>
+      </div>
+
+      <div id="drag-circle-c" phx-hook=".Draggable" draggable="true">
+        <svg viewBox="-10 -10 20 20" fill="magenta" width="32" height="32">
+          <circle cx="0" cy="0" r={8} stroke="white" stroke-width="2" />
         </svg>
       </div>
 
@@ -133,12 +145,12 @@ defmodule GeomextricWeb.HomeLive do
     <.canvas box={@box}>
       <circle class="origin" cx={0} cy={0} r={3} fill="#d0d0d0" data-non-scaling />
       <.circle
-        :for={{id, {x, y}} <- @dots}
+        :for={{id, %{pos: {x, y}, attrs: %{color: col}}} <- @dots}
         id={"d-#{id}"}
         x={x}
         y={y}
         r={10.0}
-        fill="magenta"
+        fill={col}
       />
     </.canvas>
 
@@ -149,8 +161,8 @@ defmodule GeomextricWeb.HomeLive do
           // Add different types of drag data
           var svg = evt.currentTarget.firstElementChild;
           evt.dataTransfer.setData(
-            "text/uri-list",
-            evt.target.ownerDocument.location.href,
+            "text",
+            svg.getAttribute("fill"),
           );
         }
           this.el.addEventListener('dragstart', dragstartHandler)

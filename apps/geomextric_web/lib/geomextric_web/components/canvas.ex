@@ -348,10 +348,11 @@ defmodule GeomextricWeb.Canvas do
                                 }
                               }
           const onDblClick = (evt) => {
-            this.pushEvent("create", evtToSvg(evt))
+            this.pushEvent("create", {pos: evtToSvg(evt)})
           }
           const onDrop = (evt) => {
-                    this.pushEvent("create", evtToSvg(evt))
+            const color = evt.dataTransfer.getData("text/plain")
+                    this.pushEvent("create", {pos: evtToSvg(evt), color: color})
                   }
           const svg = this.el;
           const point = svg.createSVGPoint();
