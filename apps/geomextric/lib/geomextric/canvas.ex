@@ -12,6 +12,10 @@ defmodule Geomextric.Canvas do
     GenServer.cast(server, {:put, UUID.uuid4(), {x, y}, params})
   end
 
+  def put(server, x, y, width, height, params = %{} \\ %{}) do
+    GenServer.cast(server, {:put, UUID.uuid4(), {x, y, width, height}, params})
+  end
+
   def clear(server) do
     GenServer.cast(server, :clear)
   end
@@ -45,17 +49,44 @@ defmodule Geomextric.Canvas do
 
   @impl true
   def handle_cast({:put, id, {x, y} = coords, attrs}, state) do
-    new = %{pos: coords, attrs: %{color: Map.get(attrs, "color", "rebeccapurple")}}
+    new = %{
+      pos: coords,
+      attrs: %{
+        color: Map.get(attrs, "color", "rebeccapurple"),
+        radius: Map.get(attrs, "radius", 10)
+      }
+    }
+
+    {:noreply, Map.put(state, id, new), {:continue, {:broadcast_insert, id, new}}}
+  end
+
+  @impl true
+  def handle_cast({:put, id, {x, y, width, height} = coords, attrs}, state) do
+    new = %{
+      pos: coords,
+      attrs: %{
+        color: Map.get(attrs, "color", "rebeccapurple"),
+        radius: Map.get(attrs, "radius", 0)
+      }
+    }
+
     {:noreply, Map.put(state, id, new), {:continue, {:broadcast_insert, id, new}}}
   end
 
   @impl true
   def handle_cast({:move, id, {x, y} = coords}, state) do
-    {:noreply,
-     case state do
-       %{^id => old} -> %{state | id => %{old | pos: coords}}
-       %{} -> state
-     end, {:continue, {:broadcast_move, id, coords}}}
+    case state do
+      %{^id => old = %{pos: {old_x, old_y}}} ->
+        {:noreply, %{state | id => %{old | pos: coords}},
+         {:continue, {:broadcast_move, id, coords}}}
+
+      %{^id => old = %{pos: {_old_x, _old_y, old_w, old_h}}} ->
+        {:noreply, %{state | id => %{old | pos: {x, y, old_w, old_h}}},
+         {:continue, {:broadcast_move, id, {x, y, old_w, old_h}}}}
+
+      %{} ->
+        {:noreply, state}
+    end
   end
 
   @impl true
@@ -64,11 +95,12 @@ defmodule Geomextric.Canvas do
   end
 
   @impl true
-  def handle_cast({:delete_box, %{width: w, height: h, x: bx, y: by}}, state) do
+  def handle_cast({:delete_box, %{width: bw, height: bh, x: bx, y: by}}, state) do
     {:noreply,
      state
      |> Enum.filter(fn
-       {_, %{pos: {x, y}}} -> x < bx || x > bx + w || y < by || y > by + h
+       {_, %{pos: {x, y}}} -> x < bx || x > bx + bw || y < by || y > by + bh
+       {_, %{pos: {x, y, w, h}}} -> x < bx || x + w > bx + bw || y < by || y + h > by + bh
        _ -> true
      end)
      |> Map.new(), {:continue, :broadcast_reload}}
@@ -88,28 +120,40 @@ defmodule Geomextric.Canvas do
   def handle_call(:get_box, _from, state) do
     minX =
       state
-      |> Enum.map(fn {_, %{pos: {x, _}}} -> x end)
+      |> Enum.map(fn
+        {_, %{pos: {x, _}}} -> x
+        {_, %{pos: {x, _, _w, _h}}} -> x
+      end)
       |> Enum.min(fn -> 0 end)
       |> then(&(&1 - 500))
       |> min(-500)
 
     minY =
       state
-      |> Enum.map(fn {_, %{pos: {_, y}}} -> y end)
+      |> Enum.map(fn
+        {_, %{pos: {_, y}}} -> y
+        {_, %{pos: {_, y, _w, _h}}} -> y
+      end)
       |> Enum.min(fn -> 0 end)
       |> then(&(&1 - 500))
       |> min(-500)
 
     maxX =
       state
-      |> Enum.map(fn {_, %{pos: {x, _}}} -> x end)
+      |> Enum.map(fn
+        {_, %{pos: {x, _}}} -> x
+        {_, %{pos: {x, _, w, _h}}} -> x + w
+      end)
       |> Enum.max(fn -> 0 end)
       |> then(&(&1 + 500))
       |> max(500)
 
     maxY =
       state
-      |> Enum.map(fn {_, %{pos: {_, y}}} -> y end)
+      |> Enum.map(fn
+        {_, %{pos: {_, y}}} -> y
+        {_, %{pos: {_, y, _w, h}}} -> y + h
+      end)
       |> Enum.max(fn -> 0 end)
       |> then(&(&1 + 500))
       |> max(500)

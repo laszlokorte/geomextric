@@ -330,12 +330,23 @@ defmodule GeomextricWeb.Canvas do
             const {x,y} = evtToSvg(evt)
 
             if(movement > 10) {
-            this.pushEvent('lasso', {
-              x: Math.min(offset.x, x),
-              y: Math.min(offset.y, y),
-              width: Math.abs(x - offset.x),
-              height: Math.abs(y - offset.y),
-            })
+              if(evt.button === 2) {
+
+                this.pushEvent('lasso', {
+                  x: Math.min(offset.x, x),
+                  y: Math.min(offset.y, y),
+                  width: Math.abs(x - offset.x),
+                  height: Math.abs(y - offset.y),
+                })
+            } else {
+
+              this.pushEvent('create', {pos: {
+                                       x: Math.min(offset.x, x),
+                                       y: Math.min(offset.y, y),
+                                       width: Math.abs(x - offset.x),
+                                       height: Math.abs(y - offset.y),
+                                     }})
+            }
           }
 
             lasso.setAttribute("opacity", 0)
@@ -385,6 +396,7 @@ defmodule GeomextricWeb.Canvas do
                         lasso.setAttribute("fill", 'blue')
                         lasso.setAttribute("stroke", 'darkblue')
                         lasso.setAttribute("stroke-width", 1)
+                        lasso.setAttribute("pointer-events", "none")
                         lasso.setAttribute("stroke-dasharray", "5 5")
                         lasso.setAttribute("vector-effect", "non-scaling-stroke")
                         lasso.setAttribute("width", "0")
@@ -421,11 +433,11 @@ defmodule GeomextricWeb.Canvas do
             return
           }
           evt.preventDefault()
-            this.pushEvent("create", {pos: evtToSvg(evt)})
+            this.pushEvent("create", {pos: evtToSvg(evt), radius: 10 * Math.exp(-cam.zoom)})
           }
           const onDrop = (evt) => {
             const color = evt.dataTransfer.getData("text/plain")
-                    this.pushEvent("create", {pos: evtToSvg(evt), color: color})
+                    this.pushEvent("create", {pos: evtToSvg(evt), color: color , radius: 10 * Math.exp(-cam.zoom)})
                   }
           const svg = this.el;
           const point = svg.createSVGPoint();
@@ -437,6 +449,7 @@ defmodule GeomextricWeb.Canvas do
           this.el.addEventListener('wheel', onWheel)
           this.el.addEventListener('click', onDblClick )
           this.el.addEventListener('drop', onDrop )
+          this.el.addEventListener('contextmenu', evt => evt.preventDefault() )
 
           window.addEventListener('resize', resize)
 

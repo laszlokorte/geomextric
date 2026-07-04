@@ -1,36 +1,39 @@
-defmodule GeomextricWeb.Circle do
+defmodule GeomextricWeb.Rectangle do
   use Phoenix.Component
   use Gettext, backend: GeomextricWeb.Gettext
 
-  attr :x, :float, default: 0.0, doc: "center x"
-  attr :y, :float, default: 0.0, doc: "center y"
-  attr :r, :float, default: 0.0, doc: "radius"
+  attr :x, :float, default: 0.0, doc: "x"
+  attr :y, :float, default: 0.0, doc: "y"
+  attr :width, :float, default: 0.0, doc: "width"
+  attr :height, :float, default: 0.0, doc: "height"
   attr :fill, :string, default: "red", doc: "fill color"
   attr :id, :string, default: "circle", doc: "id"
 
-  def circle(assigns) do
+  def rect(assigns) do
     ~H"""
     <g id={"g-#{@id}"} overflow="visible">
-      <circle
+      <rect
         shape-rendering="geometricPrecision"
-        cx={@x}
-        cy={@y}
-        r={@r}
+        x={@x}
+        y={@y}
+        width={@width}
+        height={@height}
         fill={@fill}
       >
-      </circle>
-      <circle
+      </rect>
+      <rect
         shape-rendering="geometricPrecision"
         id={@id}
-        phx-hook=".Circle"
-        cx={@x}
-        cy={@y}
-        r={@r}
+        phx-hook=".Rect"
+        x={@x}
+        y={@y}
+        width={@width}
+        height={@height}
         fill={@fill}
         opacity="0.3"
       />
     </g>
-    <script :type={Phoenix.LiveView.ColocatedHook} name=".Circle">
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".Rect">
       function throttle(fun, delay, fallback) {
           let lastTime = 0;
           return function (...args) {
@@ -54,6 +57,7 @@ defmodule GeomextricWeb.Circle do
       }
       export default {
         mounted(){
+
           const move = throttle(
             (x,y) =>  this.pushEvent("move", {id: this.el.id, x,y}), 60,
             debounce((x,y) => this.pushEvent("move", {id: this.el.id, x,y}), 500)
@@ -83,8 +87,10 @@ defmodule GeomextricWeb.Circle do
                         evt.currentTarget.setPointerCapture(evt.pointerId)
 
                         const {x,y} = evtToSvg(evt)
-                        offset.x = x - this.el.getAttribute("cx");
-                        offset.y = y - this.el.getAttribute("cy");
+                        offset.x = x - this.el.getAttribute("x");
+                        offset.y = y - this.el.getAttribute("y");
+                      } else {
+                      alert("x")
                       }
                     }
                     let noClick = false
@@ -99,8 +105,8 @@ defmodule GeomextricWeb.Circle do
                         noClick  = true
 
                       //  move(x,y)
-                        this.el.setAttribute('cx', x);
-                        this.el.setAttribute('cy', y );
+                        this.el.setAttribute('x', x);
+                        this.el.setAttribute('y', y );
                       }
                     }
                     const onPointerUp = (evt) => {
