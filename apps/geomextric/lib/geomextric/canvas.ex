@@ -24,6 +24,10 @@ defmodule Geomextric.Canvas do
     GenServer.cast(server, {:delete, id})
   end
 
+  def delete_box(server, box) do
+    GenServer.cast(server, {:delete_box, box})
+  end
+
   def get_all(server) do
     GenServer.call(server, :get_all)
   end
@@ -57,6 +61,17 @@ defmodule Geomextric.Canvas do
   @impl true
   def handle_cast({:delete, id}, state) do
     {:noreply, Map.delete(state, id), {:continue, {:broadcast_delete, id}}}
+  end
+
+  @impl true
+  def handle_cast({:delete_box, %{width: w, height: h, x: bx, y: by}}, state) do
+    {:noreply,
+     state
+     |> Enum.filter(fn
+       {_, %{pos: {x, y}}} -> x < bx || x > bx + w || y < by || y > by + h
+       _ -> true
+     end)
+     |> Map.new(), {:continue, :broadcast_reload}}
   end
 
   @impl true
@@ -147,6 +162,17 @@ defmodule Geomextric.Canvas do
       Geomextric.PubSub,
       @topic,
       {:delete, id}
+    )
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_continue(:broadcast_reload, state) do
+    Phoenix.PubSub.broadcast(
+      Geomextric.PubSub,
+      @topic,
+      :reload
     )
 
     {:noreply, state}

@@ -11,7 +11,7 @@ defmodule GeomextricWeb.Canvas do
       svg {
         position: absolute;
         inset: 0;
-        background: #58b;
+        background: #23875daa;
         display: block;
         width: 100%;
         height: 100%;
@@ -81,13 +81,11 @@ defmodule GeomextricWeb.Canvas do
                 patternUnits="userSpaceOnUse"
               >
                 <path
-                  vector-effect="non-scaling-stroke"
                   shape-rendering="geometricPrecision"
                   d="M 0 0 L 10 0 M 20 0 L 10 0 M 0 0 L 0 10 M 0 20 L 0 10"
-                  stroke-dasharray="2 2"
                   fill="none"
                   stroke="#abc8"
-                  stroke-width="1"
+                  stroke-width="0.25px"
                 />
               </pattern>
               <pattern
@@ -98,13 +96,11 @@ defmodule GeomextricWeb.Canvas do
                 patternUnits="userSpaceOnUse"
               >
                 <path
-                  vector-effect="non-scaling-stroke"
                   shape-rendering="geometricPrecision"
                   d="M 0 0 L 20 0 M 40 0 L 20 0 M 0 0 L 0 20 M 0 40 L 0 20"
                   fill="none"
-                  stroke-dasharray="2 2"
                   stroke="#cdea"
-                  stroke-width="2"
+                  stroke-width="0.5px"
                 />
               </pattern>
             </defs>
@@ -117,6 +113,8 @@ defmodule GeomextricWeb.Canvas do
               stroke="#d0d0d0"
               vector-effect="non-scaling-stroke"
               stroke-width="2"
+              rx="32"
+              ry="32"
             />
             <rect
               x={@box.x}
@@ -125,6 +123,8 @@ defmodule GeomextricWeb.Canvas do
               height={@box.height}
               fill="url(#grid)"
               opacity="0.8"
+              rx="32"
+              ry="32"
             />
 
             <rect
@@ -133,6 +133,8 @@ defmodule GeomextricWeb.Canvas do
               width={@box.width}
               height={@box.height}
               fill="url(#grid-sec)"
+              rx="32"
+              ry="32"
             />
 
             {render_slot(@inner_block)}
@@ -321,33 +323,104 @@ defmodule GeomextricWeb.Canvas do
               updateViewBox(this.el, this.world, cam, this.scroller)
             }
           }
+          let skipclick = false
+          const onPointerUp = (evt) => {
+            selecting = false
+
+            const {x,y} = evtToSvg(evt)
+
+            if(movement > 10) {
+            this.pushEvent('lasso', {
+              x: Math.min(offset.x, x),
+              y: Math.min(offset.y, y),
+              width: Math.abs(x - offset.x),
+              height: Math.abs(y - offset.y),
+            })
+          }
+
+            lasso.setAttribute("opacity", 0)
+          }
+          let movement = 0
           const onPointerMove = (evt) => {
                               if(evt.currentTarget.hasPointerCapture(evt.pointerId)) {
                                 evt.stopPropagation()
-                                {
-                                  const {x: x,y: y} = evtToSvg(evt);
+                                if(selecting) {
 
-                                  cam.x -= x -offset.x;
-                                  cam.y -= y -offset.y;
+                                      const {x,y} = evtToSvg(evt)
+                                      movement += Math.hypot(evt.movementX, evt.movementY)
+
+                                      skipclick ||= movement > 10
+                                      if(skipclick) {
+
+                                      lasso.setAttribute("x", Math.min(offset.x, x))
+                                      lasso.setAttribute("y", Math.min(offset.y, y))
+                                      lasso.setAttribute("width", Math.abs(x - offset.x))
+                                      lasso.setAttribute("height", Math.abs(y - offset.y))
                                 }
-                                updateViewBox(this.el, this.world, cam, this.scroller)
-                                {
-                                  const {x,y} = evtToSvg(evt)
-                                  offset.x = x;
-                                  offset.y = y;
-                                }
+                                    } else {
+
+                                    {
+                                          const {x: x,y: y} = evtToSvg(evt);
+
+                                          cam.x -= x -offset.x;
+                                          cam.y -= y -offset.y;
+                                        }
+                                        updateViewBox(this.el, this.world, cam, this.scroller)
+                                        {
+                                          const {x,y} = evtToSvg(evt)
+                                          offset.x = x;
+                                          offset.y = y;
+                                        }
+                                        }
+
                               }
                             }
+                          let selecting = false
+                        this.tools = document.createElementNS("http://www.w3.org/2000/svg", "g")
+                        const lasso = document.createElementNS("http://www.w3.org/2000/svg", "rect")
+                        lasso.setAttribute("x", "0")
+                        lasso.setAttribute("y", "0")
+                        lasso.setAttribute("opacity", 0)
+                        lasso.setAttribute("fill-opacity", 0.2)
+                        lasso.setAttribute("fill", 'blue')
+                        lasso.setAttribute("stroke", 'darkblue')
+                        lasso.setAttribute("stroke-width", 1)
+                        lasso.setAttribute("stroke-dasharray", "5 5")
+                        lasso.setAttribute("vector-effect", "non-scaling-stroke")
+                        lasso.setAttribute("width", "0")
+                        lasso.setAttribute("height", "0")
+                        this.tools.appendChild(lasso)
+                        this.world.appendChild(this.tools)
           const onPointerDown = (evt) => {
                                 evt.stopPropagation()
+                                evt.preventDefault()
+
+                                const {x,y} = evtToSvg(evt)
                                 if(evt.isPrimary && evt.button == 1 && evt.shiftKey) {
                                   evt.currentTarget.setPointerCapture(evt.pointerId)
-                                  const {x,y} = evtToSvg(evt)
                                   offset.x = x;
                                   offset.y = y;
-                                }
+                                } else {
+
+                                  movement  = 0
+                                  evt.currentTarget.setPointerCapture(evt.pointerId)
+                                  selecting  = true;
+                                  offset.x = x;
+                                                                   offset.y = y;
+                                                                   lasso.setAttribute("opacity", 1)
+                                lasso.setAttribute("x", x)
+                                lasso.setAttribute("y", y)
+
+                                lasso.setAttribute("width", "0")
+                                lasso.setAttribute("height", "0")
+          }
                               }
           const onDblClick = (evt) => {
+            if(skipclick ) {
+            skipclick  =false
+            return
+          }
+          evt.preventDefault()
             this.pushEvent("create", {pos: evtToSvg(evt)})
           }
           const onDrop = (evt) => {
@@ -359,6 +432,7 @@ defmodule GeomextricWeb.Canvas do
 
           const offset = {x:0,y:0}
           this.el.addEventListener('pointerdown', onPointerDown);
+          this.el.addEventListener('pointerup', onPointerUp);
           this.el.addEventListener('pointermove', onPointerMove);
           this.el.addEventListener('wheel', onWheel)
           this.el.addEventListener('click', onDblClick )
@@ -368,6 +442,7 @@ defmodule GeomextricWeb.Canvas do
 
           this.listeners = {
             pointerdown: onPointerDown,
+            pointerup: onPointerUp,
             pointermove: onPointerMove,
             wheel: onWheel,
             click: onDblClick,
@@ -380,6 +455,7 @@ defmodule GeomextricWeb.Canvas do
         },
         destroyed() {
           this.el.removeEventListener('pointerdown', this.listeners.pointerdown);
+        this.el.removeEventListener('pointerup', this.listeners.pointerup);
           this.el.removeEventListener('pointermove', this.listeners.pointermove);
           this.el.removeEventListener('wheel', this.listeners.wheel)
           this.el.removeEventListener('click', this.listeners.dblclick)
@@ -387,11 +463,14 @@ defmodule GeomextricWeb.Canvas do
 
           this.scroller.removeEventListener('scroll', this.listeners.scroll, {passive: true})
 
-          window.removeEventListener('resize', resize)
+          this.world.removeChild(this.tools)
         },
         updated()  {
           updateViewBox(this.el, this.world, cam, this.scroller)
+
+          this.world.appendChild(this.tools)
         }
+
       }
     </script>
     """

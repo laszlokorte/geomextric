@@ -11,8 +11,17 @@ defmodule GeomextricWeb.Circle do
   def circle(assigns) do
     ~H"""
     <g id={"g-#{@id}"} overflow="visible">
-      <circle data-non-scaling cx={@x} cy={@y} r={@r} fill={@fill}></circle>
       <circle
+        shape-rendering="geometricPrecision"
+        data-non-scaling
+        cx={@x}
+        cy={@y}
+        r={@r}
+        fill={@fill}
+      >
+      </circle>
+      <circle
+        shape-rendering="geometricPrecision"
         data-non-scaling
         id={@id}
         phx-hook=".Circle"
