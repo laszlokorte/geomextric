@@ -89,8 +89,6 @@ defmodule GeomextricWeb.Rectangle do
                         const {x,y} = evtToSvg(evt)
                         offset.x = x - this.el.getAttribute("x");
                         offset.y = y - this.el.getAttribute("y");
-                      } else {
-                      alert("x")
                       }
                     }
                     let noClick = false
