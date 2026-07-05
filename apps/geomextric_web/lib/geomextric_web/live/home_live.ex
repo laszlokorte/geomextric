@@ -208,6 +208,21 @@ defmodule GeomextricWeb.HomeLive do
       padding: 0.8ex;
       border-radius: 0.5ex;
       }
+
+      .connection-status {
+        display: flex;
+        flex-direction: row;
+        margin-left: auto;
+        margin-right: 1em;
+      }
+
+      .phx-connected .disconnected {
+        display: none;
+      }
+
+      .phx-loading .connected {
+        display: none;
+      }
     </style>
     <nav>
       <div class="pallette">
@@ -231,7 +246,9 @@ defmodule GeomextricWeb.HomeLive do
         </label>
       </form>
 
-      <button style="margin-left: auto;" phx-click="clear">Clear</button>
+      <button phx-click="clear">Clear</button>
+      <div class="connection-status connected">Connected 🟢</div>
+      <div class="connection-status disconnected">Reconnecting... 🔴</div>
     </nav>
     <.canvas box={@box}>
       <g opacity="0.4">
