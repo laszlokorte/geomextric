@@ -130,6 +130,7 @@ defmodule GeomextricWeb.Rectangle do
 
             del();
           });
+
           this.el.addEventListener("pointermove", onPointerMove);
           this.el.addEventListener("pointerup", onPointerUp);
           this.listeners = {
