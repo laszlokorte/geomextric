@@ -48,7 +48,7 @@ defmodule Geomextric.Canvas do
   end
 
   @impl true
-  def handle_cast({:put, id, {x, y} = coords, attrs}, state) do
+  def handle_cast({:put, id, {_x, _y} = coords, attrs}, state) do
     new = %{
       pos: coords,
       attrs: %{
@@ -61,7 +61,7 @@ defmodule Geomextric.Canvas do
   end
 
   @impl true
-  def handle_cast({:put, id, {x, y, width, height} = coords, attrs}, state) do
+  def handle_cast({:put, id, {_x, _y, _width, _height} = coords, attrs}, state) do
     new = %{
       pos: coords,
       attrs: %{
@@ -76,7 +76,7 @@ defmodule Geomextric.Canvas do
   @impl true
   def handle_cast({:move, id, {x, y} = coords}, state) do
     case state do
-      %{^id => old = %{pos: {old_x, old_y}}} ->
+      %{^id => old = %{pos: {_old_x, _old_y}}} ->
         {:noreply, %{state | id => %{old | pos: coords}},
          {:continue, {:broadcast_move, id, coords}}}
 

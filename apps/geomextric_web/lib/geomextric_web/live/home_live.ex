@@ -303,19 +303,15 @@ defmodule GeomextricWeb.HomeLive do
     <script :type={Phoenix.LiveView.ColocatedHook} name=".Draggable">
       export default {
         mounted() {
-        function dragstartHandler(evt) {
-          // Add different types of drag data
-          var svg = evt.currentTarget.firstElementChild;
-          evt.dataTransfer.setDragImage(svg, 0,0)
-          evt.dataTransfer.setData(
-            "text",
-            svg.getAttribute("fill"),
-          );
-        }
-          this.el.addEventListener('dragstart', dragstartHandler)
-
-        }
-      }
+          function dragstartHandler(evt) {
+            // Add different types of drag data
+            var svg = evt.currentTarget.firstElementChild;
+            evt.dataTransfer.setDragImage(svg, 0, 0);
+            evt.dataTransfer.setData("text", svg.getAttribute("fill"));
+          }
+          this.el.addEventListener("dragstart", dragstartHandler);
+        },
+      };
     </script>
     """
   end

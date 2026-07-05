@@ -1,0 +1,18 @@
+{
+  "name": "geomextric_web",
+  "version": "1.0.0",
+  "description": "To start your Phoenix server:",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Laszlo Korte",
+  "license": "ISC",
+  "dependencies": {
+    "prettier": "^3.9.4"
+  }
+}
