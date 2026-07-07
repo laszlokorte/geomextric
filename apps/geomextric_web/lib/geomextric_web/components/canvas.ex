@@ -15,6 +15,7 @@ defmodule GeomextricWeb.Canvas do
         display: block;
         width: 100%;
         height: 100%;
+        shaper-rendering: geometricPrecision;
       }
 
       :scope.scroller {
@@ -168,8 +169,8 @@ defmodule GeomextricWeb.Canvas do
         e.setAttribute(
           "viewBox",
           `${cam.x - (cam.screen.width / 2) * Math.exp(-cam.zoom)} ${cam.y - (cam.screen.height / 2) * Math.exp(-cam.zoom)}
-                                    ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
-                                    `,
+                                      ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
+                                      `,
         );
 
         r.setAttribute("data-zoomed", cam.zoom < 0 ? "out" : "in");

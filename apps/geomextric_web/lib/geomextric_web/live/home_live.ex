@@ -396,22 +396,24 @@ defmodule GeomextricWeb.HomeLive do
     </div>
     <div style={"--auto-stroke: #{@pen}; --auto-fill: #{@pen}"}>
       <.canvas box={@box}>
-        <g opacity="0.4">
+        <g shape-rendering="optimizeSpeed">
           <line
             x1={@box.x}
             y1="0"
             x2={@box.x + @box.width}
             y2="0"
+            stroke-width="2"
             vector-effect="non-scaling-stroke"
-            stroke="black"
+            stroke="#777"
           />
           <line
             y1={@box.y}
             x1="0"
             y2={@box.y + @box.height}
             x2="0"
+            stroke-width="2"
             vector-effect="non-scaling-stroke"
-            stroke="black"
+            stroke="#777"
           />
 
           <path
@@ -424,6 +426,7 @@ defmodule GeomextricWeb.HomeLive do
             d={"M  #{@box.x + @box.width} 0 l -10 -10 v 20"}
             data-non-scaling
             style=" transform-origin: 100% 50%; "
+            fill="#777"
           />
           <path
             d={"M 0 #{@box.y} h 10 v 10 h -20 v -10"}
@@ -435,6 +438,7 @@ defmodule GeomextricWeb.HomeLive do
             d={"M 0 #{@box.y} l -10 10 h 20"}
             data-non-scaling
             style=" transform-origin: 50% 0%; "
+            fill="#777"
           />
         </g>
         <circle class="origin" cx={0} cy={0} r={3} fill="#666" data-non-scaling />
