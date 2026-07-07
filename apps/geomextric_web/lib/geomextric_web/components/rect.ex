@@ -4,6 +4,8 @@ defmodule GeomextricWeb.Rectangle do
 
   attr :x, :float, default: 0.0, doc: "x"
   attr :y, :float, default: 0.0, doc: "y"
+  attr :rx, :float, default: 0.0, doc: "rx"
+  attr :ry, :float, default: 0.0, doc: "ry"
   attr :width, :float, default: 0.0, doc: "width"
   attr :height, :float, default: 0.0, doc: "height"
   attr :fill, :string, default: "red", doc: "fill color"
@@ -16,6 +18,8 @@ defmodule GeomextricWeb.Rectangle do
         shape-rendering="geometricPrecision"
         x={@x}
         y={@y}
+        rx={@rx}
+        ry={@ry}
         width={@width}
         height={@height}
         fill={@fill}
@@ -27,6 +31,8 @@ defmodule GeomextricWeb.Rectangle do
         phx-hook=".Rect"
         x={@x}
         y={@y}
+        rx={@rx}
+        ry={@ry}
         width={@width}
         height={@height}
         fill={@fill}
@@ -34,27 +40,11 @@ defmodule GeomextricWeb.Rectangle do
       />
     </g>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".Rect">
-      function throttle(fun, delay, fallback) {
-        let lastTime = 0;
-        return function (...args) {
-          let now = Date.now();
-          if (now - lastTime >= delay) {
-            fun(...args);
-            lastTime = now;
-          } else if (fallback) {
-            fallback(...args);
-          }
-        };
-      }
-      const debounce = (callback, wait) => {
-        let timeoutId = null;
-        return (...args) => {
-          window.clearTimeout(timeoutId);
-          timeoutId = window.setTimeout(() => {
-            callback(...args);
-          }, wait);
-        };
-      };
+      import {
+        throttle,
+        debounce,
+      } from "../../../../../apps/geomextric_web/assets/js/foo";
+
       export default {
         mounted() {
           const move = throttle(

@@ -1,6 +1,7 @@
 defmodule GeomextricWeb.HomeLive do
   import GeomextricWeb.Canvas
   import GeomextricWeb.Circle
+  import GeomextricWeb.Menu
   import GeomextricWeb.Rectangle
   use Phoenix.LiveView
   @topic "canvas"
@@ -12,7 +13,10 @@ defmodule GeomextricWeb.HomeLive do
      socket
      |> assign(:pen, "#0077ff")
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
-     |> assign(:dots, Geomextric.Canvas.get_all(Geomextric.Canvas) |> Enum.sort_by(&elem(&1, 0)))}
+     |> assign(
+       :layers,
+       Geomextric.Canvas.get_all(Geomextric.Canvas) |> Enum.sort_by(&elem(&1, 0))
+     )}
   end
 
   def handle_event("move", %{"id" => <<"d-", id::binary>>, "x" => x, "y" => y}, socket) do
@@ -87,7 +91,7 @@ defmodule GeomextricWeb.HomeLive do
     {:noreply,
      socket
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
-     |> update(:dots, &[{id, new} | &1])}
+     |> update(:layers, &[{id, new} | &1])}
   end
 
   def handle_info({:moved, id, new_coords}, socket) do
@@ -95,7 +99,7 @@ defmodule GeomextricWeb.HomeLive do
      socket
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
      |> update(
-       :dots,
+       :layers,
        &Enum.map(&1, fn
          {^id, %{} = old} -> {id, %{old | pos: new_coords}}
          e -> e
@@ -108,7 +112,7 @@ defmodule GeomextricWeb.HomeLive do
      socket
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
      |> update(
-       :dots,
+       :layers,
        &Enum.filter(&1, fn
          {^id, _} -> false
          _ -> true
@@ -119,7 +123,7 @@ defmodule GeomextricWeb.HomeLive do
   def handle_info(:clear, socket) do
     {:noreply,
      socket
-     |> assign(:dots, [])
+     |> assign(:layers, [])
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))}
   end
 
@@ -127,119 +131,130 @@ defmodule GeomextricWeb.HomeLive do
     {:noreply,
      socket
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
-     |> assign(:dots, Geomextric.Canvas.get_all(Geomextric.Canvas) |> Enum.sort_by(&elem(&1, 0)))}
+     |> assign(
+       :layers,
+       Geomextric.Canvas.get_all(Geomextric.Canvas) |> Enum.sort_by(&elem(&1, 0))
+     )}
   end
 
   def render(assigns) do
     ~H"""
     <style rel="stylesheet" :type={GeomextricWeb.ColocatedCSS}>
-      @keyframes enter {
-        from { transform: scale(0); }
-        to   { transform: scale(1); }
-      }
-       .origin {
-      scale: var(--cam-scale);
-      transform-box: fill-box;
-      transform-origin: 50% 50%;
-      }
+       @keyframes enter {
+         from { transform: scale(0); }
+         to   { transform: scale(1); }
+       }
+        .origin {
+       scale: var(--cam-scale);
+       transform-box: fill-box;
+       transform-origin: 50% 50%;
+       }
 
-      [data-non-scaling] {
-        scale: var(--cam-scale-min);
-        transform-box: fill-box;
-        transform-origin: 50% 50%;
-        }
-      [data-non-scaling][fill=magenta]:hover {
-      transform: scale(150%);
-      }
-      nav {
-      border-radius: 1ex;
-        position: fixed;
-        height: auto;
-        top: 0;
-        left: 0;
-        right: 0;
-        margin: 1ex;
-        padding: 1ex;
-        color: #fff;
-        display: flex;
-        gap: 1ex;
+       [data-non-scaling] {
+         scale: var(--cam-scale-min);
+         transform-box: fill-box;
+         transform-origin: 50% 50%;
+         }
+       [data-non-scaling][fill=magenta]:hover {
+       transform: scale(150%);
+       }
+       .toolbar {
+       border-radius: 1ex;
+         position: fixed;
+         height: auto;
+         top: 2em;
+         left: 0;
+         right: 1em;
+         margin: 1ex;
+         padding: 1ex;
+         color: #fff;
+         display: flex;
+         gap: 1ex;
 
-        background: #0003;
-        z-index: 1000;
-        flex-direction: row;
-        align-items: center;
-      }
-      button {
-      background: #000;
-      color: #fff;
-      padding: 1ex;
+         background: #0003;
+         z-index: 1000;
+         flex-direction: row;
+         align-items: center;
+       }
+       button {
+       background: #000;
+       color: #fff;
+       padding: 1ex;
 
-      border-radius: 1ex;
-      }
+       border-radius: 1ex;
+       }
 
-      [draggable="true"]{
-        cursor: grab;
-      }
+       [draggable="true"]{
+         cursor: grab;
+       }
 
-      input[type=color] {
-      border: none;
-      display: block;
-      width: 100%;
-      height: 100%;
-      appearance: none;
-      	-webkit-appearance: none;
-      width: 3ex;
-      height: 3ex;
-      margin: 0;
-      padding: 0;
-      }
-      .color-border {
-      display: grid;
-      border-radius: 100vw;
-      width: 3ex;
-      height: 3ex;
-      overflow: hidden;
-      padding: 0;
-      outline: 2px solid white;
-      }
+       input[type=color] {
+       border: none;
+       display: block;
+       width: 100%;
+       height: 100%;
+       appearance: none;
+       	-webkit-appearance: none;
+       width: 3ex;
+       height: 3ex;
+       margin: 0;
+       padding: 0;
+       }
+       .color-border {
+       display: grid;
+       border-radius: 100vw;
+       width: 3ex;
+       height: 3ex;
+       overflow: hidden;
+       padding: 0;
+       outline: 2px solid white;
+       }
 
-      .pallette {
-      border-right: 2px solid #0005;
-      display: inherit;
-      gap: inherit;
-      padding-right: 1ex;
-      margin-right: 1ex;
-      }
+       .pallette {
+       border-right: 2px solid #0005;
+       display: inherit;
+       gap: inherit;
+       padding-right: 1ex;
+       margin-right: 1ex;
+       }
 
-      form.ghost {
-        display: contents;
-      }
-      label {
-      display: flex;
-      align-items: center;
-      flex-direction: row;
-      gap: 1ex;
-      background: #0005;
-      padding: 0.8ex;
-      border-radius: 0.5ex;
-      }
+       form.ghost {
+         display: contents;
+       }
+       label {
+       display: flex;
+       align-items: center;
+       flex-direction: row;
+       gap: 1ex;
+       background: #0005;
+       padding: 0.8ex;
+       border-radius: 0.5ex;
+       }
 
-      .connection-status {
-        display: flex;
-        flex-direction: row;
-        margin-left: auto;
-        margin-right: 1em;
-      }
+       .connection-status {
+         display: flex;
+         flex-direction: row;
+         margin-left: auto;
+         margin-right: 1em;
+       }
 
-      .phx-connected .disconnected {
-        display: none;
-      }
+       .phx-connected .disconnected {
+         display: none;
+       }
 
-      .phx-loading .connected {
-        display: none;
+       .phx-loading .connected {
+         display: none;
+       }
+
+      .menu-bar {
+      position: absolute;
+      top: 0em;
+      left: 0em;
+      right: 0em;
+      z-index: 1000;
       }
     </style>
-    <nav>
+    <nav class="toolbar">
       <div class="pallette">
         <%= for c <- ["magenta", "cyan", "lightblue"] do %>
           <div id={"drag-circle-#{c}"} phx-hook=".Draggable" draggable="true">
@@ -272,6 +287,46 @@ defmodule GeomextricWeb.HomeLive do
       <div class="connection-status connected">Connected 🟢</div>
       <div class="connection-status disconnected">Reconnecting... 🔴</div>
     </nav>
+
+    <div class="menu-bar">
+      <.menu items={[
+        %{
+          label: "File",
+          items: [
+            %{
+              label: "Save"
+            },
+            %{label: "Clear", send: "clear"},
+            %{
+              label: "Recent",
+              items: [
+                %{label: "A"},
+                %{label: "A"},
+                %{label: "A"},
+                %{label: "A"}
+              ]
+            }
+          ]
+        },
+        %{
+          label: "Edit",
+          items: [
+            %{label: "Undo"},
+            %{label: "Redo"}
+          ]
+        },
+        %{
+          label: "Selection",
+          items: [
+            %{label: "Select All"},
+            %{label: "Unselect"}
+          ]
+        },
+        %{
+          label: "Help"
+        }
+      ]} />
+    </div>
     <.canvas box={@box}>
       <g opacity="0.4">
         <line
@@ -303,45 +358,45 @@ defmodule GeomextricWeb.HomeLive do
         />
       </g>
       <circle class="origin" cx={0} cy={0} r={3} fill="#666" data-non-scaling />
-      <.circle
-        :for={
-          {id, %{pos: {x, y}, attrs: %{color: col, radius: r}}} when is_float(x) and is_float(y) <-
-            @dots
-        }
-        id={"d-#{id}"}
-        x={x}
-        y={y}
-        r={r}
-        fill={col}
-      />
-      <.rect
-        :for={{id, %{pos: {x, y, w, h}, attrs: %{color: col, radius: r}}} <- @dots}
-        id={"d-#{id}"}
-        x={x}
-        y={y}
-        width={w}
-        height={h}
-        fill={col}
-      />
-      <line
-        :for={
-          {id, %{pos: {{x1, y1}, {x2, y2}}, attrs: %{color: col}}} <-
-            @dots
-        }
-        id={"d-#{id}"}
-        stroke="black"
-        x1={x1}
-        y1={y1}
-        x2={x2}
-        y2={y2}
-        fill={col}
-      />
+      <%= for {id, l} <- @layers do %>
+        <%= case l do %>
+          <% %{pos: {x, y}, attrs: %{color: col, radius: r}} -> %>
+            <.circle
+              id={"d-#{id}"}
+              x={x}
+              y={y}
+              r={r}
+              fill={col}
+            />
+          <% %{pos: {x, y, w, h}, attrs: %{color: col, radius: r}} -> %>
+            <.rect
+              id={"d-#{id}"}
+              x={x}
+              y={y}
+              rx={r}
+              ry={r}
+              width={w}
+              height={h}
+              fill={col}
+            />
+          <% %{pos: {{x1, y1}, {x2, y2}}, attrs: %{color: col, thickness: w}} -> %>
+            <line
+              id={"d-#{id}"}
+              stroke="black"
+              stroke-width={w}
+              x1={x1}
+              y1={y1}
+              x2={x2}
+              y2={y2}
+              fill={col}
+            />
+        <% end %>
+      <% end %>
     </.canvas>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".Draggable">
       export default {
         mounted() {
           function dragstartHandler(evt) {
-            // Add different types of drag data
             var svg = evt.currentTarget.firstElementChild;
             evt.dataTransfer.setDragImage(svg, 0, 0);
             evt.dataTransfer.setData(

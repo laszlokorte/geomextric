@@ -5,7 +5,7 @@ defmodule GeomextricWeb.InitAssigns do
   import Phoenix.Component
 
   def on_mount(:default, _params, _session, socket) do
-    {:cont, assign(socket, :page_title, "Hello")}
+    {:cont, assign(socket, :page_title, "Canvas")}
   end
 
   def on_mount(:user, _params, _session, _socket) do

@@ -27,7 +27,7 @@ defmodule GeomextricWeb.Canvas do
         inset: 0;
       }
       :scope.scroller::after {
-      content: "foo";
+      content: "";
       position: absolute;
       left: 0;
       top: 0;
@@ -160,7 +160,6 @@ defmodule GeomextricWeb.Canvas do
           height: 0,
         },
       };
-      let skipScroll = false;
       let resumeScroll = null;
       function updateViewBox(e, r, cam, scroller) {
         if (r) {
@@ -169,8 +168,8 @@ defmodule GeomextricWeb.Canvas do
         e.setAttribute(
           "viewBox",
           `${cam.x - (cam.screen.width / 2) * Math.exp(-cam.zoom)} ${cam.y - (cam.screen.height / 2) * Math.exp(-cam.zoom)}
-                      ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
-                      `,
+                              ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
+                              `,
         );
 
         r.style.setProperty("--cam-scale", Math.exp(-cam.zoom));
@@ -197,8 +196,6 @@ defmodule GeomextricWeb.Canvas do
             r.width.baseVal.value * sinAbs + r.height.baseVal.value * cosAbs;
           const cX = r.width.baseVal.value / 2 + r.x.baseVal.value;
           const cY = r.height.baseVal.value / 2 + r.y.baseVal.value;
-          const cXr = cX * cos + cY * sin;
-          const cYr = cY * cos - cX * sin;
 
           const scrollWidth =
             boundingX * Math.exp(cam.zoom) + scroller.clientWidth * 2;
@@ -217,17 +214,18 @@ defmodule GeomextricWeb.Canvas do
             (boundingY * Math.exp(cam.zoom)) / 2 +
             ((cam.y - cY) * cos + (cam.x - cX) * sin) * Math.exp(cam.zoom);
 
-          clearTimeout(resumeScroll);
-          skipScroll = true;
-          scroller.scrollTo({
-            left: newScrollLeft,
-            top: newScrollTop,
-            behavior: "instant",
-          });
+          const eps = 10;
 
-          resumeScroll = setTimeout(() => {
-            skipScroll = false;
-          }, 10);
+          if (
+            Math.abs(scroller.scrollTop - newScrollTop) > eps ||
+            Math.abs(scroller.scrollLeft - newScrollLeft) > eps
+          ) {
+            scroller.scrollTo({
+              left: newScrollLeft,
+              top: newScrollTop,
+              behavior: "instant",
+            });
+          }
         }
       }
       function rotate({ x, y }, { x: px, y: py }, angle) {
@@ -253,10 +251,6 @@ defmodule GeomextricWeb.Canvas do
           this.scroller = this.el.closest("[data-scrollbars]");
           this.scrollerBody = this.scroller.firstElementChild;
           const onScroll = (evt) => {
-            if (skipScroll) {
-              return;
-            }
-
             const angle = (cam.angle * Math.PI) / 180;
             const cos = Math.cos(angle);
             const sin = Math.sin(angle);
@@ -275,8 +269,6 @@ defmodule GeomextricWeb.Canvas do
               this.world.width.baseVal.value / 2 + this.world.x.baseVal.value;
             const cY =
               this.world.height.baseVal.value / 2 + this.world.y.baseVal.value;
-            const cXr = cX * cos + cY * sin;
-            const cYr = cY * cos - cX * sin;
 
             const dx =
               this.scroller.scrollLeft -
@@ -350,9 +342,6 @@ defmodule GeomextricWeb.Canvas do
           };
           let skipclick = false;
           const onPointerUp = (evt) => {
-            selecting = false;
-            pointing = false;
-
             const { x, y } = evtToSvg(evt);
 
             if (movement > 10) {
@@ -363,7 +352,8 @@ defmodule GeomextricWeb.Canvas do
                   width: Math.abs(x - offset.x),
                   height: Math.abs(y - offset.y),
                 });
-              } else if (evt.button == 0) {
+              } else if (evt.button == 0 && selecting) {
+                skipclick = true;
                 this.pushEvent("create", {
                   pos: {
                     x: Math.min(offset.x, x),
@@ -372,7 +362,9 @@ defmodule GeomextricWeb.Canvas do
                     height: Math.abs(y - offset.y),
                   },
                 });
-              } else if (evt.button == 1) {
+              } else if (evt.button == 0 && pointing) {
+                skipclick = true;
+
                 this.pushEvent("create", {
                   start: {
                     x,
@@ -382,8 +374,12 @@ defmodule GeomextricWeb.Canvas do
                     x: offset.x,
                     y: offset.y,
                   },
+                  thickness: Math.exp(-cam.zoom),
                 });
               }
+
+              selecting = false;
+              pointing = false;
             }
 
             lasso.setAttribute("opacity", 0);
@@ -473,15 +469,16 @@ defmodule GeomextricWeb.Canvas do
           }
           this.world.appendChild(this.tools);
           const onPointerDown = (evt) => {
-            evt.stopPropagation();
-            evt.preventDefault();
-
             const { x, y } = evtToSvg(evt);
             if (evt.isPrimary && evt.button == 1 && evt.shiftKey) {
+              evt.stopPropagation();
+              evt.preventDefault();
               evt.currentTarget.setPointerCapture(evt.pointerId);
               offset.x = x;
               offset.y = y;
-            } else if (evt.button != 1) {
+            } else if (!evt.shiftKey && evt.button != 1) {
+              evt.stopPropagation();
+              evt.preventDefault();
               movement = 0;
               evt.currentTarget.setPointerCapture(evt.pointerId);
               selecting = true;
@@ -492,7 +489,9 @@ defmodule GeomextricWeb.Canvas do
               arrow.setAttribute("y1", y);
               arrow.setAttribute("x2", x);
               arrow.setAttribute("y2", y);
-            } else if (evt.button == 1) {
+            } else if (evt.shiftKey) {
+              evt.stopPropagation();
+              evt.preventDefault();
               movement = 0;
               evt.currentTarget.setPointerCapture(evt.pointerId);
               pointing = true;

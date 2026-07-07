@@ -52,7 +52,21 @@ defmodule Geomextric.Canvas do
   end
 
   @impl true
-  def handle_cast({:put, id, {_x, _y} = coords, attrs}, state) do
+  def handle_cast({:put, id, {{x1, y1}, {x2, y2}} = coords, attrs}, state)
+      when is_float(x1) and is_float(y1) and is_float(x2) and is_float(y2) do
+    new = %{
+      pos: coords,
+      attrs: %{
+        color: Map.get(attrs, "color", "rebeccapurple"),
+        thickness: Map.get(attrs, "thickness", 1)
+      }
+    }
+
+    {:noreply, Map.put(state, id, new), {:continue, {:broadcast_insert, id, new}}}
+  end
+
+  @impl true
+  def handle_cast({:put, id, {x, y} = coords, attrs}, state) when is_float(x) and is_float(y) do
     new = %{
       pos: coords,
       attrs: %{
@@ -70,7 +84,7 @@ defmodule Geomextric.Canvas do
       pos: coords,
       attrs: %{
         color: Map.get(attrs, "color", "rebeccapurple"),
-        radius: Map.get(attrs, "radius", 0)
+        radius: Map.get(attrs, "radius", 10)
       }
     }
 
