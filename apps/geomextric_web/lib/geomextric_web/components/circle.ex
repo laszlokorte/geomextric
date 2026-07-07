@@ -104,7 +104,6 @@ defmodule GeomextricWeb.Circle do
 
           const onPointerMove = (evt) => {
             if (evt.currentTarget.hasPointerCapture(evt.pointerId)) {
-              evt.stopPropagation();
               const { x: px, y: py } = evtToSvg(evt);
 
               const x = px - offset.x;

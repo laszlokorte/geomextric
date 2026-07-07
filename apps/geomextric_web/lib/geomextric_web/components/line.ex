@@ -13,7 +13,7 @@ defmodule GeomextricWeb.Line do
 
   def line(assigns) do
     ~H"""
-    <g id={"g-#{@id}"} pointer-events="paint" overflow="visible">
+    <g id={"g-#{@id}"} overflow="visible">
       <line
         shape-rendering="geometricPrecision"
         x1={@x1}
@@ -24,7 +24,15 @@ defmodule GeomextricWeb.Line do
         stroke-width={@stroke_width}
         stroke-linecap="round"
       />
-      <g id={"h-#{@id}"} opacity="0" stroke-opacity="1" data-layer={@id} phx-hook=".Line">
+      <g
+        pointer-events="paint"
+        stroke={@stroke}
+        id={"h-#{@id}"}
+        opacity="0"
+        stroke-opacity="1"
+        data-layer={@id}
+        phx-hook=".Line"
+      >
         <line
           tabindex="-1"
           shape-rendering="geometricPrecision"
@@ -32,9 +40,7 @@ defmodule GeomextricWeb.Line do
           y1={@y1}
           x2={@x2}
           y2={@y2}
-          stroke={@stroke}
-          pointer-events="all"
-          stroke-width={@stroke_width}
+          stroke-width={@stroke_width * 1.5}
           stroke-linecap="round"
         />
 
@@ -45,8 +51,6 @@ defmodule GeomextricWeb.Line do
           y1={@y1}
           x2={@x2}
           y2={@y2}
-          stroke={@stroke}
-          pointer-events="all"
           stroke-width={10}
           vector-effect="non-scaling-stroke"
           stroke-linecap="round"
@@ -58,6 +62,26 @@ defmodule GeomextricWeb.Line do
         throttle,
         debounce,
       } from "../../../../../apps/geomextric_web/assets/js/foo";
+
+      const clonedEl = (t, reset) => {
+        if (reset && t.clonedEl) {
+          if (t.clonedEl.parentNode) {
+            t.clonedEl.parentNode.removeChild(t.clonedEl);
+          }
+          t.clonedEl = null;
+        }
+
+        if (!t.clonedEl) {
+          t.clonedEl = t.el.cloneNode(true);
+          t.clonedEl.setAttribute("pointer-events", "none");
+          t.clonedEl.setAttribute("opacity", "0.3");
+          t.clonedEl.removeAttribute("id");
+          t.clonedEl.removeAttribute("phx-hook");
+          t.el.parentNode.appendChild(t.clonedEl);
+        }
+
+        return t.clonedEl;
+      };
 
       export default {
         mounted() {
@@ -88,58 +112,62 @@ defmodule GeomextricWeb.Line do
             };
           };
           const offset = { x: 0, y: 0 };
+          this.line = { x: 0, y: 0 };
+          this.dragging = false;
           const onPointerDown = (evt) => {
             if (evt.isPrimary && evt.button === 0) {
-              evt.currentTarget.setAttribute("opacity", 0.2);
+              clonedEl(this).setAttribute("opacity", 0.2);
 
               evt.preventDefault();
               evt.stopPropagation();
-              evt.currentTarget.setPointerCapture(evt.pointerId);
+              this.el.setPointerCapture(evt.pointerId);
 
               const { x, y } = evtToSvg(evt);
+              console.log("x");
 
-              this.el.setAttribute("transform", ``);
+              clonedEl(this, true).setAttribute("transform", ``);
               offset.x = x;
               offset.y = y;
+              this.line.x = this.el.firstElementChild.getAttribute("x1") * 1;
+              this.line.y = this.el.firstElementChild.getAttribute("y1") * 1;
+              this.dragging = true;
             }
           };
           let noClick = false;
 
           const onPointerMove = (evt) => {
-            if (evt.currentTarget.hasPointerCapture(evt.pointerId)) {
-              evt.stopPropagation();
+            if (this.el.hasPointerCapture(evt.pointerId)) {
               const { x: px, y: py } = evtToSvg(evt);
 
               const x = px - offset.x;
               const y = py - offset.y;
               noClick = true;
 
-              // move(x,y)
-              // offset.x = x;
-              // offset.y = y;
+              // move( x+ 1 * this.line.x
+              //   ,y + 1 * this.line.y
+              // )
 
-              this.el.setAttribute("transform", `translate(${x}, ${y})`);
+              clonedEl(this).setAttribute("transform", `translate(${x}, ${y})`);
             }
           };
 
           const onPointerCancel = (evt) => {
-            evt.currentTarget.setAttribute("opacity", 0);
+            clonedEl(this).setAttribute("opacity", 0);
           };
           const onPointerUp = (evt) => {
-            if (evt.currentTarget.hasPointerCapture(evt.pointerId)) {
+            if (this.el.hasPointerCapture(evt.pointerId)) {
               evt.stopPropagation();
 
-              evt.currentTarget.setAttribute("opacity", 0);
-
-              this.el.setAttribute("transform", ``);
+              clonedEl(this).setAttribute("opacity", 0);
 
               const { x: px, y: py } = evtToSvg(evt);
 
-              const x =
-                px - 1 * offset.x + 1 * this.el.firstElementChild.getAttribute("x1");
-              const y =
-                py - 1 * offset.y + 1 * this.el.firstElementChild.getAttribute("y1");
-              move(x, y);
+              const x = px - 1 * offset.x;
+              const y = py - 1 * offset.y;
+
+              move(x + 1 * this.line.x, y + 1 * this.line.y);
+
+              this.dragging = false;
             }
           };
           this.el.addEventListener("pointerdown", onPointerDown);
@@ -164,9 +192,20 @@ defmodule GeomextricWeb.Line do
           };
         },
         destroyed() {
+          if (this.clonedEl) {
+            if (this.clonedEl.parentNode) {
+              this.clonedEl.parentNode.removeChild(this.clonedEl);
+            }
+            this.clonedEl = null;
+          }
           this.el.removeEventListener("pointerdown", this.listeners.pointerdown);
           this.el.removeEventListener("pointermove", this.listeners.pointermove);
           this.el.removeEventListener("pointerup", this.listeners.pointerup);
+        },
+        updated() {
+          if (this.clonedEl) {
+            this.el.parentNode.appendChild(this.clonedEl);
+          }
         },
       };
     </script>

@@ -169,8 +169,8 @@ defmodule GeomextricWeb.Canvas do
         e.setAttribute(
           "viewBox",
           `${cam.x - (cam.screen.width / 2) * Math.exp(-cam.zoom)} ${cam.y - (cam.screen.height / 2) * Math.exp(-cam.zoom)}
-                                        ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
-                                        `,
+                                          ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
+                                          `,
         );
 
         r.setAttribute("data-zoomed", cam.zoom < 0 ? "out" : "in");
@@ -404,7 +404,7 @@ defmodule GeomextricWeb.Canvas do
                     x: offset.x,
                     y: offset.y,
                   },
-                  thickness: Math.exp(-cam.zoom),
+                  thickness: 5 * Math.exp(-cam.zoom),
                 });
               }
 
