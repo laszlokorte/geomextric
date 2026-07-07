@@ -1,6 +1,7 @@
 defmodule GeomextricWeb.Line do
   use Phoenix.Component
   use Gettext, backend: GeomextricWeb.Gettext
+  defp hypot(x, y), do: :math.sqrt(x * x + y * y)
 
   attr :x1, :float, default: 0.0, doc: "x1"
   attr :y1, :float, default: 0.0, doc: "y1"
@@ -33,7 +34,8 @@ defmodule GeomextricWeb.Line do
         y2={@y2}
         stroke={@stroke}
         pointer-events="all"
-        stroke-width={@stroke_width * 5}
+        stroke-width={@stroke_width * 2}
+        data-non-zoom-stroke={if(@stroke_width < 1, do: "min", else: "no")}
         opacity="0"
         stroke-opacity="0.2"
         stroke-linecap="square"

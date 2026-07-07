@@ -157,10 +157,16 @@ defmodule GeomextricWeb.HomeLive do
        transform-origin: 50% 50%;
        }
 
-       [data-non-zoom-stroke] {
-       vector-effect: var(--cam-scale-stroke);
+       svg[data-zoomed="out"] [data-non-zoom-stroke="yes"] {
+       vector-effect: non-scaling-stroke;
 
             }
+
+            svg[data-zoomed="out"] [data-non-zoom-stroke="min"] {
+            vector-effect: non-scaling-stroke;
+            stroke-width: 5;
+
+                 }
        [data-non-scaling] {
          scale: var(--cam-scale-min);
          transform-box: fill-box;

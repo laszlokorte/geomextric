@@ -31,8 +31,8 @@ defmodule GeomextricWeb.Circle do
         opacity="0"
         stroke={@fill}
         pointer-events="all"
-        stroke-width={5}
-        data-non-zoom-stroke
+        stroke-width={2}
+        data-non-zoom-stroke="yes"
         stroke-opacity="0.3"
         stroke-linecap="square"
       />

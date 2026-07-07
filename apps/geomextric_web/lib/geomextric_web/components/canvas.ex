@@ -65,7 +65,7 @@ defmodule GeomextricWeb.Canvas do
           <svg
             data-world
             overflow="visible"
-            preserveAspectRatio="xMidYMid meet"
+            preserveAspectRatio="xMidYMid slice"
             x={@box.x}
             y={@box.y}
             width={@box.width}
@@ -168,14 +168,11 @@ defmodule GeomextricWeb.Canvas do
         e.setAttribute(
           "viewBox",
           `${cam.x - (cam.screen.width / 2) * Math.exp(-cam.zoom)} ${cam.y - (cam.screen.height / 2) * Math.exp(-cam.zoom)}
-                                  ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
-                                  `,
+                                    ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
+                                    `,
         );
 
-        r.style.setProperty(
-          "--cam-scale-stroke",
-          cam.zoom < 0 ? "non-scaling-stroke" : "none",
-        );
+        r.setAttribute("data-zoomed", cam.zoom < 0 ? "out" : "in");
         r.style.setProperty("--cam-scale", Math.exp(-cam.zoom));
         r.style.setProperty(
           "--cam-scale-clamped",
@@ -206,6 +203,9 @@ defmodule GeomextricWeb.Canvas do
           const scrollHeight =
             boundingY * Math.exp(cam.zoom) + scroller.clientHeight * 2;
           if (!isNaN(scrollWidth) && !isNaN(scrollHeight)) {
+            if (scrollWidth > 2 << 20 || scrollHeight > 2 << 20) {
+              return;
+            }
             scroller.style.setProperty("--scroll-width", scrollWidth + "px");
             scroller.style.setProperty("--scroll-height", scrollHeight + "px");
           }
@@ -287,13 +287,14 @@ defmodule GeomextricWeb.Canvas do
             cam.y = (-dx * sin + dy * cos) / s + cY;
             updateViewBox(this.el, this.world, cam, this.scroller);
           };
-          this.scroller.addEventListener("scroll", onScroll, { passive: true });
+          this.scroller.addEventListener("scroll", onScroll, { passive: false });
           const evtToSvg = (evt) => {
             point.x = evt.clientX;
             point.y = evt.clientY;
             const svgGlobal = point.matrixTransform(
               this.world.getScreenCTM().inverse(),
             );
+
             return {
               x: svgGlobal.x,
               y: svgGlobal.y,
@@ -302,7 +303,7 @@ defmodule GeomextricWeb.Canvas do
 
           const wr = (this.world.viewBox.baseVal.width / window.innerWidth) * 1;
           const hr = (this.world.viewBox.baseVal.height / window.innerHeight) * 1;
-          cam.zoom = -Math.log(Math.max(wr, hr));
+          cam.zoom = Math.max(-6, -Math.log(Math.max(wr, hr)));
           cam.x = this.el.viewBox.baseVal.width / 2 + this.el.viewBox.baseVal.x;
           cam.y = this.el.viewBox.baseVal.height / 2 + this.el.viewBox.baseVal.y;
 
@@ -314,8 +315,32 @@ defmodule GeomextricWeb.Canvas do
           resize();
 
           updateViewBox(this.el, this.world, cam, this.scroller);
+
+          const clampZoom = (oldZoom, delta) => {
+            const newZoom = Math.max(-6, oldZoom + delta);
+            const newFactor = Math.exp(newZoom);
+            if (this.scroller) {
+              const r = this.world;
+
+              const bounding = Math.max(
+                r.height.baseVal.value,
+                r.height.baseVal.value,
+              );
+
+              const scrollSize =
+                bounding * newFactor +
+                Math.max(this.scroller.clientWidth, this.scroller.clientHeight) * 2;
+
+              return !isNaN(scrollSize) && scrollSize < 2 << 18 ? newZoom : oldZoom;
+            }
+          };
+          let piv = null;
           const onWheel = (evt) => {
-            const piv = evtToSvg(evt);
+            if (!piv) {
+              console.log("x");
+
+              piv = evtToSvg(evt);
+            }
 
             if (evt.altKey) {
               evt.preventDefault();
@@ -332,9 +357,9 @@ defmodule GeomextricWeb.Canvas do
             } else if (evt.ctrlKey) {
               evt.preventDefault();
               const oldZoom = Math.exp(cam.zoom);
-              cam.zoom -= evt.deltaY / 1000;
+              console.log(cam.zoom);
 
-              cam.zoom = Math.max(-10, Math.min(6, cam.zoom));
+              cam.zoom = clampZoom(cam.zoom, -evt.deltaY / 1000);
               const newZoom = Math.exp(cam.zoom);
               const factor = oldZoom / newZoom;
 
@@ -394,6 +419,7 @@ defmodule GeomextricWeb.Canvas do
           };
           let movement = 0;
           const onPointerMove = (evt) => {
+            piv = null;
             if (evt.currentTarget.hasPointerCapture(evt.pointerId)) {
               evt.stopPropagation();
               if (selecting) {
@@ -593,7 +619,7 @@ defmodule GeomextricWeb.Canvas do
           this.el.removeEventListener("drop", this.listeners.drop);
 
           this.scroller.removeEventListener("scroll", this.listeners.scroll, {
-            passive: true,
+            passive: false,
           });
 
           this.world.removeChild(this.tools);
