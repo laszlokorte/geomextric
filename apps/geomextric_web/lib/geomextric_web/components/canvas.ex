@@ -169,8 +169,8 @@ defmodule GeomextricWeb.Canvas do
         e.setAttribute(
           "viewBox",
           `${cam.x - (cam.screen.width / 2) * Math.exp(-cam.zoom)} ${cam.y - (cam.screen.height / 2) * Math.exp(-cam.zoom)}
-                                      ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
-                                      `,
+                                        ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
+                                        `,
         );
 
         r.setAttribute("data-zoomed", cam.zoom < 0 ? "out" : "in");
@@ -338,8 +338,6 @@ defmodule GeomextricWeb.Canvas do
           let piv = null;
           const onWheel = (evt) => {
             if (!piv) {
-              console.log("x");
-
               piv = evtToSvg(evt);
             }
 
@@ -358,7 +356,6 @@ defmodule GeomextricWeb.Canvas do
             } else if (evt.ctrlKey) {
               evt.preventDefault();
               const oldZoom = Math.exp(cam.zoom);
-              console.log(cam.zoom);
 
               cam.zoom = clampZoom(cam.zoom, -evt.deltaY / 1000);
               const newZoom = Math.exp(cam.zoom);

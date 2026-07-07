@@ -13,7 +13,7 @@ defmodule GeomextricWeb.Line do
 
   def line(assigns) do
     ~H"""
-    <g id={"g-#{@id}"} overflow="visible">
+    <g id={"g-#{@id}"} pointer-events="paint" overflow="visible">
       <line
         shape-rendering="geometricPrecision"
         x1={@x1}
@@ -22,24 +22,36 @@ defmodule GeomextricWeb.Line do
         y2={@y2}
         stroke={@stroke}
         stroke-width={@stroke_width}
+        stroke-linecap="round"
       />
-      <line
-        tabindex="-1"
-        shape-rendering="geometricPrecision"
-        id={@id}
-        phx-hook=".Line"
-        x1={@x1}
-        y1={@y1}
-        x2={@x2}
-        y2={@y2}
-        stroke={@stroke}
-        pointer-events="all"
-        stroke-width={@stroke_width * 2}
-        data-non-zoom-stroke={if(@stroke_width < 1, do: "min", else: "no")}
-        opacity="0"
-        stroke-opacity="0.2"
-        stroke-linecap="square"
-      />
+      <g id={"h-#{@id}"} opacity="0" stroke-opacity="1" data-layer={@id} phx-hook=".Line">
+        <line
+          tabindex="-1"
+          shape-rendering="geometricPrecision"
+          x1={@x1}
+          y1={@y1}
+          x2={@x2}
+          y2={@y2}
+          stroke={@stroke}
+          pointer-events="all"
+          stroke-width={@stroke_width}
+          stroke-linecap="round"
+        />
+
+        <line
+          tabindex="-1"
+          shape-rendering="geometricPrecision"
+          x1={@x1}
+          y1={@y1}
+          x2={@x2}
+          y2={@y2}
+          stroke={@stroke}
+          pointer-events="all"
+          stroke-width={10}
+          vector-effect="non-scaling-stroke"
+          stroke-linecap="round"
+        />
+      </g>
     </g>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".Line">
       import {
@@ -49,15 +61,16 @@ defmodule GeomextricWeb.Line do
 
       export default {
         mounted() {
+          const id = this.el.getAttribute("data-layer");
           const move = throttle(
-            (x, y) => this.pushEvent("move", { id: this.el.id, x, y }),
+            (x, y) => this.pushEvent("move", { id: id, x, y }),
             60,
-            debounce((x, y) => this.pushEvent("move", { id: this.el.id, x, y }), 500),
+            debounce((x, y) => this.pushEvent("move", { id: id, x, y }), 500),
           );
           const del = throttle(
-            (x, y) => this.pushEvent("delete", { id: this.el.id }),
+            (x, y) => this.pushEvent("delete", { id: id }),
             60,
-            debounce((x, y) => this.pushEvent("delete", { id: this.el.id }), 500),
+            debounce((x, y) => this.pushEvent("delete", { id: id }), 500),
           );
 
           const svg = this.el.ownerSVGElement;
@@ -77,15 +90,17 @@ defmodule GeomextricWeb.Line do
           const offset = { x: 0, y: 0 };
           const onPointerDown = (evt) => {
             if (evt.isPrimary && evt.button === 0) {
-              evt.currentTarget.setAttribute("opacity", 1);
+              evt.currentTarget.setAttribute("opacity", 0.2);
 
               evt.preventDefault();
               evt.stopPropagation();
               evt.currentTarget.setPointerCapture(evt.pointerId);
 
               const { x, y } = evtToSvg(evt);
-              offset.x = x - this.el.getAttribute("x1");
-              offset.y = y - this.el.getAttribute("y1");
+
+              this.el.setAttribute("transform", ``);
+              offset.x = x;
+              offset.y = y;
             }
           };
           let noClick = false;
@@ -99,15 +114,11 @@ defmodule GeomextricWeb.Line do
               const y = py - offset.y;
               noClick = true;
 
-              //  move(x,y)
+              // move(x,y)
+              // offset.x = x;
+              // offset.y = y;
 
-              const oldDX = this.el.getAttribute("x2") - this.el.getAttribute("x1");
-              const oldDY = this.el.getAttribute("y2") - this.el.getAttribute("y1");
-
-              this.el.setAttribute("x1", x);
-              this.el.setAttribute("y1", y);
-              this.el.setAttribute("x2", x + oldDX);
-              this.el.setAttribute("y2", y + oldDY);
+              this.el.setAttribute("transform", `translate(${x}, ${y})`);
             }
           };
 
@@ -119,10 +130,15 @@ defmodule GeomextricWeb.Line do
               evt.stopPropagation();
 
               evt.currentTarget.setAttribute("opacity", 0);
+
+              this.el.setAttribute("transform", ``);
+
               const { x: px, y: py } = evtToSvg(evt);
 
-              const x = px - offset.x;
-              const y = py - offset.y;
+              const x =
+                px - 1 * offset.x + 1 * this.el.firstElementChild.getAttribute("x1");
+              const y =
+                py - 1 * offset.y + 1 * this.el.firstElementChild.getAttribute("y1");
               move(x, y);
             }
           };
