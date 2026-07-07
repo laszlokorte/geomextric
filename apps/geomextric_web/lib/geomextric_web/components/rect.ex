@@ -81,7 +81,7 @@ defmodule GeomextricWeb.Rectangle do
           };
           const offset = { x: 0, y: 0 };
           const onPointerDown = (evt) => {
-            if (evt.isPrimary && evt.button === 0) {
+            if (evt.isPrimary && evt.button === 0 && !evt.ctrlKey) {
               evt.preventDefault();
               evt.stopPropagation();
               evt.currentTarget.setPointerCapture(evt.pointerId);

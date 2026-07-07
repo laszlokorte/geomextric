@@ -88,7 +88,7 @@ defmodule GeomextricWeb.Circle do
           };
           const offset = { x: 0, y: 0 };
           const onPointerDown = (evt) => {
-            if (evt.isPrimary && evt.button === 0) {
+            if (evt.isPrimary && evt.button === 0 && !evt.ctrlKey) {
               evt.stopPropagation();
 
               evt.preventDefault();

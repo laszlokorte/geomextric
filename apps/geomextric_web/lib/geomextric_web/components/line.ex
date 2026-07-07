@@ -115,7 +115,7 @@ defmodule GeomextricWeb.Line do
           this.line = { x: 0, y: 0 };
           this.dragging = false;
           const onPointerDown = (evt) => {
-            if (evt.isPrimary && evt.button === 0) {
+            if (evt.isPrimary && evt.button === 0 && !evt.ctrlKey) {
               clonedEl(this).setAttribute("opacity", 0.2);
 
               evt.preventDefault();

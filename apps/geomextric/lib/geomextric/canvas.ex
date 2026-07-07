@@ -8,7 +8,7 @@ defmodule Geomextric.Canvas do
     GenServer.start_link(__MODULE__, %{}, opts)
   end
 
-  def put(server, x, y, params = %{}) when is_float(x) and is_float(y) do
+  def put(server, x, y, params = %{}) when is_number(x) and is_number(y) do
     GenServer.cast(server, {:put, UUID.uuid4(), {x, y}, params})
   end
 
@@ -53,7 +53,7 @@ defmodule Geomextric.Canvas do
 
   @impl true
   def handle_cast({:put, id, {{x1, y1}, {x2, y2}} = coords, attrs}, state)
-      when is_float(x1) and is_float(y1) and is_float(x2) and is_float(y2) do
+      when is_number(x1) and is_number(y1) and is_number(x2) and is_number(y2) do
     new = %{
       pos: coords,
       attrs: %{
@@ -66,7 +66,7 @@ defmodule Geomextric.Canvas do
   end
 
   @impl true
-  def handle_cast({:put, id, {x, y} = coords, attrs}, state) when is_float(x) and is_float(y) do
+  def handle_cast({:put, id, {x, y} = coords, attrs}, state) when is_number(x) and is_number(y) do
     new = %{
       pos: coords,
       attrs: %{
@@ -94,7 +94,7 @@ defmodule Geomextric.Canvas do
   @impl true
   def handle_cast({:move, id, {x, y} = coords}, state) do
     case state do
-      %{^id => old = %{pos: {old_x, old_y}}} when is_float(old_x) and is_float(old_y) ->
+      %{^id => old = %{pos: {old_x, old_y}}} when is_number(old_x) and is_number(old_y) ->
         {:noreply, %{state | id => %{old | pos: coords}},
          {:continue, {:broadcast_move, id, coords}}}
 
