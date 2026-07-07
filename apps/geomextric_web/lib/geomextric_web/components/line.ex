@@ -1,64 +1,50 @@
-defmodule GeomextricWeb.Circle do
+defmodule GeomextricWeb.Line do
   use Phoenix.Component
   use Gettext, backend: GeomextricWeb.Gettext
 
-  attr :x, :float, default: 0.0, doc: "center x"
-  attr :y, :float, default: 0.0, doc: "center y"
-  attr :r, :float, default: 0.0, doc: "radius"
-  attr :fill, :string, default: "red", doc: "fill color"
-  attr :id, :string, default: "circle", doc: "id"
+  attr :x1, :float, default: 0.0, doc: "x1"
+  attr :y1, :float, default: 0.0, doc: "y1"
+  attr :x2, :float, default: 0.0, doc: "x2"
+  attr :y2, :float, default: 0.0, doc: "y2"
+  attr :stroke, :string, default: "red", doc: "stroke color"
+  attr :stroke_width, :float, default: 1.0, doc: "stroke width"
+  attr :id, :string, default: "line", doc: "id"
 
-  def circle(assigns) do
+  def line(assigns) do
     ~H"""
     <g id={"g-#{@id}"} overflow="visible">
-      <circle
+      <line
         shape-rendering="geometricPrecision"
-        cx={@x}
-        cy={@y}
-        r={@r}
-        fill={@fill}
-      >
-      </circle>
-      <circle
+        x1={@x1}
+        y1={@y1}
+        x2={@x2}
+        y2={@y2}
+        stroke={@stroke}
+        stroke-width={@stroke_width}
+      />
+      <line
+        tabindex="-1"
         shape-rendering="geometricPrecision"
         id={@id}
-        phx-hook=".Circle"
-        cx={@x}
-        cy={@y}
-        r={@r}
-        fill={@fill}
-        fill-opacity="0.1"
-        opacity="0"
-        stroke={@fill}
+        phx-hook=".Line"
+        x1={@x1}
+        y1={@y1}
+        x2={@x2}
+        y2={@y2}
+        stroke={@stroke}
         pointer-events="all"
-        stroke-width={5}
-        data-non-zoom-stroke
-        stroke-opacity="0.3"
+        stroke-width={@stroke_width * 5}
+        opacity="0"
+        stroke-opacity="0.2"
         stroke-linecap="square"
       />
     </g>
-    <script :type={Phoenix.LiveView.ColocatedHook} name=".Circle">
-      function throttle(fun, delay, fallback) {
-        let lastTime = 0;
-        return function (...args) {
-          let now = Date.now();
-          if (now - lastTime >= delay) {
-            fun(...args);
-            lastTime = now;
-          } else if (fallback) {
-            fallback(...args);
-          }
-        };
-      }
-      const debounce = (callback, wait) => {
-        let timeoutId = null;
-        return (...args) => {
-          window.clearTimeout(timeoutId);
-          timeoutId = window.setTimeout(() => {
-            callback(...args);
-          }, wait);
-        };
-      };
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".Line">
+      import {
+        throttle,
+        debounce,
+      } from "../../../../../apps/geomextric_web/assets/js/foo";
+
       export default {
         mounted() {
           const move = throttle(
@@ -89,15 +75,15 @@ defmodule GeomextricWeb.Circle do
           const offset = { x: 0, y: 0 };
           const onPointerDown = (evt) => {
             if (evt.isPrimary && evt.button === 0) {
-              evt.stopPropagation();
-
-              evt.preventDefault();
-              evt.currentTarget.setPointerCapture(evt.pointerId);
               evt.currentTarget.setAttribute("opacity", 1);
 
+              evt.preventDefault();
+              evt.stopPropagation();
+              evt.currentTarget.setPointerCapture(evt.pointerId);
+
               const { x, y } = evtToSvg(evt);
-              offset.x = x - this.el.getAttribute("cx");
-              offset.y = y - this.el.getAttribute("cy");
+              offset.x = x - this.el.getAttribute("x1");
+              offset.y = y - this.el.getAttribute("y1");
             }
           };
           let noClick = false;
@@ -112,8 +98,14 @@ defmodule GeomextricWeb.Circle do
               noClick = true;
 
               //  move(x,y)
-              this.el.setAttribute("cx", x);
-              this.el.setAttribute("cy", y);
+
+              const oldDX = this.el.getAttribute("x2") - this.el.getAttribute("x1");
+              const oldDY = this.el.getAttribute("y2") - this.el.getAttribute("y1");
+
+              this.el.setAttribute("x1", x);
+              this.el.setAttribute("y1", y);
+              this.el.setAttribute("x2", x + oldDX);
+              this.el.setAttribute("y2", y + oldDY);
             }
           };
 
@@ -140,8 +132,10 @@ defmodule GeomextricWeb.Circle do
               return;
             }
             evt.preventDefault();
+
             del();
           });
+
           this.el.addEventListener("pointermove", onPointerMove);
           this.el.addEventListener("pointerup", onPointerUp);
           this.el.addEventListener("pointercancel", onPointerCancel);

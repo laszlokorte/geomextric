@@ -3,8 +3,12 @@ defmodule GeomextricWeb.HomeLive do
   import GeomextricWeb.Circle
   import GeomextricWeb.Menu
   import GeomextricWeb.Rectangle
+  import GeomextricWeb.Line
   use Phoenix.LiveView
   @topic "canvas"
+  @colors ["#ff00ff", "#00ffff", "#00ff00"]
+
+  def colors, do: @colors
 
   def mount(%{}, _, socket) do
     GeomextricWeb.Endpoint.subscribe(@topic)
@@ -82,8 +86,7 @@ defmodule GeomextricWeb.HomeLive do
     {:noreply, socket}
   end
 
-  def handle_event("change_pen", %{"color" => color}, socket) do
-    {:noreply, socket}
+  def handle_event("change_pen", %{"value" => color}, socket) do
     {:noreply, socket |> assign(:pen, color)}
   end
 
@@ -140,6 +143,10 @@ defmodule GeomextricWeb.HomeLive do
   def render(assigns) do
     ~H"""
     <style rel="stylesheet" :type={GeomextricWeb.ColocatedCSS}>
+      body {
+      font-family: monospace, monospace;
+      font-size: 1em;
+      }
        @keyframes enter {
          from { transform: scale(0); }
          to   { transform: scale(1); }
@@ -150,14 +157,20 @@ defmodule GeomextricWeb.HomeLive do
        transform-origin: 50% 50%;
        }
 
+       [data-non-zoom-stroke] {
+       vector-effect: var(--cam-scale-stroke);
+
+            }
        [data-non-scaling] {
          scale: var(--cam-scale-min);
          transform-box: fill-box;
          transform-origin: 50% 50%;
          }
-       [data-non-scaling][fill=magenta]:hover {
-       transform: scale(150%);
-       }
+
+        .auto-color {
+        fill: var(--auto-fill, attr("fill"));
+        stroke: var(--auto-stroke, attr("stroke"));
+        }
        .toolbar {
        border-radius: 1ex;
          position: fixed;
@@ -179,13 +192,19 @@ defmodule GeomextricWeb.HomeLive do
        button {
        background: #000;
        color: #fff;
-       padding: 1ex;
+       padding: 0.5ex 1em;
+       cursor: pointer;
 
-       border-radius: 1ex;
+       border-radius: 0.5ex;
+       align-self: stretch;
        }
 
        [draggable="true"]{
          cursor: grab;
+       }
+
+       ::-moz-color-swatch {
+       border: none;
        }
 
        input[type=color] {
@@ -211,11 +230,8 @@ defmodule GeomextricWeb.HomeLive do
        }
 
        .pallette {
-       border-right: 2px solid #0005;
        display: inherit;
        gap: inherit;
-       padding-right: 1ex;
-       margin-right: 1ex;
        }
 
        form.ghost {
@@ -226,9 +242,7 @@ defmodule GeomextricWeb.HomeLive do
        align-items: center;
        flex-direction: row;
        gap: 1ex;
-       background: #0005;
-       padding: 0.8ex;
-       border-radius: 0.5ex;
+       margin-right: 1em;
        }
 
        .connection-status {
@@ -236,6 +250,17 @@ defmodule GeomextricWeb.HomeLive do
          flex-direction: row;
          margin-left: auto;
          margin-right: 1em;
+         white-space: nowrap;
+       }
+       .push-right {
+       margin-left: auto;
+       }
+
+       .color-list {
+       display: flex;
+       background: #0005;
+       padding: 0.8ex;
+       border-radius: 0.5ex;
        }
 
        .phx-connected .disconnected {
@@ -256,36 +281,67 @@ defmodule GeomextricWeb.HomeLive do
     </style>
     <nav class="toolbar">
       <div class="pallette">
-        <%= for c <- ["magenta", "cyan", "lightblue"] do %>
+        <%= for c <- colors() do %>
           <div id={"drag-circle-#{c}"} phx-hook=".Draggable" draggable="true">
             <svg data-type="circle" viewBox="-10 -10 20 20" fill={c} width="32" height="32">
               <circle cx="0" cy="0" r={8} stroke="white" stroke-width="2" />
             </svg>
           </div>
         <% end %>
-        <%= for c <- ["magenta", "cyan", "lightblue"] do %>
+        <%= for c <- colors() do %>
           <div id={"drag-rect-#{c}"} phx-hook=".Draggable" draggable="true">
             <svg data-type="rect" viewBox="-10 -10 20 20" fill={c} width="32" height="32">
-              <rect x="-8" y="-8" width="16" height="16" stroke="white" stroke-width="2" />
+              <rect
+                rx="5"
+                ry="5"
+                x="-8"
+                y="-8"
+                width="16"
+                height="16"
+                stroke="white"
+                stroke-width="2"
+              />
             </svg>
           </div>
         <% end %>
       </div>
 
-      <form class="ghost" phx-change="change_pen">
-        <label>
-          <div class="color-border">
-            <input type="color" name="color" value={@pen} />
-          </div>
-          <span style={"text-shadow: 0 0 5px #{@pen}"}>
-            {@pen}
-          </span>
-        </label>
-      </form>
+      <div class="color-list">
+        <form class="ghost" phx-change="change_pen">
+          <label>
+            <div class="color-border">
+              <input type="color" name="value" value={@pen} />
+            </div>
+            <span style={"text-shadow: 0 0 5px #{@pen}; font-family: monospace, monospace;"}>
+              {@pen}
+            </span>
+          </label>
+        </form>
 
-      <button phx-click="clear">Clear</button>
-      <div class="connection-status connected">Connected 🟢</div>
-      <div class="connection-status disconnected">Reconnecting... 🔴</div>
+        <button
+          :for={c <- colors()}
+          style="padding: 0; background: none;"
+          name="color"
+          phx-click="change_pen"
+          value={c}
+        >
+          <svg data-type="rect" viewBox="-10 -10 20 20" fill={c} width="28" height="28">
+            <rect
+              rx="20"
+              ry="20"
+              x="-8"
+              y="-8"
+              width="16"
+              height="16"
+              stroke="#0005"
+              stroke-width="1"
+            />
+          </svg>
+        </button>
+      </div>
+      <div class="push-right">
+        <button phx-click="clear">Clear</button>
+      </div>
     </nav>
 
     <div class="menu-bar">
@@ -325,74 +381,92 @@ defmodule GeomextricWeb.HomeLive do
         %{
           label: "Help"
         }
-      ]} />
+      ]}>
+        <div class="segment">
+          <div class="connection-status connected">Connected 🟢</div>
+          <div class="connection-status disconnected">Reconnecting... 🔴</div>
+        </div>
+      </.menu>
     </div>
-    <.canvas box={@box}>
-      <g opacity="0.4">
-        <line
-          x1={@box.x}
-          y1="0"
-          x2={@box.x + @box.width}
-          y2="0"
-          vector-effect="non-scaling-stroke"
-          stroke="black"
-        />
-        <line
-          y1={@box.y}
-          x1="0"
-          y2={@box.y + @box.height}
-          x2="0"
-          vector-effect="non-scaling-stroke"
-          stroke="black"
-        />
-        <path
-          d={"M  #{@box.x + @box.width} 0 l -10 -10 v 20"}
-          data-non-scaling
-          style=" transform-origin: 100% 50%; "
-        />
+    <div style={"--auto-stroke: #{@pen}; --auto-fill: #{@pen}"}>
+      <.canvas box={@box}>
+        <g opacity="0.4">
+          <line
+            x1={@box.x}
+            y1="0"
+            x2={@box.x + @box.width}
+            y2="0"
+            vector-effect="non-scaling-stroke"
+            stroke="black"
+          />
+          <line
+            y1={@box.y}
+            x1="0"
+            y2={@box.y + @box.height}
+            x2="0"
+            vector-effect="non-scaling-stroke"
+            stroke="black"
+          />
 
-        <path
-          d={"M 0 #{@box.y} l -10 10 h 20"}
-          data-non-scaling
-          style=" transform-origin: 50% 0%; "
-        />
-      </g>
-      <circle class="origin" cx={0} cy={0} r={3} fill="#666" data-non-scaling />
-      <%= for {id, l} <- @layers do %>
-        <%= case l do %>
-          <% %{pos: {x, y}, attrs: %{color: col, radius: r}} -> %>
-            <.circle
-              id={"d-#{id}"}
-              x={x}
-              y={y}
-              r={r}
-              fill={col}
-            />
-          <% %{pos: {x, y, w, h}, attrs: %{color: col, radius: r}} -> %>
-            <.rect
-              id={"d-#{id}"}
-              x={x}
-              y={y}
-              rx={r}
-              ry={r}
-              width={w}
-              height={h}
-              fill={col}
-            />
-          <% %{pos: {{x1, y1}, {x2, y2}}, attrs: %{color: col, thickness: w}} -> %>
-            <line
-              id={"d-#{id}"}
-              stroke="black"
-              stroke-width={w}
-              x1={x1}
-              y1={y1}
-              x2={x2}
-              y2={y2}
-              fill={col}
-            />
+          <path
+            fill="white"
+            d={"M  #{@box.x + @box.width} 0 v -10 h -10 v 20 h 10"}
+            data-non-scaling
+            style=" transform-origin: 100% 50%; "
+          />
+          <path
+            d={"M  #{@box.x + @box.width} 0 l -10 -10 v 20"}
+            data-non-scaling
+            style=" transform-origin: 100% 50%; "
+          />
+          <path
+            d={"M 0 #{@box.y} h 10 v 10 h -20 v -10"}
+            data-non-scaling
+            fill="white"
+            style=" transform-origin: 50% 0%; "
+          />
+          <path
+            d={"M 0 #{@box.y} l -10 10 h 20"}
+            data-non-scaling
+            style=" transform-origin: 50% 0%; "
+          />
+        </g>
+        <circle class="origin" cx={0} cy={0} r={3} fill="#666" data-non-scaling />
+        <%= for {id, l} <- @layers do %>
+          <%= case l do %>
+            <% %{pos: {x, y}, attrs: %{color: col, radius: r}} -> %>
+              <.circle
+                id={"d-#{id}"}
+                x={x}
+                y={y}
+                r={r}
+                fill={col}
+              />
+            <% %{pos: {x, y, w, h}, attrs: %{color: col, radius: r}} -> %>
+              <.rect
+                id={"d-#{id}"}
+                x={x}
+                y={y}
+                rx={r}
+                ry={r}
+                width={w}
+                height={h}
+                fill={col}
+              />
+            <% %{pos: {{x1, y1}, {x2, y2}}, attrs: %{color: col, thickness: w}} -> %>
+              <.line
+                id={"d-#{id}"}
+                stroke_width={w}
+                x1={x1}
+                y1={y1}
+                x2={x2}
+                y2={y2}
+                stroke={col}
+              />
+          <% end %>
         <% end %>
-      <% end %>
-    </.canvas>
+      </.canvas>
+    </div>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".Draggable">
       export default {
         mounted() {

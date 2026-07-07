@@ -9,7 +9,7 @@ defmodule GeomextricWeb.Rectangle do
   attr :width, :float, default: 0.0, doc: "width"
   attr :height, :float, default: 0.0, doc: "height"
   attr :fill, :string, default: "red", doc: "fill color"
-  attr :id, :string, default: "circle", doc: "id"
+  attr :id, :string, default: "rect", doc: "id"
 
   def rect(assigns) do
     ~H"""
@@ -36,7 +36,14 @@ defmodule GeomextricWeb.Rectangle do
         width={@width}
         height={@height}
         fill={@fill}
-        opacity="0.3"
+        fill-opacity="0.1"
+        opacity="0"
+        stroke={@fill}
+        pointer-events="all"
+        stroke-width={5}
+        data-non-zoom-stroke
+        stroke-opacity="0.3"
+        stroke-linecap="square"
       />
     </g>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".Rect">
@@ -75,8 +82,11 @@ defmodule GeomextricWeb.Rectangle do
           const offset = { x: 0, y: 0 };
           const onPointerDown = (evt) => {
             if (evt.isPrimary && evt.button === 0) {
+              evt.preventDefault();
               evt.stopPropagation();
               evt.currentTarget.setPointerCapture(evt.pointerId);
+
+              evt.currentTarget.setAttribute("opacity", 1);
 
               const { x, y } = evtToSvg(evt);
               offset.x = x - this.el.getAttribute("x");
@@ -99,9 +109,14 @@ defmodule GeomextricWeb.Rectangle do
               this.el.setAttribute("y", y);
             }
           };
+          const onPointerCancel = (evt) => {
+            evt.currentTarget.setAttribute("opacity", 0);
+          };
           const onPointerUp = (evt) => {
             if (evt.currentTarget.hasPointerCapture(evt.pointerId)) {
               evt.stopPropagation();
+
+              evt.currentTarget.setAttribute("opacity", 0);
               const { x: px, y: py } = evtToSvg(evt);
 
               const x = px - offset.x;
@@ -123,6 +138,7 @@ defmodule GeomextricWeb.Rectangle do
 
           this.el.addEventListener("pointermove", onPointerMove);
           this.el.addEventListener("pointerup", onPointerUp);
+          this.el.addEventListener("pointercancel", onPointerCancel);
           this.listeners = {
             pointerdown: onPointerDown,
             pointermove: onPointerMove,

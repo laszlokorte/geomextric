@@ -168,10 +168,14 @@ defmodule GeomextricWeb.Canvas do
         e.setAttribute(
           "viewBox",
           `${cam.x - (cam.screen.width / 2) * Math.exp(-cam.zoom)} ${cam.y - (cam.screen.height / 2) * Math.exp(-cam.zoom)}
-                              ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
-                              `,
+                                  ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
+                                  `,
         );
 
+        r.style.setProperty(
+          "--cam-scale-stroke",
+          cam.zoom < 0 ? "non-scaling-stroke" : "none",
+        );
         r.style.setProperty("--cam-scale", Math.exp(-cam.zoom));
         r.style.setProperty(
           "--cam-scale-clamped",
@@ -330,7 +334,7 @@ defmodule GeomextricWeb.Canvas do
               const oldZoom = Math.exp(cam.zoom);
               cam.zoom -= evt.deltaY / 1000;
 
-              cam.zoom = Math.max(-6, Math.min(6, cam.zoom));
+              cam.zoom = Math.max(-10, Math.min(6, cam.zoom));
               const newZoom = Math.exp(cam.zoom);
               const factor = oldZoom / newZoom;
 
@@ -341,11 +345,12 @@ defmodule GeomextricWeb.Canvas do
             }
           };
           let skipclick = false;
+          const onPointerCancel = (evt) => {};
           const onPointerUp = (evt) => {
             const { x, y } = evtToSvg(evt);
 
             if (movement > 10) {
-              if (evt.button === 2) {
+              if (evt.button === 2 && !evt.shiftKey) {
                 this.pushEvent("lasso", {
                   x: Math.min(offset.x, x),
                   y: Math.min(offset.y, y),
@@ -361,6 +366,8 @@ defmodule GeomextricWeb.Canvas do
                     width: Math.abs(x - offset.x),
                     height: Math.abs(y - offset.y),
                   },
+
+                  radius: 5 * Math.exp(-cam.zoom),
                 });
               } else if (evt.button == 0 && pointing) {
                 skipclick = true;
@@ -438,6 +445,7 @@ defmodule GeomextricWeb.Canvas do
             "line",
           );
           {
+            lasso.classList.add("auto-color");
             lasso.setAttribute("x", "0");
             lasso.setAttribute("y", "0");
             lasso.setAttribute("opacity", 0);
@@ -453,6 +461,7 @@ defmodule GeomextricWeb.Canvas do
             this.tools.appendChild(lasso);
           }
           {
+            arrow.classList.add("auto-color");
             arrow.setAttribute("x1", "0");
             arrow.setAttribute("y1", "0");
             arrow.setAttribute("x2", "0");
@@ -489,7 +498,7 @@ defmodule GeomextricWeb.Canvas do
               arrow.setAttribute("y1", y);
               arrow.setAttribute("x2", x);
               arrow.setAttribute("y2", y);
-            } else if (evt.shiftKey) {
+            } else if (evt.shiftKey && evt.button != 2) {
               evt.stopPropagation();
               evt.preventDefault();
               movement = 0;
@@ -518,31 +527,34 @@ defmodule GeomextricWeb.Canvas do
           };
 
           const onDrop = (evt) => {
-            const data = JSON.parse(evt.dataTransfer.getData("text/plain"));
-            switch (data.type) {
-              case "circle": {
-                this.pushEvent("create", {
-                  pos: evtToSvg(evt),
-                  color: data.color,
-                  radius: 10 * Math.exp(-cam.zoom),
-                });
-                break;
-              }
+            try {
+              const data = JSON.parse(evt.dataTransfer.getData("text/plain"));
+              switch (data.type) {
+                case "circle": {
+                  this.pushEvent("create", {
+                    pos: evtToSvg(evt),
+                    color: data.color,
+                    radius: 10 * Math.exp(-cam.zoom),
+                  });
+                  break;
+                }
 
-              case "rect": {
-                const p = evtToSvg(evt);
-                this.pushEvent("create", {
-                  pos: {
-                    x: p.x - 10 * Math.exp(-cam.zoom),
-                    y: p.y - 10 * Math.exp(-cam.zoom),
-                    width: 20 * Math.exp(-cam.zoom),
-                    height: 20 * Math.exp(-cam.zoom),
-                  },
-                  color: data.color,
-                });
-                break;
+                case "rect": {
+                  const p = evtToSvg(evt);
+                  this.pushEvent("create", {
+                    pos: {
+                      x: p.x - 10 * Math.exp(-cam.zoom),
+                      y: p.y - 10 * Math.exp(-cam.zoom),
+                      width: 20 * Math.exp(-cam.zoom),
+                      height: 20 * Math.exp(-cam.zoom),
+                    },
+                    radius: 5 * Math.exp(-cam.zoom),
+                    color: data.color,
+                  });
+                  break;
+                }
               }
-            }
+            } catch (e) {}
           };
           const svg = this.el;
           const point = svg.createSVGPoint();
@@ -550,6 +562,7 @@ defmodule GeomextricWeb.Canvas do
           const offset = { x: 0, y: 0 };
           this.el.addEventListener("pointerdown", onPointerDown);
           this.el.addEventListener("pointerup", onPointerUp);
+          this.el.addEventListener("pointercancel", onPointerCancel);
           this.el.addEventListener("pointermove", onPointerMove);
           this.el.addEventListener("wheel", onWheel);
           this.el.addEventListener("click", onDblClick);

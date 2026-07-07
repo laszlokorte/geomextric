@@ -94,13 +94,18 @@ defmodule Geomextric.Canvas do
   @impl true
   def handle_cast({:move, id, {x, y} = coords}, state) do
     case state do
-      %{^id => old = %{pos: {_old_x, _old_y}}} ->
+      %{^id => old = %{pos: {old_x, old_y}}} when is_float(old_x) and is_float(old_y) ->
         {:noreply, %{state | id => %{old | pos: coords}},
          {:continue, {:broadcast_move, id, coords}}}
 
       %{^id => old = %{pos: {_old_x, _old_y, old_w, old_h}}} ->
         {:noreply, %{state | id => %{old | pos: {x, y, old_w, old_h}}},
          {:continue, {:broadcast_move, id, {x, y, old_w, old_h}}}}
+
+      %{^id => old = %{pos: {{old_x1, old_y1}, {old_x2, old_y2}}}} ->
+        {:noreply,
+         %{state | id => %{old | pos: {{x, y}, {x - old_x1 + old_x2, y - old_y1 + old_y2}}}},
+         {:continue, {:broadcast_move, id, {{x, y}, {x - old_x1 + old_x2, y - old_y1 + old_y2}}}}}
 
       %{} ->
         {:noreply, state}
