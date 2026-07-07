@@ -8,8 +8,12 @@ defmodule Geomextric.Canvas do
     GenServer.start_link(__MODULE__, %{}, opts)
   end
 
-  def put(server, x, y, params = %{} \\ %{}) do
+  def put(server, x, y, params = %{}) when is_float(x) and is_float(y) do
     GenServer.cast(server, {:put, UUID.uuid4(), {x, y}, params})
+  end
+
+  def put(server, {x1, y1}, {x2, y2}, params = %{}) do
+    GenServer.cast(server, {:put, UUID.uuid4(), {{x1, y1}, {x2, y2}}, params})
   end
 
   def put(server, x, y, width, height, params = %{} \\ %{}) do
@@ -99,9 +103,18 @@ defmodule Geomextric.Canvas do
     {:noreply,
      state
      |> Enum.filter(fn
-       {_, %{pos: {x, y}}} -> x < bx || x > bx + bw || y < by || y > by + bh
-       {_, %{pos: {x, y, w, h}}} -> x < bx || x + w > bx + bw || y < by || y + h > by + bh
-       _ -> true
+       {_, %{pos: {{x1, y1}, {x2, y2}}}} ->
+         x1 < bx || x1 > bx + bw || y1 < by || y1 > by + bh ||
+           x2 < bx || x2 > bx + bw || y2 < by || y2 > by + bh
+
+       {_, %{pos: {x, y}}} ->
+         x < bx || x > bx + bw || y < by || y > by + bh
+
+       {_, %{pos: {x, y, w, h}}} ->
+         x < bx || x + w > bx + bw || y < by || y + h > by + bh
+
+       _ ->
+         true
      end)
      |> Map.new(), {:continue, :broadcast_reload}}
   end
@@ -121,6 +134,7 @@ defmodule Geomextric.Canvas do
     minX =
       state
       |> Enum.map(fn
+        {_, %{pos: {{x1, _}, {x2, _}}}} -> min(x1, x2)
         {_, %{pos: {x, _}}} -> x
         {_, %{pos: {x, _, _w, _h}}} -> x
       end)
@@ -131,6 +145,7 @@ defmodule Geomextric.Canvas do
     minY =
       state
       |> Enum.map(fn
+        {_, %{pos: {{_, y1}, {_, y2}}}} -> min(y1, y2)
         {_, %{pos: {_, y}}} -> y
         {_, %{pos: {_, y, _w, _h}}} -> y
       end)
@@ -141,6 +156,7 @@ defmodule Geomextric.Canvas do
     maxX =
       state
       |> Enum.map(fn
+        {_, %{pos: {{x1, _}, {x2, _}}}} -> max(x1, x2)
         {_, %{pos: {x, _}}} -> x
         {_, %{pos: {x, _, w, _h}}} -> x + w
       end)
@@ -151,6 +167,7 @@ defmodule Geomextric.Canvas do
     maxY =
       state
       |> Enum.map(fn
+        {_, %{pos: {{_, y1}, {_, y2}}}} -> max(y1, y2)
         {_, %{pos: {_, y}}} -> y
         {_, %{pos: {_, y, _w, h}}} -> y + h
       end)

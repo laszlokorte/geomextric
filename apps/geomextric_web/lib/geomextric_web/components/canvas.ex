@@ -169,8 +169,8 @@ defmodule GeomextricWeb.Canvas do
         e.setAttribute(
           "viewBox",
           `${cam.x - (cam.screen.width / 2) * Math.exp(-cam.zoom)} ${cam.y - (cam.screen.height / 2) * Math.exp(-cam.zoom)}
-              ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
-              `,
+                      ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
+                      `,
         );
 
         r.style.setProperty("--cam-scale", Math.exp(-cam.zoom));
@@ -351,6 +351,7 @@ defmodule GeomextricWeb.Canvas do
           let skipclick = false;
           const onPointerUp = (evt) => {
             selecting = false;
+            pointing = false;
 
             const { x, y } = evtToSvg(evt);
 
@@ -362,7 +363,7 @@ defmodule GeomextricWeb.Canvas do
                   width: Math.abs(x - offset.x),
                   height: Math.abs(y - offset.y),
                 });
-              } else {
+              } else if (evt.button == 0) {
                 this.pushEvent("create", {
                   pos: {
                     x: Math.min(offset.x, x),
@@ -371,10 +372,22 @@ defmodule GeomextricWeb.Canvas do
                     height: Math.abs(y - offset.y),
                   },
                 });
+              } else if (evt.button == 1) {
+                this.pushEvent("create", {
+                  start: {
+                    x,
+                    y,
+                  },
+                  end: {
+                    x: offset.x,
+                    y: offset.y,
+                  },
+                });
               }
             }
 
             lasso.setAttribute("opacity", 0);
+            arrow.setAttribute("opacity", 0);
           };
           let movement = 0;
           const onPointerMove = (evt) => {
@@ -386,11 +399,21 @@ defmodule GeomextricWeb.Canvas do
 
                 skipclick ||= movement > 10;
                 if (skipclick) {
+                  lasso.setAttribute("opacity", 1);
                   lasso.setAttribute("x", Math.min(offset.x, x));
                   lasso.setAttribute("y", Math.min(offset.y, y));
                   lasso.setAttribute("width", Math.abs(x - offset.x));
                   lasso.setAttribute("height", Math.abs(y - offset.y));
                 }
+              } else if (pointing) {
+                const { x, y } = evtToSvg(evt);
+
+                movement += Math.hypot(evt.movementX, evt.movementY);
+                arrow.setAttribute("opacity", 1);
+                arrow.setAttribute("x1", x);
+                arrow.setAttribute("y1", y);
+                arrow.setAttribute("x2", offset.x);
+                arrow.setAttribute("y2", offset.y);
               } else {
                 {
                   const { x: x, y: y } = evtToSvg(evt);
@@ -408,24 +431,46 @@ defmodule GeomextricWeb.Canvas do
             }
           };
           let selecting = false;
+          let pointing = false;
           this.tools = document.createElementNS("http://www.w3.org/2000/svg", "g");
           const lasso = document.createElementNS(
             "http://www.w3.org/2000/svg",
             "rect",
           );
-          lasso.setAttribute("x", "0");
-          lasso.setAttribute("y", "0");
-          lasso.setAttribute("opacity", 0);
-          lasso.setAttribute("fill-opacity", 0.2);
-          lasso.setAttribute("fill", "blue");
-          lasso.setAttribute("stroke", "darkblue");
-          lasso.setAttribute("stroke-width", 1);
-          lasso.setAttribute("pointer-events", "none");
-          lasso.setAttribute("stroke-dasharray", "5 5");
-          lasso.setAttribute("vector-effect", "non-scaling-stroke");
-          lasso.setAttribute("width", "0");
-          lasso.setAttribute("height", "0");
-          this.tools.appendChild(lasso);
+          const arrow = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "line",
+          );
+          {
+            lasso.setAttribute("x", "0");
+            lasso.setAttribute("y", "0");
+            lasso.setAttribute("opacity", 0);
+            lasso.setAttribute("fill-opacity", 0.2);
+            lasso.setAttribute("fill", "blue");
+            lasso.setAttribute("stroke", "darkblue");
+            lasso.setAttribute("stroke-width", 1);
+            lasso.setAttribute("pointer-events", "none");
+            lasso.setAttribute("stroke-dasharray", "5 5");
+            lasso.setAttribute("vector-effect", "non-scaling-stroke");
+            lasso.setAttribute("width", "0");
+            lasso.setAttribute("height", "0");
+            this.tools.appendChild(lasso);
+          }
+          {
+            arrow.setAttribute("x1", "0");
+            arrow.setAttribute("y1", "0");
+            arrow.setAttribute("x2", "0");
+            arrow.setAttribute("y2", "0");
+            arrow.setAttribute("opacity", 0);
+            arrow.setAttribute("fill-opacity", 0.2);
+            arrow.setAttribute("fill", "blue");
+            arrow.setAttribute("stroke", "darkblue");
+            arrow.setAttribute("stroke-width", 1);
+            arrow.setAttribute("pointer-events", "none");
+            arrow.setAttribute("stroke-dasharray", "5 5");
+            arrow.setAttribute("vector-effect", "non-scaling-stroke");
+            this.tools.appendChild(arrow);
+          }
           this.world.appendChild(this.tools);
           const onPointerDown = (evt) => {
             evt.stopPropagation();
@@ -436,10 +481,21 @@ defmodule GeomextricWeb.Canvas do
               evt.currentTarget.setPointerCapture(evt.pointerId);
               offset.x = x;
               offset.y = y;
-            } else {
+            } else if (evt.button != 1) {
               movement = 0;
               evt.currentTarget.setPointerCapture(evt.pointerId);
               selecting = true;
+              offset.x = x;
+              offset.y = y;
+              arrow.setAttribute("opacity", 1);
+              arrow.setAttribute("x1", x);
+              arrow.setAttribute("y1", y);
+              arrow.setAttribute("x2", x);
+              arrow.setAttribute("y2", y);
+            } else if (evt.button == 1) {
+              movement = 0;
+              evt.currentTarget.setPointerCapture(evt.pointerId);
+              pointing = true;
               offset.x = x;
               offset.y = y;
               lasso.setAttribute("opacity", 1);
@@ -461,13 +517,33 @@ defmodule GeomextricWeb.Canvas do
               radius: 10 * Math.exp(-cam.zoom),
             });
           };
+
           const onDrop = (evt) => {
-            const color = evt.dataTransfer.getData("text/plain");
-            this.pushEvent("create", {
-              pos: evtToSvg(evt),
-              color: color,
-              radius: 10 * Math.exp(-cam.zoom),
-            });
+            const data = JSON.parse(evt.dataTransfer.getData("text/plain"));
+            switch (data.type) {
+              case "circle": {
+                this.pushEvent("create", {
+                  pos: evtToSvg(evt),
+                  color: data.color,
+                  radius: 10 * Math.exp(-cam.zoom),
+                });
+                break;
+              }
+
+              case "rect": {
+                const p = evtToSvg(evt);
+                this.pushEvent("create", {
+                  pos: {
+                    x: p.x - 10 * Math.exp(-cam.zoom),
+                    y: p.y - 10 * Math.exp(-cam.zoom),
+                    width: 20 * Math.exp(-cam.zoom),
+                    height: 20 * Math.exp(-cam.zoom),
+                  },
+                  color: data.color,
+                });
+                break;
+              }
+            }
           };
           const svg = this.el;
           const point = svg.createSVGPoint();

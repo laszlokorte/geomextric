@@ -58,6 +58,21 @@ defmodule GeomextricWeb.HomeLive do
     {:noreply, socket}
   end
 
+  def handle_event(
+        "create",
+        %{"start" => %{"x" => x1, "y" => y1}, "end" => %{"x" => x2, "y" => y2}} = params,
+        socket
+      ) do
+    Geomextric.Canvas.put(
+      Geomextric.Canvas,
+      {x1, y1},
+      {x2, y2},
+      Map.merge(%{"color" => socket.assigns.pen}, params)
+    )
+
+    {:noreply, socket}
+  end
+
   def handle_event("clear", %{}, socket) do
     Geomextric.Canvas.clear(Geomextric.Canvas)
     {:noreply, socket}
@@ -228,8 +243,15 @@ defmodule GeomextricWeb.HomeLive do
       <div class="pallette">
         <%= for c <- ["magenta", "cyan", "lightblue"] do %>
           <div id={"drag-circle-#{c}"} phx-hook=".Draggable" draggable="true">
-            <svg viewBox="-10 -10 20 20" fill={c} width="32" height="32">
+            <svg data-type="circle" viewBox="-10 -10 20 20" fill={c} width="32" height="32">
               <circle cx="0" cy="0" r={8} stroke="white" stroke-width="2" />
+            </svg>
+          </div>
+        <% end %>
+        <%= for c <- ["magenta", "cyan", "lightblue"] do %>
+          <div id={"drag-rect-#{c}"} phx-hook=".Draggable" draggable="true">
+            <svg data-type="rect" viewBox="-10 -10 20 20" fill={c} width="32" height="32">
+              <rect x="-8" y="-8" width="16" height="16" stroke="white" stroke-width="2" />
             </svg>
           </div>
         <% end %>
@@ -282,7 +304,10 @@ defmodule GeomextricWeb.HomeLive do
       </g>
       <circle class="origin" cx={0} cy={0} r={3} fill="#666" data-non-scaling />
       <.circle
-        :for={{id, %{pos: {x, y}, attrs: %{color: col, radius: r}}} <- @dots}
+        :for={
+          {id, %{pos: {x, y}, attrs: %{color: col, radius: r}}} when is_float(x) and is_float(y) <-
+            @dots
+        }
         id={"d-#{id}"}
         x={x}
         y={y}
@@ -298,8 +323,20 @@ defmodule GeomextricWeb.HomeLive do
         height={h}
         fill={col}
       />
+      <line
+        :for={
+          {id, %{pos: {{x1, y1}, {x2, y2}}, attrs: %{color: col}}} <-
+            @dots
+        }
+        id={"d-#{id}"}
+        stroke="black"
+        x1={x1}
+        y1={y1}
+        x2={x2}
+        y2={y2}
+        fill={col}
+      />
     </.canvas>
-
     <script :type={Phoenix.LiveView.ColocatedHook} name=".Draggable">
       export default {
         mounted() {
@@ -307,7 +344,13 @@ defmodule GeomextricWeb.HomeLive do
             // Add different types of drag data
             var svg = evt.currentTarget.firstElementChild;
             evt.dataTransfer.setDragImage(svg, 0, 0);
-            evt.dataTransfer.setData("text", svg.getAttribute("fill"));
+            evt.dataTransfer.setData(
+              "text",
+              JSON.stringify({
+                type: svg.getAttribute("data-type"),
+                color: svg.getAttribute("fill"),
+              }),
+            );
           }
           this.el.addEventListener("dragstart", dragstartHandler);
         },
