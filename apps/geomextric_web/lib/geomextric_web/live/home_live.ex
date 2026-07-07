@@ -178,6 +178,7 @@ defmodule GeomextricWeb.HomeLive do
         stroke: var(--auto-stroke, attr("stroke"));
         }
        .toolbar {
+       flex-wrap: wrap-reverse;
        border-radius: 1ex;
          position: fixed;
          height: auto;
@@ -238,6 +239,7 @@ defmodule GeomextricWeb.HomeLive do
        .pallette {
        display: inherit;
        gap: inherit;
+       flex-wrap: wrap;
        }
 
        form.ghost {
@@ -268,13 +270,16 @@ defmodule GeomextricWeb.HomeLive do
        padding: 0.8ex;
        border-radius: 0.5ex;
        }
-
-       .phx-connected .disconnected {
-         display: none;
+       .connection-status {
+       display: none;
        }
 
-       .phx-loading .connected {
-         display: none;
+       .phx-loading .disconnected {
+         display: block;
+       }
+
+       .phx-connected .connected {
+         display: block;
        }
 
       .menu-bar {
