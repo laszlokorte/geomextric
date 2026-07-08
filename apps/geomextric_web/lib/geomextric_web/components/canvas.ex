@@ -3,6 +3,9 @@ defmodule GeomextricWeb.Canvas do
   use Gettext, backend: GeomextricWeb.Gettext
 
   slot :inner_block, required: true
+
+  attr :grid, :boolean, default: false, doc: "show grid"
+  attr :bounds, :boolean, default: false, doc: "show grid"
   attr :box, :map, default: %{}, doc: "The viewBox"
 
   def canvas(assigns) do
@@ -11,11 +14,16 @@ defmodule GeomextricWeb.Canvas do
       svg {
         position: absolute;
         inset: 0;
-        background: #23875daa;
         display: block;
+        background: #fff;
         width: 100%;
         height: 100%;
         shaper-rendering: geometricPrecision;
+      }
+
+      svg[with-bounds] {
+
+      background: #23875daa;
       }
 
       :scope.scroller {
@@ -58,6 +66,7 @@ defmodule GeomextricWeb.Canvas do
     <div class="scroller" data-scrollbars tabindex="-1">
       <div class="scroller-body">
         <svg
+          with-bounds={if(@bounds, do: "yes")}
           preserveAspectRatio="xMidYMid meet"
           viewBox={"#{@box.x} #{@box.y} #{@box.width} #{@box.height}"}
           id="my-camera"
@@ -113,7 +122,7 @@ defmodule GeomextricWeb.Canvas do
               fill="#fff"
               stroke="#d0d0d0"
               vector-effect="non-scaling-stroke"
-              stroke-width="2"
+              stroke-width={if(@bounds, do: "2", else: "0")}
               rx="32"
               ry="32"
             />
@@ -122,7 +131,7 @@ defmodule GeomextricWeb.Canvas do
               y={@box.y}
               width={@box.width}
               height={@box.height}
-              fill="url(#grid)"
+              fill={if(@grid and @bounds, do: "url(#grid)", else: "none")}
               opacity="0.8"
               rx="32"
               ry="32"
@@ -133,7 +142,7 @@ defmodule GeomextricWeb.Canvas do
               y={@box.y}
               width={@box.width}
               height={@box.height}
-              fill="url(#grid-sec)"
+              fill={if(@grid and @bounds, do: "url(#grid-sec)", else: "none")}
               rx="32"
               ry="32"
             />

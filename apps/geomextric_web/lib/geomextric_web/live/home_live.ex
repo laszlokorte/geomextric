@@ -17,6 +17,9 @@ defmodule GeomextricWeb.HomeLive do
     {:ok,
      socket
      |> assign(:pen, "#0077ff")
+     |> assign(:axis, true)
+     |> assign(:grid, true)
+     |> assign(:bounds, true)
      |> assign(:extra_pen, "#0077ff")
      |> assign(:selection, [])
      |> assign(:tips, to_form(%{"target" => false, "source" => false}))
@@ -133,6 +136,30 @@ defmodule GeomextricWeb.HomeLive do
      |> update(:extra_pen, fn p -> if(Enum.member?(@colors, color), do: p, else: color) end)}
   end
 
+  def handle_event("set_grid", %{"value" => "true"}, socket) do
+    {:noreply, socket |> assign(:grid, true)}
+  end
+
+  def handle_event("set_grid", %{"value" => "false"}, socket) do
+    {:noreply, socket |> assign(:grid, false)}
+  end
+
+  def handle_event("set_axis", %{"value" => "true"}, socket) do
+    {:noreply, socket |> assign(:axis, true)}
+  end
+
+  def handle_event("set_axis", %{"value" => "false"}, socket) do
+    {:noreply, socket |> assign(:axis, false)}
+  end
+
+  def handle_event("set_bounds", %{"value" => "true"}, socket) do
+    {:noreply, socket |> assign(:bounds, true)}
+  end
+
+  def handle_event("set_bounds", %{"value" => "false"}, socket) do
+    {:noreply, socket |> assign(:bounds, false)}
+  end
+
   def handle_event("select", %{"value" => ""}, socket) do
     {:noreply, socket |> assign(:selection, [])}
   end
@@ -208,14 +235,10 @@ defmodule GeomextricWeb.HomeLive do
        :history,
        Geomextric.Canvas.get_history(Geomextric.Canvas)
      )
-     |> assign(
-       :history,
-       Geomextric.Canvas.get_history(Geomextric.Canvas)
-     )
      |> update(
        :layers,
        &Enum.filter(&1, fn
-         {^id, _} -> false
+         %{id: ^id} -> false
          _ -> true
        end)
      )
@@ -286,6 +309,17 @@ defmodule GeomextricWeb.HomeLive do
          transform-box: fill-box;
          transform-origin: 50% 50%;
          }
+        [data-zoomed=out] [data-non-scaling-max] {
+                scale: var(--cam-scale-max);
+                transform-box: fill-box;
+                transform-origin: 50% 50%;
+                stroke-width: 1;
+                }
+         [data-non-scaling-full] {
+                 scale: var(--cam-scale);
+                 transform-box: fill-box;
+                 transform-origin: 50% 50%;
+                 }
 
         .auto-color {
         fill: var(--auto-fill, attr("fill"));
@@ -423,7 +457,7 @@ defmodule GeomextricWeb.HomeLive do
       margin: 0;
       background: #0001;
       user-select: none;
-      filter:  saturate(0%);
+      filter: saturate(0%) brightness(500%) ;
       }
       label:has(input[type=checkbox]:checked) {
 
@@ -640,6 +674,27 @@ defmodule GeomextricWeb.HomeLive do
           ]
         },
         %{
+          label: "View",
+          items: [
+            %{
+              label: if(@grid, do: "Hide Grid", else: "Show Grid"),
+              shortcut: [key: "g", ctrl: true],
+              send: "set_grid",
+              value: if(@grid, do: "false", else: "true")
+            },
+            %{
+              label: if(@axis, do: "Hide Axis", else: "Show Axis"),
+              send: "set_axis",
+              value: if(@axis, do: "false", else: "true")
+            },
+            %{
+              label: if(@bounds, do: "Hide Bounds", else: "Show Bounds"),
+              send: "set_bounds",
+              value: if(@bounds, do: "false", else: "true")
+            }
+          ]
+        },
+        %{
           label: "Help",
           items: [
             %{
@@ -657,25 +712,27 @@ defmodule GeomextricWeb.HomeLive do
       </.menu>
     </div>
     <div style={"--auto-stroke: #{@pen}; --auto-fill: #{@pen}"}>
-      <.canvas box={@box}>
-        <g shape-rendering="optimizeSpeed">
+      <.canvas grid={@grid} bounds={@bounds} box={@box}>
+        <g :if={@axis and @bounds} shape-rendering="geometricPrecision">
           <line
             x1={@box.x}
             y1="0"
             x2={@box.x + @box.width}
             y2="0"
-            stroke-width="2"
+            stroke-width="1"
+            shape-rendering="geometricPrecision"
             vector-effect="non-scaling-stroke"
-            stroke="#777"
+            stroke="#aaa"
           />
           <line
             y1={@box.y}
             x1="0"
             y2={@box.y + @box.height}
             x2="0"
-            stroke-width="2"
+            stroke-width="1"
+            shape-rendering="geometricPrecision"
             vector-effect="non-scaling-stroke"
-            stroke="#777"
+            stroke="#aaa"
           />
 
           <path
@@ -704,7 +761,7 @@ defmodule GeomextricWeb.HomeLive do
           />
         </g>
         <circle class="origin" cx={0} cy={0} r={3} fill="#666" data-non-scaling />
-        <%= for %{id: id} = l <- @layers do %>
+        <%= for %{id: id} = l <- @layers |> Enum.reverse() do %>
           <%= case l do %>
             <% %{pos: {x, y}, attrs: %{color: col, radius: r}} -> %>
               <.circle
