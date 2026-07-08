@@ -16,7 +16,7 @@ defmodule GeomextricWeb.Rectangle do
   def rect(assigns) do
     ~H"""
     <g id={"g-#{@id}"} overflow="visible">
-      <.dragger x={@x} y={@y} id={@id}>
+      <.dragger x={@x} y={@y} id={@id} color={@fill}>
         <rect
           shape-rendering="geometricPrecision"
           x={@x}

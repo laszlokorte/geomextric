@@ -169,8 +169,8 @@ defmodule GeomextricWeb.Canvas do
         e.setAttribute(
           "viewBox",
           `${cam.x - (cam.screen.width / 2) * Math.exp(-cam.zoom)} ${cam.y - (cam.screen.height / 2) * Math.exp(-cam.zoom)}
-                                            ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
-                                            `,
+                                                  ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
+                                                  `,
         );
 
         r.setAttribute("data-zoomed", cam.zoom < 0 ? "out" : "in");
@@ -553,6 +553,7 @@ defmodule GeomextricWeb.Canvas do
           const onDrop = (evt) => {
             try {
               const data = JSON.parse(evt.dataTransfer.getData("text/plain"));
+              console.log(data);
               switch (data.type) {
                 case "circle": {
                   this.pushEvent("create", {
@@ -574,6 +575,23 @@ defmodule GeomextricWeb.Canvas do
                     },
                     radius: 5 * Math.exp(-cam.zoom),
                     color: data.color,
+                  });
+                  break;
+                }
+                case "line": {
+                  const p = evtToSvg(evt);
+                  this.pushEvent("create", {
+                    start: {
+                      x: p.x + 20 * Math.exp(-cam.zoom),
+                      y: p.y - 0 * 10 * Math.exp(-cam.zoom),
+                    },
+                    end: {
+                      x: p.x - 0 * 10 * Math.exp(-cam.zoom),
+                      y: p.y + 0 * 10 * Math.exp(-cam.zoom),
+                    },
+                    thickness: 5 * Math.exp(-cam.zoom),
+                    source_tip: data.source_tip,
+                    target_tip: data.target_tip,
                   });
                   break;
                 }

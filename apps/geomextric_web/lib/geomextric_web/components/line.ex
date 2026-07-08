@@ -15,7 +15,7 @@ defmodule GeomextricWeb.Line do
 
   def line(assigns) do
     ~H"""
-    <.dragger x={@x1} y={@y1} id={@id}>
+    <.dragger x={@x1} y={@y1} id={@id} color={@stroke}>
       <line
         shape-rendering="geometricPrecision"
         x1={@x1}

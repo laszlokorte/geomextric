@@ -11,7 +11,7 @@ defmodule GeomextricWeb.Circle do
 
   def circle(assigns) do
     ~H"""
-    <.dragger x={@x} y={@y} id={@id}>
+    <.dragger x={@x} y={@y} id={@id} color={@fill}>
       <circle
         shape-rendering="geometricPrecision"
         cx={@x}

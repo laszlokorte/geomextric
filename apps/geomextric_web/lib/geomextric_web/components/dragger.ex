@@ -4,6 +4,7 @@ defmodule GeomextricWeb.Dragger do
 
   attr :x, :float, default: 0.0, doc: "x"
   attr :y, :float, default: 0.0, doc: "y"
+  attr :color, :string, default: nil
   attr :id, :string, default: "line", doc: "id"
   slot :inner_block, required: true
   slot :handle, required: true
@@ -16,6 +17,7 @@ defmodule GeomextricWeb.Dragger do
       id={"h-#{@id}"}
       base-x={@x}
       base-y={@y}
+      color={@color}
       opacity="0"
       data-layer={@id}
       phx-hook=".DragControl"
@@ -156,6 +158,10 @@ defmodule GeomextricWeb.Dragger do
           this.el.addEventListener("pointerdown", onPointerDown);
           this.el.addEventListener("click", (evt) => evt.stopPropagation());
           this.el.addEventListener("dblclick", (evt) => {
+            if (evt.shiftKey && this.el.hasAttribute("color")) {
+              this.pushEvent("change_pen", { value: this.el.getAttribute("color") });
+              return;
+            }
             if (noClick) {
               noClick = false;
               return;

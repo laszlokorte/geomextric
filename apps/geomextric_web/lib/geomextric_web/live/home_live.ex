@@ -229,6 +229,9 @@ defmodule GeomextricWeb.HomeLive do
 
        [draggable="true"]{
          cursor: grab;
+         background: none;
+         padding: 0;
+         border: none;
        }
 
        ::-moz-color-swatch {
@@ -326,11 +329,13 @@ defmodule GeomextricWeb.HomeLive do
       margin: 0;
       background: #0001;
       user-select: none;
+      filter:  saturate(0%);
       }
       label:has(input[type=checkbox]:checked) {
 
       color: #fff;
       background: #000a;
+      filter:  saturate(100%);
 
       }
 
@@ -339,6 +344,7 @@ defmodule GeomextricWeb.HomeLive do
             opacity: 0.5;
 
             }
+
       label:has(input[type=checkbox]:checked) svg {
 
             opacity: 1;
@@ -347,16 +353,44 @@ defmodule GeomextricWeb.HomeLive do
     </style>
     <nav class="toolbar">
       <div class="pallette">
-        <%= for c <- colors() do %>
-          <div id={"drag-circle-#{c}"} phx-hook=".Draggable" draggable="true">
-            <svg data-type="circle" viewBox="-10 -10 20 20" fill={c} width="32" height="32">
+        <%= for {c,ci} <- [@pen| colors()] |> Enum.with_index do %>
+          <button
+            name="color"
+            phx-click="change_pen"
+            value={c}
+            id={"drag-circle-#{ci}"}
+            phx-hook=".Draggable"
+            draggable="true"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              data-type="circle"
+              viewBox="-10 -10 20 20"
+              fill={c}
+              width="32"
+              height="32"
+            >
               <circle cx="0" cy="0" r={8} stroke="white" stroke-width="2" />
             </svg>
-          </div>
+          </button>
         <% end %>
-        <%= for c <- colors() do %>
-          <div id={"drag-rect-#{c}"} phx-hook=".Draggable" draggable="true">
-            <svg data-type="rect" viewBox="-10 -10 20 20" fill={c} width="32" height="32">
+        <%= for {c, ci} <- [@pen| colors()] |> Enum.with_index do %>
+          <button
+            name="color"
+            phx-click="change_pen"
+            value={c}
+            id={"drag-rect-#{ci}"}
+            phx-hook=".Draggable"
+            draggable="true"
+          >
+            <svg
+              data-type="rect"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="-10 -10 20 20"
+              fill={c}
+              width="32"
+              height="32"
+            >
               <rect
                 rx="5"
                 ry="5"
@@ -368,7 +402,7 @@ defmodule GeomextricWeb.HomeLive do
                 stroke-width="2"
               />
             </svg>
-          </div>
+          </button>
         <% end %>
       </div>
 
@@ -383,59 +417,70 @@ defmodule GeomextricWeb.HomeLive do
             </span>
           </label>
         </form>
-
-        <button
-          :for={c <- colors()}
-          style="padding: 0; background: none;"
-          name="color"
-          phx-click="change_pen"
-          value={c}
-        >
-          <svg data-type="rect" viewBox="-10 -10 20 20" fill={c} width="28" height="28">
-            <rect
-              rx="20"
-              ry="20"
-              x="-8"
-              y="-8"
-              width="16"
-              height="16"
-              stroke="#0005"
-              stroke-width="1"
-            />
-          </svg>
-        </button>
       </div>
 
       <div class="ghost">
         <form class="ghost" phx-change="change_tips">
-          <.input_plain label="Source" type="checkbox" field={@tips[:source]}>
-            <svg data-type="rect" viewBox="-15 -15 30 30" fill="currentColor" width="28" height="28">
+          <.input_plain
+            phx-hook=".Draggable"
+            draggable="true"
+            label="Source"
+            type="checkbox"
+            field={@tips[:source]}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              data-type="line"
+              color={@pen}
+              target-tip
+              viewBox="-15 -15 30 30"
+              fill="currentColor"
+              width="28"
+              height="28"
+            >
               <path
                 d={"M #{-10} #{0} h #{20} z"}
-                stroke="currentColor"
+                stroke={@pen}
                 stroke-linecap="round"
                 stroke-linejoin="round"
                 stroke-width="5"
               />
               <path
                 d={"M #{-15} #{0} l #{15} #{10} v #{-20} z"}
+                fill={@pen}
                 stroke-linecap="round"
                 stroke-linejoin="round"
               />
             </svg>
           </.input_plain>
 
-          <.input_plain label="Target" type="checkbox" field={@tips[:target]}>
-            <svg data-type="rect" viewBox="-15 -15 30 30" fill="currentColor" width="28" height="28">
+          <.input_plain
+            draggable="true"
+            phx-hook=".Draggable"
+            label="Target"
+            type="checkbox"
+            field={@tips[:target]}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              data-type="line"
+              color={@pen}
+              source-tip
+              viewBox="-15 -15 30 30"
+              fill="currentColor"
+              width="28"
+              height="28"
+            >
               <path
                 d={"M #{10} #{0} h #{-20} z"}
-                stroke="currentColor"
+                stroke={@pen}
                 stroke-linecap="round"
                 stroke-linejoin="round"
                 stroke-width="5"
               />
               <path
                 d={"M #{15} #{0} l #{-15} #{10} v #{-20} z"}
+                fill={@pen}
                 stroke-linecap="round"
                 stroke-linejoin="round"
               />
@@ -580,14 +625,37 @@ defmodule GeomextricWeb.HomeLive do
     <script :type={Phoenix.LiveView.ColocatedHook} name=".Draggable">
       export default {
         mounted() {
+          const canvas = document.createElement("canvas");
+          canvas.width = 24;
+          canvas.height = 24;
+          const ctx = canvas.getContext("2d");
+          const blob = new Blob([this.el.querySelector("svg").outerHTML], {
+            type: "image/svg+xml",
+          });
+          const url = URL.createObjectURL(blob);
+          const img = new Image();
+
+          img.width = 24;
+          img.height = 24;
+          img.onload = function () {
+            ctx.clearRect(0, 0, 24, 24);
+            ctx.drawImage(img, 0, 0, 24, 24);
+            URL.revokeObjectURL(url);
+          };
+          img.onerror = (e) => console.error(e);
+          img.src = url;
+
           function dragstartHandler(evt) {
-            var svg = evt.currentTarget.firstElementChild;
+            var svg = evt.currentTarget.querySelector("svg");
+
             evt.dataTransfer.setDragImage(svg, 0, 0);
             evt.dataTransfer.setData(
               "text",
               JSON.stringify({
                 type: svg.getAttribute("data-type"),
                 color: svg.getAttribute("fill"),
+                source_tip: svg.hasAttribute("source-tip"),
+                target_tip: svg.hasAttribute("target-tip"),
               }),
             );
           }
@@ -618,7 +686,7 @@ defmodule GeomextricWeb.HomeLive do
       end)
 
     ~H"""
-    <label>
+    <label id={@name} draggable="true" phx-hook=".Draggable">
       <input
         type="hidden"
         name={@name}
