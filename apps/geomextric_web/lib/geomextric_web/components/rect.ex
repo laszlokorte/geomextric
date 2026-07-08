@@ -12,11 +12,12 @@ defmodule GeomextricWeb.Rectangle do
   attr :height, :float, default: 0.0, doc: "height"
   attr :fill, :string, default: "red", doc: "fill color"
   attr :id, :string, default: "rect", doc: "id"
+  attr :selection, :list, default: []
 
   def rect(assigns) do
     ~H"""
     <g id={"g-#{@id}"} overflow="visible">
-      <.dragger x={@x} y={@y} id={@id} color={@fill}>
+      <.dragger selection={@selection} x={@x} y={@y} id={@id} color={@fill}>
         <rect
           shape-rendering="geometricPrecision"
           x={@x}
@@ -47,6 +48,9 @@ defmodule GeomextricWeb.Rectangle do
             stroke-linecap="square"
           />
         </:handle>
+        <:pin :for={{x, y} <- for x <- [0, 0.5, 1], y <- [0, 0.5, 1], do: {x, y}}>
+          <circle data-non-scaling cx={@x + x * @width} cy={@y + y * @height} r="5" />
+        </:pin>
       </.dragger>
     </g>
     """

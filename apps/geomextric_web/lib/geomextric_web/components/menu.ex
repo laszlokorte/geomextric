@@ -119,6 +119,7 @@ defmodule GeomextricWeb.Menu do
           <button
             id={"button-#{idx}"}
             phx-click={Map.get(item, :send)}
+            value={Map.get(item, :value)}
             style={"anchor-name: --menu-#{idx}"}
           >
             {item.label}
@@ -129,6 +130,7 @@ defmodule GeomextricWeb.Menu do
             interestfor={"menu-#{idx}"}
             id={"button-#{idx}"}
             phx-click={Map.get(item, :send)}
+            value={Map.get(item, :value)}
             style={"anchor-name: --menu-#{idx}"}
           >
             {item.label}
@@ -144,6 +146,7 @@ defmodule GeomextricWeb.Menu do
               <%= if Map.get(sub, :items, []) |> Enum.empty? do %>
                 <button
                   phx-click={Map.get(sub, :send)}
+                  value={Map.get(sub, :value)}
                   popovertarget={"menu-#{idx}-#{sdx}"}
                   interestfor={"menu-#{idx}-#{sdx}"}
                   popovertargetaction="show"
@@ -154,6 +157,7 @@ defmodule GeomextricWeb.Menu do
               <% else %>
                 <button
                   phx-click={Map.get(sub, :send)}
+                  value={Map.get(sub, :value)}
                   popovertarget={"menu-#{idx}-#{sdx}"}
                   interestfor={"menu-#{idx}-#{sdx}"}
                   popovertargetaction="show"

@@ -9,13 +9,14 @@ defmodule GeomextricWeb.Line do
   attr :y2, :float, default: 0.0, doc: "y2"
   attr :source_tip, :boolean, default: false
   attr :target_tip, :boolean, default: false
+  attr :selection, :list, default: []
   attr :stroke, :string, default: "blue", doc: "stroke color"
   attr :stroke_width, :float, default: 1.0, doc: "stroke width"
   attr :id, :string, default: "line", doc: "id"
 
   def line(assigns) do
     ~H"""
-    <.dragger x={@x1} y={@y1} id={@id} color={@stroke}>
+    <.dragger selection={@selection} x={@x1} y={@y1} id={@id} color={@stroke}>
       <line
         shape-rendering="geometricPrecision"
         x1={@x1}
@@ -82,6 +83,15 @@ defmodule GeomextricWeb.Line do
           d={"M #{@x2} #{@y2} l #{2*@stroke_width} #{1.5*@stroke_width} v #{-3*@stroke_width} z"}
         />
       </:handle>
+      <:pin :for={t <- [0, 0.5, 1]}>
+        <rect
+          data-non-scaling
+          x={@x1 + t * (@x2 - @x1) - 5}
+          y={@y1 + t * (@y2 - @y1) - 5}
+          width="10"
+          height="10"
+        />
+      </:pin>
     </.dragger>
     """
   end

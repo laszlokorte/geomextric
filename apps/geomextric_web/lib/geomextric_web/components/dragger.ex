@@ -6,24 +6,48 @@ defmodule GeomextricWeb.Dragger do
   attr :y, :float, default: 0.0, doc: "y"
   attr :color, :string, default: nil
   attr :id, :string, default: "line", doc: "id"
+  attr :selection, :list, default: []
   slot :inner_block, required: true
+  slot :pin, required: false
   slot :handle, required: true
 
   def dragger(assigns) do
     ~H"""
     {render_slot(@inner_block)}
-    <g
-      pointer-events="paint"
-      id={"h-#{@id}"}
-      base-x={@x}
-      base-y={@y}
-      color={@color}
-      opacity="0"
-      data-layer={@id}
-      phx-hook=".DragControl"
-    >
-      {render_slot(@handle)}
+    <g>
+      <g
+        pointer-events="paint"
+        id={"h-#{@id}"}
+        base-x={@x}
+        base-y={@y}
+        color={@color}
+        opacity="0"
+        data-layer={@id}
+        phx-hook=".DragControl"
+      >
+        {render_slot(@handle)}
+      </g>
     </g>
+    <g :if={Enum.member?(@selection, @id)} pointer-events="fill">
+      <%= for {p, pi} <- @pin |> Enum.with_index() do %>
+        <g fill="gold" stroke="white" id={"pin-#{@id}-#{pi}"} phx-hook=".Pin">
+          {render_slot(p)}
+        </g>
+      <% end %>
+    </g>
+
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".Pin">
+      export default {
+        mounted() {
+          this.el.addEventListener("pointerdown", (evt) => {
+            return;
+            evt.currentTarget.setPointerCapture(evt.pointerId);
+            evt.preventDefault();
+            evt.stopPropagation();
+          });
+        },
+      };
+    </script>
 
     <script :type={Phoenix.LiveView.ColocatedHook} name=".DragControl">
       function throttle(fun, delay, fallback) {
@@ -151,15 +175,26 @@ defmodule GeomextricWeb.Dragger do
               const y = py - 1 * offset.y;
 
               move(x + 1 * this.base.x, y + 1 * this.base.y);
+            } else {
+              this.pushEvent("select", {
+                value: this.el.getAttribute("data-layer"),
+                op: evt.shiftKey ? "toggle" : "replace",
+              });
             }
 
             clonedEl(this).setAttribute("opacity", 0);
           };
           this.el.addEventListener("pointerdown", onPointerDown);
-          this.el.addEventListener("click", (evt) => evt.stopPropagation());
+          this.el.addEventListener("click", (evt) => {
+            evt.stopPropagation();
+          });
           this.el.addEventListener("dblclick", (evt) => {
-            if (evt.shiftKey && this.el.hasAttribute("color")) {
-              this.pushEvent("change_pen", { value: this.el.getAttribute("color") });
+            if (evt.shiftKey) {
+              if (this.el.hasAttribute("color")) {
+                this.pushEvent("change_pen", {
+                  value: this.el.getAttribute("color"),
+                });
+              }
               return;
             }
             if (noClick) {

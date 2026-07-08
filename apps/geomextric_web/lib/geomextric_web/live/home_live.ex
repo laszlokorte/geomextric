@@ -17,6 +17,7 @@ defmodule GeomextricWeb.HomeLive do
     {:ok,
      socket
      |> assign(:pen, "#0077ff")
+     |> assign(:selection, [])
      |> assign(:tips, to_form(%{"target" => false, "source" => false}))
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
      |> assign(
@@ -25,12 +26,12 @@ defmodule GeomextricWeb.HomeLive do
      )}
   end
 
-  def handle_event("move", %{"id" => <<"d-", id::binary>>, "x" => x, "y" => y}, socket) do
+  def handle_event("move", %{"id" => <<id::binary>>, "x" => x, "y" => y}, socket) do
     Geomextric.Canvas.move(Geomextric.Canvas, id, x, y)
     {:noreply, socket}
   end
 
-  def handle_event("delete", %{"id" => <<"d-", id::binary>>}, socket) do
+  def handle_event("delete", %{"id" => <<id::binary>>}, socket) do
     Geomextric.Canvas.delete(Geomextric.Canvas, id)
     {:noreply, socket}
   end
@@ -99,6 +100,33 @@ defmodule GeomextricWeb.HomeLive do
     {:noreply, socket |> assign(:pen, color)}
   end
 
+  def handle_event("select", %{"value" => ""}, socket) do
+    {:noreply, socket |> assign(:selection, [])}
+  end
+
+  def handle_event("select", %{"value" => "all"}, socket) do
+    {:noreply, socket |> assign(:selection, socket.assigns.layers |> Enum.map(&elem(&1, 0)))}
+  end
+
+  def handle_event("select", %{"value" => id, "op" => "union"}, socket) do
+    {:noreply, socket |> assign(:selection, [id | socket.assigns.selection] |> Enum.uniq())}
+  end
+
+  def handle_event("select", %{"value" => id, "op" => "toggle"}, socket) do
+    {:noreply,
+     socket
+     |> assign(
+       :selection,
+       MapSet.new(socket.assigns.selection)
+       |> MapSet.symmetric_difference(MapSet.new([id]))
+       |> Enum.to_list()
+     )}
+  end
+
+  def handle_event("select", %{"value" => id, "op" => "replace"}, socket) do
+    {:noreply, socket |> assign(:selection, [id])}
+  end
+
   def handle_event("change_tips", %{"source" => s, "target" => t}, socket) do
     {:noreply,
      socket
@@ -115,7 +143,8 @@ defmodule GeomextricWeb.HomeLive do
     {:noreply,
      socket
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
-     |> update(:layers, &[{id, new} | &1])}
+     |> update(:layers, &[{id, new} | &1])
+     |> assign(:selection, [id])}
   end
 
   def handle_info({:moved, id, new_coords}, socket) do
@@ -141,6 +170,13 @@ defmodule GeomextricWeb.HomeLive do
          {^id, _} -> false
          _ -> true
        end)
+     )
+     |> update(
+       :selection,
+       &Enum.filter(&1, fn
+         ^id -> false
+         _ -> true
+       end)
      )}
   end
 
@@ -148,6 +184,7 @@ defmodule GeomextricWeb.HomeLive do
     {:noreply,
      socket
      |> assign(:layers, [])
+     |> assign(:selection, [])
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))}
   end
 
@@ -455,8 +492,6 @@ defmodule GeomextricWeb.HomeLive do
           </.input_plain>
 
           <.input_plain
-            draggable="true"
-            phx-hook=".Draggable"
             label="Target"
             type="checkbox"
             field={@tips[:target]}
@@ -523,8 +558,8 @@ defmodule GeomextricWeb.HomeLive do
         %{
           label: "Selection",
           items: [
-            %{label: "Select All"},
-            %{label: "Unselect"}
+            %{label: "Select All", send: "select", value: :all},
+            %{label: "Unselect", send: "select", value: ""}
           ]
         },
         %{
@@ -589,7 +624,8 @@ defmodule GeomextricWeb.HomeLive do
           <%= case l do %>
             <% %{pos: {x, y}, attrs: %{color: col, radius: r}} -> %>
               <.circle
-                id={"d-#{id}"}
+                selection={@selection}
+                id={"#{id}"}
                 x={x}
                 y={y}
                 r={r}
@@ -597,7 +633,8 @@ defmodule GeomextricWeb.HomeLive do
               />
             <% %{pos: {x, y, w, h}, attrs: %{color: col, radius: r}} -> %>
               <.rect
-                id={"d-#{id}"}
+                selection={@selection}
+                id={"#{id}"}
                 x={x}
                 y={y}
                 rx={r}
@@ -608,9 +645,10 @@ defmodule GeomextricWeb.HomeLive do
               />
             <% %{pos: {{x1, y1}, {x2, y2}}, attrs: %{color: col, thickness: w, source_tip: source_tip, target_tip: target_tip}} -> %>
               <.line
+                selection={@selection}
                 source_tip={source_tip}
                 target_tip={target_tip}
-                id={"d-#{id}"}
+                id={"#{id}"}
                 stroke_width={w}
                 x1={x1}
                 y1={y1}
@@ -665,8 +703,6 @@ defmodule GeomextricWeb.HomeLive do
     </script>
     """
   end
-
-  slot :inner_block, required: false
 
   def input_plain(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
     errors = if Phoenix.Component.used_input?(field), do: field.errors, else: []
