@@ -17,6 +17,7 @@ defmodule GeomextricWeb.HomeLive do
     {:ok,
      socket
      |> assign(:pen, "#0077ff")
+     |> assign(:extra_pen, "#0077ff")
      |> assign(:selection, [])
      |> assign(:tips, to_form(%{"target" => false, "source" => false}))
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
@@ -36,9 +37,32 @@ defmodule GeomextricWeb.HomeLive do
     {:noreply, socket}
   end
 
-  def handle_event("lasso", %{"width" => w, "height" => h, "x" => x, "y" => y}, socket) do
-    Geomextric.Canvas.delete_box(Geomextric.Canvas, %{width: w, height: h, x: x, y: y})
+  def handle_event("delete", %{"value" => "selected"}, socket) do
+    Geomextric.Canvas.delete_all(Geomextric.Canvas, socket.assigns.selection)
     {:noreply, socket}
+  end
+
+  def handle_event("recent", %{"value" => _v}, socket) do
+    {:noreply, socket}
+  end
+
+  def handle_event("undo", %{}, socket) do
+    {:noreply, socket}
+  end
+
+  def handle_event("redo", %{}, socket) do
+    {:noreply, socket}
+  end
+
+  def handle_event("lasso", %{"width" => w, "height" => h, "x" => x, "y" => y}, socket) do
+    {:noreply,
+     socket
+     |> update(
+       :selection,
+       fn _ ->
+         Geomextric.Canvas.select_box(Geomextric.Canvas, %{width: w, height: h, x: x, y: y})
+       end
+     )}
   end
 
   def handle_event(
@@ -97,7 +121,10 @@ defmodule GeomextricWeb.HomeLive do
   end
 
   def handle_event("change_pen", %{"value" => color}, socket) do
-    {:noreply, socket |> assign(:pen, color)}
+    {:noreply,
+     socket
+     |> assign(:pen, color)
+     |> update(:extra_pen, fn p -> if(Enum.member?(@colors, color), do: p, else: color) end)}
   end
 
   def handle_event("select", %{"value" => ""}, socket) do
@@ -143,8 +170,7 @@ defmodule GeomextricWeb.HomeLive do
     {:noreply,
      socket
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
-     |> update(:layers, &[{id, new} | &1])
-     |> assign(:selection, [id])}
+     |> update(:layers, &[{id, new} | &1])}
   end
 
   def handle_info({:moved, id, new_coords}, socket) do
@@ -180,22 +206,22 @@ defmodule GeomextricWeb.HomeLive do
      )}
   end
 
+  def handle_info(:reload, socket) do
+    {:noreply,
+     socket
+     |> assign(
+       :layers,
+       Geomextric.Canvas.get_all(Geomextric.Canvas) |> Enum.sort_by(&elem(&1, 0))
+     )
+     |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))}
+  end
+
   def handle_info(:clear, socket) do
     {:noreply,
      socket
      |> assign(:layers, [])
      |> assign(:selection, [])
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))}
-  end
-
-  def handle_info(:reload, socket) do
-    {:noreply,
-     socket
-     |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
-     |> assign(
-       :layers,
-       Geomextric.Canvas.get_all(Geomextric.Canvas) |> Enum.sort_by(&elem(&1, 0))
-     )}
   end
 
   def render(assigns) do
@@ -320,6 +346,7 @@ defmodule GeomextricWeb.HomeLive do
          margin-left: auto;
          margin-right: 1em;
          white-space: nowrap;
+         color: black;
        }
        .push-right {
        display: inherit;
@@ -390,7 +417,7 @@ defmodule GeomextricWeb.HomeLive do
     </style>
     <nav class="toolbar">
       <div class="pallette">
-        <%= for {c,ci} <- [@pen| colors()] |> Enum.with_index do %>
+        <%= for {c,ci} <- [@extra_pen| colors()] |> Enum.with_index do %>
           <button
             name="color"
             phx-click="change_pen"
@@ -411,7 +438,7 @@ defmodule GeomextricWeb.HomeLive do
             </svg>
           </button>
         <% end %>
-        <%= for {c, ci} <- [@pen| colors()] |> Enum.with_index do %>
+        <%= for {c, ci} <- [@extra_pen| colors()] |> Enum.with_index do %>
           <button
             name="color"
             phx-click="change_pen"
@@ -536,34 +563,57 @@ defmodule GeomextricWeb.HomeLive do
             %{
               label: "Save"
             },
-            %{label: "Clear", send: "clear"},
+            %{label: "Clear", send: "clear", shortcut: [key: "x", ctrl: true]},
             %{
               label: "Recent",
-              items: [
-                %{label: "A"},
-                %{label: "A"},
-                %{label: "A"},
-                %{label: "A"}
-              ]
+              items:
+                for(
+                  n <- 1..5,
+                  do: %{
+                    label: "File #{n}",
+                    send: "recent",
+                    value: n,
+                    shortcut: [key: "#{n}", ctrl: true]
+                  }
+                )
             }
           ]
         },
         %{
           label: "Edit",
           items: [
-            %{label: "Undo"},
-            %{label: "Redo"}
+            %{label: "Undo", send: "undo", shortcut: [key: "z", ctrl: true]},
+            %{label: "Redo", send: "redo", shortcut: [key: "y", ctrl: true]},
+            %{
+              label: "Delete",
+              shortcut: [key: "Delete"],
+              active: not Enum.empty?(@selection),
+              send: "delete",
+              value: "selected"
+            }
           ]
         },
         %{
           label: "Selection",
           items: [
-            %{label: "Select All", send: "select", value: :all},
-            %{label: "Unselect", send: "select", value: ""}
+            %{
+              label: "Select All",
+              shortcut: [key: "a", ctrl: true],
+              send: "select",
+              value: :all
+            },
+            %{label: "Unselect", shortcut: [key: "d", ctrl: true], send: "select", value: ""}
           ]
         },
         %{
-          label: "Help"
+          label: "Help",
+          items: [
+            %{
+              label: "www.laszlokorte.de",
+              shortcut: [key: "h", ctrl: true],
+              link: "https://www.laszlokorte.de"
+            }
+          ]
         }
       ]}>
         <div class="segment">

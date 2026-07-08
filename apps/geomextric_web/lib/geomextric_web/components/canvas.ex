@@ -169,8 +169,8 @@ defmodule GeomextricWeb.Canvas do
         e.setAttribute(
           "viewBox",
           `${cam.x - (cam.screen.width / 2) * Math.exp(-cam.zoom)} ${cam.y - (cam.screen.height / 2) * Math.exp(-cam.zoom)}
-                                                  ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
-                                                  `,
+                                                      ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
+                                                      `,
         );
 
         r.setAttribute("data-zoomed", cam.zoom < 0 ? "out" : "in");
@@ -460,14 +460,18 @@ defmodule GeomextricWeb.Canvas do
           let selecting = false;
           let pointing = false;
           this.tools = document.createElementNS("http://www.w3.org/2000/svg", "g");
+          this.tools.setAttribute("id", "canvas-tools");
           const lasso = document.createElementNS(
             "http://www.w3.org/2000/svg",
             "rect",
           );
+          lasso.setAttribute("id", "tools-lasso");
           const arrow = document.createElementNS(
             "http://www.w3.org/2000/svg",
             "line",
           );
+
+          arrow.setAttribute("id", "tools-arrow");
           {
             lasso.classList.add("auto-color");
             lasso.setAttribute("x", "0");
@@ -509,7 +513,10 @@ defmodule GeomextricWeb.Canvas do
               evt.currentTarget.setPointerCapture(evt.pointerId);
               offset.x = x;
               offset.y = y;
-            } else if (!evt.shiftKey && evt.button != 1) {
+            } else if (
+              (!evt.shiftKey && evt.button == 2) ||
+              (evt.shiftKey && evt.button == 0)
+            ) {
               evt.stopPropagation();
               evt.preventDefault();
               movement = 0;
@@ -517,12 +524,12 @@ defmodule GeomextricWeb.Canvas do
               selecting = true;
               offset.x = x;
               offset.y = y;
-              arrow.setAttribute("opacity", 1);
-              arrow.setAttribute("x1", x);
-              arrow.setAttribute("y1", y);
-              arrow.setAttribute("x2", x);
-              arrow.setAttribute("y2", y);
-            } else if (evt.shiftKey && evt.button != 2) {
+              lasso.setAttribute("opacity", 1);
+              lasso.setAttribute("x", x);
+              lasso.setAttribute("y", y);
+              lasso.setAttribute("width", "0");
+              lasso.setAttribute("height", "0");
+            } else if (!evt.shiftKey && evt.button == 0) {
               evt.stopPropagation();
               evt.preventDefault();
               movement = 0;
@@ -530,15 +537,15 @@ defmodule GeomextricWeb.Canvas do
               pointing = true;
               offset.x = x;
               offset.y = y;
-              lasso.setAttribute("opacity", 1);
-              lasso.setAttribute("x", x);
-              lasso.setAttribute("y", y);
 
-              lasso.setAttribute("width", "0");
-              lasso.setAttribute("height", "0");
+              arrow.setAttribute("opacity", 1);
+              arrow.setAttribute("x1", x);
+              arrow.setAttribute("y1", y);
+              arrow.setAttribute("x2", x);
+              arrow.setAttribute("y2", y);
             }
           };
-          const onDblClick = (evt) => {
+          const onClick = (evt) => {
             if (skipclick) {
               skipclick = false;
               return;
@@ -553,7 +560,6 @@ defmodule GeomextricWeb.Canvas do
           const onDrop = (evt) => {
             try {
               const data = JSON.parse(evt.dataTransfer.getData("text/plain"));
-              console.log(data);
               switch (data.type) {
                 case "circle": {
                   this.pushEvent("create", {
@@ -607,7 +613,7 @@ defmodule GeomextricWeb.Canvas do
           this.el.addEventListener("pointercancel", onPointerCancel);
           this.el.addEventListener("pointermove", onPointerMove);
           this.el.addEventListener("wheel", onWheel);
-          this.el.addEventListener("click", onDblClick);
+          this.el.addEventListener("click", onClick);
           this.el.addEventListener("drop", onDrop);
           this.el.addEventListener("contextmenu", (evt) => evt.preventDefault());
 
@@ -618,7 +624,7 @@ defmodule GeomextricWeb.Canvas do
             pointerup: onPointerUp,
             pointermove: onPointerMove,
             wheel: onWheel,
-            click: onDblClick,
+            click: onClick,
             scroll: onScroll,
             drop: onDrop,
             resize,
@@ -643,6 +649,7 @@ defmodule GeomextricWeb.Canvas do
         updated() {
           updateViewBox(this.el, this.world, cam, this.scroller);
 
+          this.world = this.el.firstElementChild;
           this.world.appendChild(this.tools);
         },
       };

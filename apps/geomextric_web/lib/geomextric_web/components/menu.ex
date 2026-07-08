@@ -74,6 +74,9 @@ defmodule GeomextricWeb.Menu do
       .submenu::backdrop {
          background-color: #abc0;
        }
+       button:disabled {
+       color: #aaa;
+       }
        button {
        border: none;
        padding-left: 1em;
@@ -85,6 +88,9 @@ defmodule GeomextricWeb.Menu do
        color: #000;
        position: relative;
        cursor: pointer;
+       display: flex;
+       gap: 2em;
+       align-items: baseline;
        }
        button:hover {
        background: #000;
@@ -111,6 +117,12 @@ defmodule GeomextricWeb.Menu do
         background: #000;
         color: #fff;
        }
+
+       kbd {
+       color: #aaaa;
+       margin-left: auto;
+       font-size: 0.8em;
+       }
     </style>
 
     <div class="m">
@@ -118,19 +130,23 @@ defmodule GeomextricWeb.Menu do
         <%= if Map.get(item, :items, []) |> Enum.empty? do %>
           <button
             id={"button-#{idx}"}
+            data-shortcut={Map.get(item, :shortcut, []) |> Keyword.get(:key)}
+            phx-hook=".Shortcut"
+            disabled={not Map.get(item, :active, true)}
             phx-click={Map.get(item, :send)}
+            href={Map.get(item, :link)}
             value={Map.get(item, :value)}
             style={"anchor-name: --menu-#{idx}"}
           >
             {item.label}
+            <kbd>{Map.get(item, :shortcut, []) |> Keyword.get(:key)}</kbd>
           </button>
         <% else %>
           <button
+            disabled={not Map.get(item, :active, true)}
             popovertarget={"menu-#{idx}"}
             interestfor={"menu-#{idx}"}
             id={"button-#{idx}"}
-            phx-click={Map.get(item, :send)}
-            value={Map.get(item, :value)}
             style={"anchor-name: --menu-#{idx}"}
           >
             {item.label}
@@ -145,19 +161,50 @@ defmodule GeomextricWeb.Menu do
             <%= for {sub, sdx} <- Map.get(item, :items, []) |> Enum.with_index() do %>
               <%= if Map.get(sub, :items, []) |> Enum.empty? do %>
                 <button
+                  disabled={not Map.get(sub, :active, true)}
                   phx-click={Map.get(sub, :send)}
+                  href={Map.get(sub, :link)}
                   value={Map.get(sub, :value)}
                   popovertarget={"menu-#{idx}-#{sdx}"}
                   interestfor={"menu-#{idx}-#{sdx}"}
                   popovertargetaction="show"
                   style={"anchor-name: --menu-#{idx}-#{sdx}"}
+                  data-shortcut={Map.get(sub, :shortcut, []) |> Keyword.get(:key)}
+                  data-shortcut-ctrl={
+                    Map.get(sub, :shortcut, [])
+                    |> Keyword.get(:ctrl, false)
+                  }
+                  data-shortcut-shift={
+                    Map.get(sub, :shortcut, [])
+                    |> Keyword.get(:shift, false)
+                  }
+                  data-shortcut-alt={
+                    Map.get(sub, :shortcut, [])
+                    |> Keyword.get(:alt, false)
+                  }
+                  id={"menu-button-#{idx}-#{sdx}"}
+                  phx-hook=".Shortcut"
                 >
                   {sub.label}
+
+                  <kbd>
+                    {Map.get(sub, :shortcut, [])
+                    |> Keyword.get(:ctrl, false)
+                    |> then(&if(&1, do: "Ctrl + "))}
+
+                    {Map.get(sub, :shortcut, [])
+                    |> Keyword.get(:shift, false)
+                    |> then(&if(&1, do: "Shift + "))}
+
+                    {Map.get(sub, :shortcut, [])
+                    |> Keyword.get(:alt, false)
+                    |> then(&if(&1, do: "Alt + "))}
+                    {Map.get(sub, :shortcut, []) |> Keyword.get(:key, "") |> String.upcase()}
+                  </kbd>
                 </button>
               <% else %>
                 <button
-                  phx-click={Map.get(sub, :send)}
-                  value={Map.get(sub, :value)}
+                  disabled={not Map.get(sub, :active, true)}
                   popovertarget={"menu-#{idx}-#{sdx}"}
                   interestfor={"menu-#{idx}-#{sdx}"}
                   popovertargetaction="show"
@@ -173,10 +220,44 @@ defmodule GeomextricWeb.Menu do
                 >
                   <%= for {subsub, ssdx} <- Map.get(sub, :items, []) |> Enum.with_index() do %>
                     <button
+                      phx-click={Map.get(subsub, :send)}
+                      href={Map.get(subsub, :link)}
+                      value={Map.get(subsub, :value)}
+                      disabled={not Map.get(subsub, :active, true)}
                       popovertarget={"menu-#{idx}-#{sdx}-#{ssdx}"}
                       interestfor={"menu-#{idx}-#{sdx}-#{ssdx}"}
+                      data-shortcut={Map.get(subsub, :shortcut, []) |> Keyword.get(:key)}
+                      data-shortcut-ctrl={
+                        Map.get(subsub, :shortcut, [])
+                        |> Keyword.get(:ctrl, false)
+                      }
+                      data-shortcut-shift={
+                        Map.get(subsub, :shortcut, [])
+                        |> Keyword.get(:shift, false)
+                      }
+                      data-shortcut-alt={
+                        Map.get(subsub, :shortcut, [])
+                        |> Keyword.get(:alt, false)
+                      }
+                      id={"menu-button-#{idx}-#{sdx}-#{ssdx}"}
+                      phx-hook=".Shortcut"
                     >
-                      {sub.label}
+                      {subsub.label}
+                      <kbd>
+                        {Map.get(subsub, :shortcut, [])
+                        |> Keyword.get(:ctrl, false)
+                        |> then(&if(&1, do: "Ctrl + "))}
+
+                        {Map.get(subsub, :shortcut, [])
+                        |> Keyword.get(:shift, false)
+                        |> then(&if(&1, do: "Shift + "))}
+
+                        {Map.get(subsub, :shortcut, [])
+                        |> Keyword.get(:alt, false)
+                        |> then(&if(&1, do: "Alt + "))}
+
+                        {Map.get(subsub, :shortcut, []) |> Keyword.get(:key, "") |> String.upcase()}
+                      </kbd>
                     </button>
                   <% end %>
                 </div>
@@ -189,6 +270,30 @@ defmodule GeomextricWeb.Menu do
         {render_slot(@inner_block)}
       </div>
     </div>
+
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".Shortcut">
+      export default {
+        mounted() {
+          if (this.el.hasAttribute("data-shortcut")) {
+            const shortCut = this.el.getAttribute("data-shortcut");
+            const shortCutShift = this.el.hasAttribute("data-shortcut-shift");
+            const shortCutCtrl = this.el.hasAttribute("data-shortcut-ctrl");
+            const shortCutAlt = this.el.hasAttribute("data-shortcut-alt");
+            document.addEventListener("keydown", (evt) => {
+              if (
+                shortCut == evt.key &&
+                shortCutShift === evt.shiftKey &&
+                shortCutCtrl === evt.ctrlKey &&
+                shortCutAlt === evt.metaKey
+              ) {
+                evt.preventDefault();
+                this.el.click();
+              }
+            });
+          }
+        },
+      };
+    </script>
     """
   end
 end

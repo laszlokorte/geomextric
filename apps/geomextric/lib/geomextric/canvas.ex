@@ -32,8 +32,16 @@ defmodule Geomextric.Canvas do
     GenServer.cast(server, {:delete, id})
   end
 
+  def delete_all(server, ids) do
+    GenServer.cast(server, {:delete_all, ids})
+  end
+
   def delete_box(server, box) do
     GenServer.cast(server, {:delete_box, box})
+  end
+
+  def select_box(server, box) do
+    GenServer.call(server, {:select_box, box})
   end
 
   def get_all(server) do
@@ -120,6 +128,17 @@ defmodule Geomextric.Canvas do
   end
 
   @impl true
+  def handle_cast({:delete_all, ids}, state) do
+    {:noreply, state |> Enum.reject(fn {k, _} -> Enum.member?(ids, k) end) |> Map.new(),
+     {:continue, :broadcast_delete}}
+  end
+
+  @impl true
+  def handle_cast(:clear, _state) do
+    {:noreply, Map.new(), {:continue, :broadcast_clear}}
+  end
+
+  @impl true
   def handle_cast({:delete_box, %{width: bw, height: bh, x: bx, y: by}}, state) do
     {:noreply,
      state
@@ -141,8 +160,24 @@ defmodule Geomextric.Canvas do
   end
 
   @impl true
-  def handle_cast(:clear, _state) do
-    {:noreply, Map.new(), {:continue, :broadcast_clear}}
+  def handle_call({:select_box, %{width: bw, height: bh, x: bx, y: by}}, _from, state) do
+    {:reply,
+     state
+     |> Enum.reject(fn
+       {_, %{pos: {{x1, y1}, {x2, y2}}}} ->
+         x1 < bx || x1 > bx + bw || y1 < by || y1 > by + bh ||
+           x2 < bx || x2 > bx + bw || y2 < by || y2 > by + bh
+
+       {_, %{pos: {x, y}}} ->
+         x < bx || x > bx + bw || y < by || y > by + bh
+
+       {_, %{pos: {x, y, w, h}}} ->
+         x < bx || x + w > bx + bw || y < by || y + h > by + bh
+
+       _ ->
+         true
+     end)
+     |> Enum.map(&elem(&1, 0)), state}
   end
 
   @impl true
@@ -244,6 +279,17 @@ defmodule Geomextric.Canvas do
       Geomextric.PubSub,
       @topic,
       {:delete, id}
+    )
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_continue(:broadcast_delete, state) do
+    Phoenix.PubSub.broadcast(
+      Geomextric.PubSub,
+      @topic,
+      :reload
     )
 
     {:noreply, state}
