@@ -42,6 +42,10 @@ defmodule Geomextric.Canvas do
     GenServer.cast(server, {:move, id, {x, y}})
   end
 
+  def move_by(server, ids, dx, dy) do
+    GenServer.cast(server, {:move_by, ids, {dx, dy}})
+  end
+
   def delete(server, id) do
     GenServer.cast(server, {:delete, id})
   end
@@ -104,6 +108,32 @@ defmodule Geomextric.Canvas do
         {:ok,
          %__MODULE__{layers: new_layers |> Enum.reverse(), future: [], past: [old_layers | past]},
          new_value}
+
+      _ ->
+        :err
+    end
+  end
+
+  defp update_layers(%__MODULE__{layers: old_layers, future: _fut, past: past}, ids, attr, fun) do
+    for l <- old_layers, reduce: {:ok, []} do
+      :err ->
+        :err
+
+      {:ok, layers} ->
+        case l do
+          %{:id => id} ->
+            if Enum.member?(ids, id) do
+              new_attr = fun.(Map.get(l, attr))
+              {:ok, [%{l | attr => new_attr} | layers]}
+            else
+              {:ok, [l | layers]}
+            end
+        end
+    end
+    |> case do
+      {:ok, new_layers} ->
+        {:ok,
+         %__MODULE__{layers: new_layers |> Enum.reverse(), future: [], past: [old_layers | past]}}
 
       _ ->
         :err
@@ -197,6 +227,30 @@ defmodule Geomextric.Canvas do
     |> case do
       {:ok, new_state, new_coord} ->
         {:noreply, new_state, {:continue, {:broadcast_move, id, new_coord}}}
+
+      _ ->
+        {:noreply, state}
+    end
+  end
+
+  @impl true
+  def handle_cast({:move_by, ids, {dx, dy}}, state) do
+    update_layers(state, ids, :pos, fn
+      {old_x, old_y} when is_number(old_x) and is_number(old_y) ->
+        {old_x + dx, old_y + dy}
+
+      {old_x, old_y, old_w, old_h} ->
+        {old_x + dx, old_y + dy, old_w, old_h}
+
+      {{old_x1, old_y1}, {old_x2, old_y2}} ->
+        {{old_x1 + dx, old_y1 + dy}, {old_x2 + dx, old_y2 + dy}}
+
+      %{} ->
+        nil
+    end)
+    |> case do
+      {:ok, new_state} ->
+        {:noreply, new_state, {:continue, :broadcast_reload}}
 
       _ ->
         {:noreply, state}

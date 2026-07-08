@@ -8,12 +8,14 @@ defmodule GeomextricWeb.Circle do
   attr :r, :float, default: 0.0, doc: "radius"
   attr :fill, :string, default: "red", doc: "fill color"
   attr :id, :string, default: "circle", doc: "id"
-  attr :selection, :list, default: []
+  attr :prefix, :string, default: "circle", doc: "id"
+  attr :handles, :boolean, default: false
 
   def circle(assigns) do
     ~H"""
-    <.dragger selection={@selection} x={@x} y={@y} id={@id} color={@fill}>
+    <.dragger x={@x} y={@y} id={@id} prefix={@prefix} color={@fill} show_handle={@handles}>
       <circle
+        :if={not @handles}
         shape-rendering="geometricPrecision"
         cx={@x}
         cy={@y}
@@ -30,14 +32,15 @@ defmodule GeomextricWeb.Circle do
           fill-opacity="0.3"
           stroke={@fill}
           fill={@fill}
-          stroke-width={2}
+          stroke-width={if(@handles, do: 10, else: 2)}
+          multi-drag={@handles}
           data-non-zoom-stroke="yes"
           stroke-opacity="0.3"
           stroke-linecap="square"
         />
       </:handle>
 
-      <:pin>
+      <:pin :if={@handles}>
         <circle data-non-scaling cx={@x} cy={@y} r="5" />
       </:pin>
     </.dragger>

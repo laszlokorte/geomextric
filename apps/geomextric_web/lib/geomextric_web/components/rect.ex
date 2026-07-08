@@ -12,13 +12,15 @@ defmodule GeomextricWeb.Rectangle do
   attr :height, :float, default: 0.0, doc: "height"
   attr :fill, :string, default: "red", doc: "fill color"
   attr :id, :string, default: "rect", doc: "id"
-  attr :selection, :list, default: []
+  attr :prefix, :string, default: "rect", doc: "id"
+  attr :handles, :boolean, default: false
 
   def rect(assigns) do
     ~H"""
-    <g id={"g-#{@id}"} overflow="visible">
-      <.dragger selection={@selection} x={@x} y={@y} id={@id} color={@fill}>
+    <g id={"g-#{@prefix}-#{@id}"} overflow="visible">
+      <.dragger x={@x} y={@y} id={@id} prefix={@prefix} color={@fill} show_handle={@handles}>
         <rect
+          :if={not @handles}
           shape-rendering="geometricPrecision"
           x={@x}
           y={@y}
@@ -43,12 +45,13 @@ defmodule GeomextricWeb.Rectangle do
             fill-opacity="0.3"
             fill-opacity="0.5"
             stroke={@fill}
-            stroke-width={2}
+            multi-drag={@handles}
+            stroke-width={if(@handles, do: 10, else: 2)}
             data-non-zoom-stroke="yes"
             stroke-linecap="square"
           />
         </:handle>
-        <:pin :for={{x, y} <- for x <- [0, 0.5, 1], y <- [0, 0.5, 1], do: {x, y}}>
+        <:pin :for={{x, y} <- for x <- [0, 0.5, 1], y <- [0, 0.5, 1], do: {x, y}} :if={@handles}>
           <circle data-non-scaling cx={@x + x * @width} cy={@y + y * @height} r="5" />
         </:pin>
       </.dragger>

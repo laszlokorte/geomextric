@@ -6,10 +6,11 @@ defmodule GeomextricWeb.Dragger do
   attr :y, :float, default: 0.0, doc: "y"
   attr :color, :string, default: nil
   attr :id, :string, default: "line", doc: "id"
-  attr :selection, :list, default: []
+  attr :prefix, :string, default: "dragger", doc: "id"
   slot :inner_block, required: true
   slot :pin, required: false
   slot :handle, required: true
+  attr :show_handle, :boolean, default: false
 
   def dragger(assigns) do
     ~H"""
@@ -17,20 +18,20 @@ defmodule GeomextricWeb.Dragger do
     <g>
       <g
         pointer-events="paint"
-        id={"h-#{@id}"}
+        id={"#{@prefix}-#{@id}"}
         base-x={@x}
         base-y={@y}
         color={@color}
-        opacity="0"
+        opacity={if(@show_handle, do: 0.3, else: 0)}
         data-layer={@id}
         phx-hook=".DragControl"
       >
         {render_slot(@handle)}
       </g>
     </g>
-    <g :if={Enum.member?(@selection, @id)} pointer-events="fill">
+    <g pointer-events="none">
       <%= for {p, pi} <- @pin |> Enum.with_index() do %>
-        <g fill="gold" stroke="white" id={"pin-#{@id}-#{pi}"} phx-hook=".Pin">
+        <g fill="gold" stroke="white" id={"pin-#{@prefix}-#{@id}-#{pi}"} phx-hook=".Pin">
           {render_slot(p)}
         </g>
       <% end %>
@@ -84,7 +85,7 @@ defmodule GeomextricWeb.Dragger do
           t.clonedEl = t.el.cloneNode(true);
           t.clonedEl.setAttribute("pointer-events", "none");
           t.clonedEl.setAttribute("opacity", "0.3");
-          t.clonedEl.removeAttribute("id");
+          t.clonedEl.setAttribute("id", "cloned" + t.id);
           t.clonedEl.removeAttribute("phx-hook");
           t.el.parentNode.appendChild(t.clonedEl);
         }
@@ -94,7 +95,13 @@ defmodule GeomextricWeb.Dragger do
 
       export default {
         mounted() {
+          this.multiDragRoot = this.el.closest("[multi-drag-root]");
           const id = this.el.getAttribute("data-layer");
+          const moveSelected = throttle(
+            (x, y) => this.pushEvent("move", { dx: x, dy: y }),
+            60,
+            debounce((x, y) => this.pushEvent("move", { dx: x, dy: y }), 500),
+          );
           const move = throttle(
             (x, y) => this.pushEvent("move", { id: id, x, y }),
             60,
@@ -136,6 +143,7 @@ defmodule GeomextricWeb.Dragger do
 
               const { x, y } = evtToSvg(evt);
 
+              this.multiDragRoot?.setAttribute("transform", ``);
               clonedEl(this, true).setAttribute("transform", ``);
               offset.x = x;
               offset.y = y;
@@ -158,7 +166,10 @@ defmodule GeomextricWeb.Dragger do
               //    ,y + 1 * this.base.y
               //  )
 
-              clonedEl(this).setAttribute("transform", `translate(${x}, ${y})`);
+              (this.multiDragRoot || clonedEl(this)).setAttribute(
+                "transform",
+                `translate(${x}, ${y})`,
+              );
             }
           };
 
@@ -174,7 +185,11 @@ defmodule GeomextricWeb.Dragger do
               const x = px - 1 * offset.x;
               const y = py - 1 * offset.y;
 
-              move(x + 1 * this.base.x, y + 1 * this.base.y);
+              if (this.multiDragRoot) {
+                moveSelected(x, y);
+              } else {
+                move(x + 1 * this.base.x, y + 1 * this.base.y);
+              }
             } else {
               this.pushEvent("select", {
                 value: this.el.getAttribute("data-layer"),

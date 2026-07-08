@@ -39,6 +39,11 @@ defmodule GeomextricWeb.HomeLive do
     {:noreply, socket}
   end
 
+  def handle_event("move", %{"dx" => dx, "dy" => dy}, socket) do
+    Geomextric.Canvas.move_by(Geomextric.Canvas, socket.assigns.selection, dx, dy)
+    {:noreply, socket}
+  end
+
   def handle_event("delete", %{"id" => <<id::binary>>}, socket) do
     Geomextric.Canvas.delete(Geomextric.Canvas, id)
     {:noreply, socket}
@@ -689,6 +694,7 @@ defmodule GeomextricWeb.HomeLive do
             },
             %{
               label: if(@bounds, do: "Hide Bounds", else: "Show Bounds"),
+              shortcut: [key: "b", ctrl: true],
               send: "set_bounds",
               value: if(@bounds, do: "false", else: "true")
             }
@@ -759,46 +765,90 @@ defmodule GeomextricWeb.HomeLive do
             style=" transform-origin: 50% 0%; "
             fill="#777"
           />
+
+          <circle class="origin" cx={0} cy={0} r={3} fill="#666" data-non-scaling />
         </g>
-        <circle class="origin" cx={0} cy={0} r={3} fill="#666" data-non-scaling />
-        <%= for %{id: id} = l <- @layers |> Enum.reverse() do %>
-          <%= case l do %>
-            <% %{pos: {x, y}, attrs: %{color: col, radius: r}} -> %>
-              <.circle
-                selection={@selection}
-                id={"#{id}"}
-                x={x}
-                y={y}
-                r={r}
-                fill={col}
-              />
-            <% %{pos: {x, y, w, h}, attrs: %{color: col, radius: r}} -> %>
-              <.rect
-                selection={@selection}
-                id={"#{id}"}
-                x={x}
-                y={y}
-                rx={r}
-                ry={r}
-                width={w}
-                height={h}
-                fill={col}
-              />
-            <% %{pos: {{x1, y1}, {x2, y2}}, attrs: %{color: col, thickness: w, source_tip: source_tip, target_tip: target_tip}} -> %>
-              <.line
-                selection={@selection}
-                source_tip={source_tip}
-                target_tip={target_tip}
-                id={"#{id}"}
-                stroke_width={w}
-                x1={x1}
-                y1={y1}
-                x2={x2}
-                y2={y2}
-                stroke={col}
-              />
+
+        <g id="layers">
+          <%= for %{id: id} = l <- @layers |> Enum.reverse() do %>
+            <%= case l do %>
+              <% %{pos: {x, y}, attrs: %{color: col, radius: r}} -> %>
+                <.circle
+                  id={"#{id}"}
+                  x={x}
+                  y={y}
+                  r={r}
+                  fill={col}
+                />
+              <% %{pos: {x, y, w, h}, attrs: %{color: col, radius: r}} -> %>
+                <.rect
+                  id={"#{id}"}
+                  x={x}
+                  y={y}
+                  rx={r}
+                  ry={r}
+                  width={w}
+                  height={h}
+                  fill={col}
+                />
+              <% %{pos: {{x1, y1}, {x2, y2}}, attrs: %{color: col, thickness: w, source_tip: source_tip, target_tip: target_tip}} -> %>
+                <.line
+                  source_tip={source_tip}
+                  target_tip={target_tip}
+                  id={"#{id}"}
+                  stroke_width={w}
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke={col}
+                />
+            <% end %>
           <% end %>
-        <% end %>
+        </g>
+        <g id="layers-selection" multi-drag-root>
+          <%= for %{id: id} = l <- @layers |> Enum.reverse(), Enum.member?(@selection, id) do %>
+            <%= case l do %>
+              <% %{pos: {x, y}, attrs: %{color: col, radius: r}} -> %>
+                <.circle
+                  handles={true}
+                  prefix="sel-"
+                  id={"#{id}"}
+                  x={x}
+                  y={y}
+                  r={r}
+                  fill={col}
+                />
+              <% %{pos: {x, y, w, h}, attrs: %{color: col, radius: r}} -> %>
+                <.rect
+                  handles={true}
+                  prefix="sel-"
+                  id={"#{id}"}
+                  x={x}
+                  y={y}
+                  rx={r}
+                  ry={r}
+                  width={w}
+                  height={h}
+                  fill={col}
+                />
+              <% %{pos: {{x1, y1}, {x2, y2}}, attrs: %{color: col, thickness: w, source_tip: source_tip, target_tip: target_tip}} -> %>
+                <.line
+                  handles={true}
+                  source_tip={source_tip}
+                  target_tip={target_tip}
+                  prefix="sel-"
+                  id={"#{id}"}
+                  stroke_width={w}
+                  x1={x1}
+                  y1={y1}
+                  x2={x2}
+                  y2={y2}
+                  stroke={col}
+                />
+            <% end %>
+          <% end %>
+        </g>
       </.canvas>
     </div>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".Draggable">
