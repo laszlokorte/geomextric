@@ -2,10 +2,12 @@ defmodule Geomextric.Canvas do
   use GenServer
   @topic "canvas"
 
+  defstruct [:layers, :future, :past]
+
   ## Client API
 
   def start_link(opts \\ []) do
-    GenServer.start_link(__MODULE__, %{}, opts)
+    GenServer.start_link(__MODULE__, [], opts)
   end
 
   def put(server, x, y, params = %{}) when is_number(x) and is_number(y) do
@@ -22,6 +24,18 @@ defmodule Geomextric.Canvas do
 
   def clear(server) do
     GenServer.cast(server, :clear)
+  end
+
+  def reset(server) do
+    GenServer.cast(server, :reset)
+  end
+
+  def undo(server) do
+    GenServer.cast(server, :undo)
+  end
+
+  def redo(server) do
+    GenServer.cast(server, :redo)
   end
 
   def move(server, id, x, y) do
@@ -48,6 +62,10 @@ defmodule Geomextric.Canvas do
     GenServer.call(server, :get_all)
   end
 
+  def get_history(server) do
+    GenServer.call(server, :get_history)
+  end
+
   def get_box(server) do
     GenServer.call(server, :get_box)
   end
@@ -55,14 +73,72 @@ defmodule Geomextric.Canvas do
   ## Server callbacks
 
   @impl true
-  def init(state) do
-    {:ok, state}
+  def init(layers) when is_list(layers) do
+    {:ok, %__MODULE__{layers: layers, future: [], past: []}}
+  end
+
+  defp insert_layer(%__MODULE__{layers: layers, future: _fut, past: past}, layer) do
+    %__MODULE__{layers: [layer | layers], future: [], past: [layers | past]}
+  end
+
+  defp update_layer(%__MODULE__{layers: old_layers, future: _fut, past: past}, id, attr, fun) do
+    for l <- old_layers, reduce: {:ok, []} do
+      :err ->
+        :err
+
+      {:ok, layers, new_value} ->
+        {:ok, [l | layers], new_value}
+
+      {:ok, layers} ->
+        case l do
+          %{:id => ^id} ->
+            new_attr = fun.(Map.get(l, attr))
+            {:ok, [%{l | attr => new_attr} | layers], new_attr}
+
+          _ ->
+            {:ok, [l | layers]}
+        end
+    end
+    |> case do
+      {:ok, new_layers, new_value} ->
+        {:ok,
+         %__MODULE__{layers: new_layers |> Enum.reverse(), future: [], past: [old_layers | past]},
+         new_value}
+
+      _ ->
+        :err
+    end
+  end
+
+  defp delete_layers(%__MODULE__{layers: layers, future: _fut, past: past}, ids) do
+    %__MODULE__{
+      layers: layers |> Enum.reject(&Enum.member?(ids, Map.get(&1, :id))),
+      future: [],
+      past: [layers | past]
+    }
+  end
+
+  defp filter_layers(%__MODULE__{layers: layers, future: _fut, past: past}, fun) do
+    %__MODULE__{
+      layers: layers |> Enum.filter(fun),
+      future: [],
+      past: [layers | past]
+    }
+  end
+
+  defp clear_layers(%__MODULE__{layers: layers, future: _fut, past: past}) do
+    %__MODULE__{
+      layers: [],
+      future: [],
+      past: [layers | past]
+    }
   end
 
   @impl true
   def handle_cast({:put, id, {{x1, y1}, {x2, y2}} = coords, attrs}, state)
       when is_number(x1) and is_number(y1) and is_number(x2) and is_number(y2) do
     new = %{
+      id: id,
       pos: coords,
       attrs: %{
         color: Map.get(attrs, "color", "rebeccapurple"),
@@ -72,12 +148,13 @@ defmodule Geomextric.Canvas do
       }
     }
 
-    {:noreply, Map.put(state, id, new), {:continue, {:broadcast_insert, id, new}}}
+    {:noreply, insert_layer(state, new), {:continue, {:broadcast_insert, new}}}
   end
 
   @impl true
   def handle_cast({:put, id, {x, y} = coords, attrs}, state) when is_number(x) and is_number(y) do
     new = %{
+      id: id,
       pos: coords,
       attrs: %{
         color: Map.get(attrs, "color", "rebeccapurple"),
@@ -85,12 +162,13 @@ defmodule Geomextric.Canvas do
       }
     }
 
-    {:noreply, Map.put(state, id, new), {:continue, {:broadcast_insert, id, new}}}
+    {:noreply, insert_layer(state, new), {:continue, {:broadcast_insert, new}}}
   end
 
   @impl true
   def handle_cast({:put, id, {_x, _y, _width, _height} = coords, attrs}, state) do
     new = %{
+      id: id,
       pos: coords,
       attrs: %{
         color: Map.get(attrs, "color", "rebeccapurple"),
@@ -98,51 +176,80 @@ defmodule Geomextric.Canvas do
       }
     }
 
-    {:noreply, Map.put(state, id, new), {:continue, {:broadcast_insert, id, new}}}
+    {:noreply, insert_layer(state, new), {:continue, {:broadcast_insert, new}}}
   end
 
   @impl true
   def handle_cast({:move, id, {x, y} = coords}, state) do
-    case state do
-      %{^id => old = %{pos: {old_x, old_y}}} when is_number(old_x) and is_number(old_y) ->
-        {:noreply, %{state | id => %{old | pos: coords}},
-         {:continue, {:broadcast_move, id, coords}}}
+    update_layer(state, id, :pos, fn
+      {old_x, old_y} when is_number(old_x) and is_number(old_y) ->
+        coords
 
-      %{^id => old = %{pos: {_old_x, _old_y, old_w, old_h}}} ->
-        {:noreply, %{state | id => %{old | pos: {x, y, old_w, old_h}}},
-         {:continue, {:broadcast_move, id, {x, y, old_w, old_h}}}}
+      {_old_x, _old_y, old_w, old_h} ->
+        {x, y, old_w, old_h}
 
-      %{^id => old = %{pos: {{old_x1, old_y1}, {old_x2, old_y2}}}} ->
-        {:noreply,
-         %{state | id => %{old | pos: {{x, y}, {x - old_x1 + old_x2, y - old_y1 + old_y2}}}},
-         {:continue, {:broadcast_move, id, {{x, y}, {x - old_x1 + old_x2, y - old_y1 + old_y2}}}}}
+      {{old_x1, old_y1}, {old_x2, old_y2}} ->
+        {{x, y}, {x - old_x1 + old_x2, y - old_y1 + old_y2}}
 
       %{} ->
+        nil
+    end)
+    |> case do
+      {:ok, new_state, new_coord} ->
+        {:noreply, new_state, {:continue, {:broadcast_move, id, new_coord}}}
+
+      _ ->
         {:noreply, state}
     end
   end
 
   @impl true
   def handle_cast({:delete, id}, state) do
-    {:noreply, Map.delete(state, id), {:continue, {:broadcast_delete, id}}}
+    {:noreply, delete_layers(state, [id]), {:continue, {:broadcast_delete, id}}}
   end
 
   @impl true
   def handle_cast({:delete_all, ids}, state) do
-    {:noreply, state |> Enum.reject(fn {k, _} -> Enum.member?(ids, k) end) |> Map.new(),
-     {:continue, :broadcast_delete}}
+    {:noreply, delete_layers(state, ids), {:continue, :broadcast_delete}}
   end
 
   @impl true
-  def handle_cast(:clear, _state) do
-    {:noreply, Map.new(), {:continue, :broadcast_clear}}
+  def handle_cast(:reset, _state) do
+    {:noreply, %__MODULE__{layers: [], future: [], past: []}, {:continue, :broadcast_clear}}
+  end
+
+  @impl true
+  def handle_cast(:clear, state) do
+    {:noreply, clear_layers(state), {:continue, :broadcast_clear}}
+  end
+
+  @impl true
+  def handle_cast(:undo, %{layers: cur, future: fut, past: [prev | new_past]}) do
+    {:noreply, %__MODULE__{layers: prev, future: [cur | fut], past: new_past},
+     {:continue, :broadcast_undo}}
+  end
+
+  @impl true
+  def handle_cast(:undo, state = %{past: []}) do
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_cast(:redo, %{layers: cur, past: past, future: [fut | new_fut]}) do
+    {:noreply, %__MODULE__{layers: fut, past: [cur | past], future: new_fut},
+     {:continue, :broadcast_redo}}
+  end
+
+  @impl true
+  def handle_cast(:redo, state = %{future: []}) do
+    {:noreply, state}
   end
 
   @impl true
   def handle_cast({:delete_box, %{width: bw, height: bh, x: bx, y: by}}, state) do
     {:noreply,
      state
-     |> Enum.filter(fn
+     |> filter_layers(fn
        {_, %{pos: {{x1, y1}, {x2, y2}}}} ->
          x1 < bx || x1 > bx + bw || y1 < by || y1 > by + bh ||
            x2 < bx || x2 > bx + bw || y2 < by || y2 > by + bh
@@ -155,77 +262,81 @@ defmodule Geomextric.Canvas do
 
        _ ->
          true
-     end)
-     |> Map.new(), {:continue, :broadcast_reload}}
+     end), {:continue, :broadcast_reload}}
   end
 
   @impl true
   def handle_call({:select_box, %{width: bw, height: bh, x: bx, y: by}}, _from, state) do
     {:reply,
-     state
+     state.layers
      |> Enum.reject(fn
-       {_, %{pos: {{x1, y1}, {x2, y2}}}} ->
+       %{pos: {{x1, y1}, {x2, y2}}} ->
          x1 < bx || x1 > bx + bw || y1 < by || y1 > by + bh ||
            x2 < bx || x2 > bx + bw || y2 < by || y2 > by + bh
 
-       {_, %{pos: {x, y}}} ->
+       %{pos: {x, y}} ->
          x < bx || x > bx + bw || y < by || y > by + bh
 
-       {_, %{pos: {x, y, w, h}}} ->
+       %{pos: {x, y, w, h}} ->
          x < bx || x + w > bx + bw || y < by || y + h > by + bh
 
        _ ->
          true
      end)
-     |> Enum.map(&elem(&1, 0)), state}
+     |> Enum.map(& &1.id), state}
   end
 
   @impl true
   def handle_call(:get_all, _from, state) do
-    {:reply, state, state}
+    {:reply, state.layers, state}
+  end
+
+  @impl true
+  def handle_call(:get_history, _from, state = %{future: f, past: p}) do
+    {:reply, {Enum.count(p), Enum.count(f)}, state}
   end
 
   @impl true
   def handle_call(:get_box, _from, state) do
     minX =
-      state
+      state.layers
       |> Enum.map(fn
-        {_, %{pos: {{x1, _}, {x2, _}}}} -> min(x1, x2)
-        {_, %{pos: {x, _}}} -> x
-        {_, %{pos: {x, _, _w, _h}}} -> x
+        %{pos: {{x1, _}, {x2, _}}} -> min(x1, x2)
+        %{pos: {x, _}} -> x
+        %{pos: {x, _, _w, _h}} -> x
       end)
       |> Enum.min(fn -> 0 end)
       |> then(&(&1 - 500))
       |> min(-500)
 
     minY =
-      state
+      state.layers
       |> Enum.map(fn
-        {_, %{pos: {{_, y1}, {_, y2}}}} -> min(y1, y2)
-        {_, %{pos: {_, y}}} -> y
-        {_, %{pos: {_, y, _w, _h}}} -> y
+        %{pos: {{_, y1}, {_, y2}}} -> min(y1, y2)
+        %{pos: {_, y}} -> y
+        %{pos: {_, y, _w, _h}} -> y
       end)
       |> Enum.min(fn -> 0 end)
       |> then(&(&1 - 500))
       |> min(-500)
 
     maxX =
-      state
+      state.layers
       |> Enum.map(fn
-        {_, %{pos: {{x1, _}, {x2, _}}}} -> max(x1, x2)
-        {_, %{pos: {x, _}}} -> x
-        {_, %{pos: {x, _, w, _h}}} -> x + w
+        %{pos: {{x1, _}, {x2, _}}} -> max(x1, x2)
+        %{pos: {x, _}} -> x
+        %{pos: {x, _, w, _h}} -> x + w
       end)
       |> Enum.max(fn -> 0 end)
       |> then(&(&1 + 500))
       |> max(500)
 
     maxY =
-      state
+      state.layers
       |> Enum.map(fn
-        {_, %{pos: {{_, y1}, {_, y2}}}} -> max(y1, y2)
-        {_, %{pos: {_, y}}} -> y
-        {_, %{pos: {_, y, _w, h}}} -> y + h
+        %{pos: {{_, y1}, {_, y2}}} -> max(y1, y2)
+        %{pos: {_, y}} -> y
+        %{pos: {_, y, _w, h}} -> y + h
       end)
       |> Enum.max(fn -> 0 end)
       |> then(&(&1 + 500))
@@ -241,11 +352,11 @@ defmodule Geomextric.Canvas do
   end
 
   @impl true
-  def handle_continue({:broadcast_insert, id, new}, state) do
+  def handle_continue({:broadcast_insert, new}, state) do
     Phoenix.PubSub.broadcast(
       Geomextric.PubSub,
       @topic,
-      {:inserted, id, new}
+      {:inserted, new}
     )
 
     {:noreply, state}
@@ -297,6 +408,28 @@ defmodule Geomextric.Canvas do
 
   @impl true
   def handle_continue(:broadcast_reload, state) do
+    Phoenix.PubSub.broadcast(
+      Geomextric.PubSub,
+      @topic,
+      :reload
+    )
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_continue(:broadcast_undo, state) do
+    Phoenix.PubSub.broadcast(
+      Geomextric.PubSub,
+      @topic,
+      :reload
+    )
+
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_continue(:broadcast_redo, state) do
     Phoenix.PubSub.broadcast(
       Geomextric.PubSub,
       @topic,

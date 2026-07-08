@@ -22,8 +22,12 @@ defmodule GeomextricWeb.HomeLive do
      |> assign(:tips, to_form(%{"target" => false, "source" => false}))
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
      |> assign(
+       :history,
+       Geomextric.Canvas.get_history(Geomextric.Canvas)
+     )
+     |> assign(
        :layers,
-       Geomextric.Canvas.get_all(Geomextric.Canvas) |> Enum.sort_by(&elem(&1, 0))
+       Geomextric.Canvas.get_all(Geomextric.Canvas)
      )}
   end
 
@@ -47,10 +51,12 @@ defmodule GeomextricWeb.HomeLive do
   end
 
   def handle_event("undo", %{}, socket) do
+    Geomextric.Canvas.undo(Geomextric.Canvas)
     {:noreply, socket}
   end
 
   def handle_event("redo", %{}, socket) do
+    Geomextric.Canvas.redo(Geomextric.Canvas)
     {:noreply, socket}
   end
 
@@ -116,7 +122,7 @@ defmodule GeomextricWeb.HomeLive do
   end
 
   def handle_event("clear", %{}, socket) do
-    Geomextric.Canvas.clear(Geomextric.Canvas)
+    Geomextric.Canvas.reset(Geomextric.Canvas)
     {:noreply, socket}
   end
 
@@ -132,7 +138,7 @@ defmodule GeomextricWeb.HomeLive do
   end
 
   def handle_event("select", %{"value" => "all"}, socket) do
-    {:noreply, socket |> assign(:selection, socket.assigns.layers |> Enum.map(&elem(&1, 0)))}
+    {:noreply, socket |> assign(:selection, socket.assigns.layers |> Enum.map(& &1.id))}
   end
 
   def handle_event("select", %{"value" => id, "op" => "union"}, socket) do
@@ -166,21 +172,29 @@ defmodule GeomextricWeb.HomeLive do
      )}
   end
 
-  def handle_info({:inserted, id, new}, socket) do
+  def handle_info({:inserted, new}, socket) do
     {:noreply,
      socket
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
-     |> update(:layers, &[{id, new} | &1])}
+     |> assign(
+       :history,
+       Geomextric.Canvas.get_history(Geomextric.Canvas)
+     )
+     |> update(:layers, &[new | &1])}
   end
 
   def handle_info({:moved, id, new_coords}, socket) do
     {:noreply,
      socket
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
+     |> assign(
+       :history,
+       Geomextric.Canvas.get_history(Geomextric.Canvas)
+     )
      |> update(
        :layers,
        &Enum.map(&1, fn
-         {^id, %{} = old} -> {id, %{old | pos: new_coords}}
+         %{id: ^id} = old -> %{old | pos: new_coords}
          e -> e
        end)
      )}
@@ -190,6 +204,14 @@ defmodule GeomextricWeb.HomeLive do
     {:noreply,
      socket
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
+     |> assign(
+       :history,
+       Geomextric.Canvas.get_history(Geomextric.Canvas)
+     )
+     |> assign(
+       :history,
+       Geomextric.Canvas.get_history(Geomextric.Canvas)
+     )
      |> update(
        :layers,
        &Enum.filter(&1, fn
@@ -210,8 +232,12 @@ defmodule GeomextricWeb.HomeLive do
     {:noreply,
      socket
      |> assign(
+       :history,
+       Geomextric.Canvas.get_history(Geomextric.Canvas)
+     )
+     |> assign(
        :layers,
-       Geomextric.Canvas.get_all(Geomextric.Canvas) |> Enum.sort_by(&elem(&1, 0))
+       Geomextric.Canvas.get_all(Geomextric.Canvas)
      )
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))}
   end
@@ -221,6 +247,10 @@ defmodule GeomextricWeb.HomeLive do
      socket
      |> assign(:layers, [])
      |> assign(:selection, [])
+     |> assign(
+       :history,
+       Geomextric.Canvas.get_history(Geomextric.Canvas)
+     )
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))}
   end
 
@@ -581,17 +611,21 @@ defmodule GeomextricWeb.HomeLive do
         },
         %{
           label: "Edit",
-          items: [
-            %{label: "Undo", send: "undo", shortcut: [key: "z", ctrl: true]},
-            %{label: "Redo", send: "redo", shortcut: [key: "y", ctrl: true]},
-            %{
-              label: "Delete",
-              shortcut: [key: "Delete"],
-              active: not Enum.empty?(@selection),
-              send: "delete",
-              value: "selected"
-            }
-          ]
+          items:
+            with(
+              {u, r} <- @history,
+              do: [
+                %{label: "Undo", send: "undo", active: u > 0, shortcut: [key: "z", ctrl: true]},
+                %{label: "Redo", send: "redo", active: r > 0, shortcut: [key: "y", ctrl: true]},
+                %{
+                  label: "Delete",
+                  shortcut: [key: "Delete"],
+                  active: not Enum.empty?(@selection),
+                  send: "delete",
+                  value: "selected"
+                }
+              ]
+            )
         },
         %{
           label: "Selection",
@@ -670,7 +704,7 @@ defmodule GeomextricWeb.HomeLive do
           />
         </g>
         <circle class="origin" cx={0} cy={0} r={3} fill="#666" data-non-scaling />
-        <%= for {id, l} <- @layers do %>
+        <%= for %{id: id} = l <- @layers do %>
           <%= case l do %>
             <% %{pos: {x, y}, attrs: %{color: col, radius: r}} -> %>
               <.circle
