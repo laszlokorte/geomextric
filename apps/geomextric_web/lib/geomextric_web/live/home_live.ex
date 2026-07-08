@@ -1,4 +1,5 @@
 defmodule GeomextricWeb.HomeLive do
+  import GeomextricWeb.CoreComponents
   import GeomextricWeb.Canvas
   import GeomextricWeb.Circle
   import GeomextricWeb.Menu
@@ -6,7 +7,7 @@ defmodule GeomextricWeb.HomeLive do
   import GeomextricWeb.Line
   use Phoenix.LiveView
   @topic "canvas"
-  @colors ["#ff00ff", "#00ffff", "#00ff00"]
+  @colors ["#ff00ff", "#00ffff", "#00ff00", "#ffaa00"]
 
   def colors, do: @colors
 
@@ -16,6 +17,7 @@ defmodule GeomextricWeb.HomeLive do
     {:ok,
      socket
      |> assign(:pen, "#0077ff")
+     |> assign(:tips, to_form(%{"target" => false, "source" => false}))
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
      |> assign(
        :layers,
@@ -75,7 +77,14 @@ defmodule GeomextricWeb.HomeLive do
       Geomextric.Canvas,
       {x1, y1},
       {x2, y2},
-      Map.merge(%{"color" => socket.assigns.pen}, params)
+      Map.merge(
+        %{
+          "color" => socket.assigns.pen,
+          "source_tip" => socket.assigns.tips[:source].value,
+          "target_tip" => socket.assigns.tips[:target].value
+        },
+        params
+      )
     )
 
     {:noreply, socket}
@@ -88,6 +97,18 @@ defmodule GeomextricWeb.HomeLive do
 
   def handle_event("change_pen", %{"value" => color}, socket) do
     {:noreply, socket |> assign(:pen, color)}
+  end
+
+  def handle_event("change_tips", %{"source" => s, "target" => t}, socket) do
+    {:noreply,
+     socket
+     |> assign(
+       :tips,
+       to_form(%{
+         "target" => t == "true",
+         "source" => s == "true"
+       })
+     )}
   end
 
   def handle_info({:inserted, id, new}, socket) do
@@ -242,7 +263,7 @@ defmodule GeomextricWeb.HomeLive do
        flex-wrap: wrap;
        }
 
-       form.ghost {
+       .ghost {
          display: contents;
        }
        label {
@@ -261,6 +282,9 @@ defmodule GeomextricWeb.HomeLive do
          white-space: nowrap;
        }
        .push-right {
+       display: inherit;
+       align-self: stretch;
+       align-items: inherit;
        margin-left: auto;
        }
 
@@ -289,6 +313,37 @@ defmodule GeomextricWeb.HomeLive do
       right: 0em;
       z-index: 1000;
       }
+      input[type=checkbox] {
+      display: none;
+      }
+      label:has(input[type=checkbox]) {
+      color: #fff;
+      align-self: stretch;
+      display: flex;
+      align-items: center;
+      border-radius: 0.5ex;
+      padding: 0.5ex;
+      margin: 0;
+      background: #0001;
+      user-select: none;
+      }
+      label:has(input[type=checkbox]:checked) {
+
+      color: #fff;
+      background: #000a;
+
+      }
+
+      label:has(input[type=checkbox]) svg {
+
+            opacity: 0.5;
+
+            }
+      label:has(input[type=checkbox]:checked) svg {
+
+            opacity: 1;
+
+            }
     </style>
     <nav class="toolbar">
       <div class="pallette">
@@ -349,6 +404,44 @@ defmodule GeomextricWeb.HomeLive do
             />
           </svg>
         </button>
+      </div>
+
+      <div class="ghost">
+        <form class="ghost" phx-change="change_tips">
+          <.input_plain label="Source" type="checkbox" field={@tips[:source]}>
+            <svg data-type="rect" viewBox="-15 -15 30 30" fill="currentColor" width="28" height="28">
+              <path
+                d={"M #{-10} #{0} h #{20} z"}
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="5"
+              />
+              <path
+                d={"M #{-15} #{0} l #{15} #{10} v #{-20} z"}
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </.input_plain>
+
+          <.input_plain label="Target" type="checkbox" field={@tips[:target]}>
+            <svg data-type="rect" viewBox="-15 -15 30 30" fill="currentColor" width="28" height="28">
+              <path
+                d={"M #{10} #{0} h #{-20} z"}
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="5"
+              />
+              <path
+                d={"M #{15} #{0} l #{-15} #{10} v #{-20} z"}
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </.input_plain>
+        </form>
       </div>
       <div class="push-right">
         <button phx-click="clear">Clear</button>
@@ -468,8 +561,10 @@ defmodule GeomextricWeb.HomeLive do
                 height={h}
                 fill={col}
               />
-            <% %{pos: {{x1, y1}, {x2, y2}}, attrs: %{color: col, thickness: w}} -> %>
+            <% %{pos: {{x1, y1}, {x2, y2}}, attrs: %{color: col, thickness: w, source_tip: source_tip, target_tip: target_tip}} -> %>
               <.line
+                source_tip={source_tip}
+                target_tip={target_tip}
                 id={"d-#{id}"}
                 stroke_width={w}
                 x1={x1}
@@ -500,6 +595,43 @@ defmodule GeomextricWeb.HomeLive do
         },
       };
     </script>
+    """
+  end
+
+  slot :inner_block, required: false
+
+  def input_plain(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
+    errors = if Phoenix.Component.used_input?(field), do: field.errors, else: []
+
+    assigns
+    |> assign(field: nil, id: field.id)
+    |> assign(:errors, Enum.map(errors, &translate_error(&1)))
+    |> assign_new(:name, fn -> field.name end)
+    |> assign_new(:value, fn -> field.value end)
+    |> input_plain()
+  end
+
+  def input_plain(%{type: "checkbox"} = assigns) do
+    assigns =
+      assign_new(assigns, :checked, fn ->
+        Phoenix.HTML.Form.normalize_value("checkbox", assigns[:value])
+      end)
+
+    ~H"""
+    <label>
+      <input
+        type="hidden"
+        name={@name}
+        value="false"
+      />
+      <input
+        type="checkbox"
+        name={@name}
+        value="true"
+        checked={@checked}
+      />
+      {render_slot(@inner_block) || @label}
+    </label>
     """
   end
 end

@@ -58,7 +58,9 @@ defmodule Geomextric.Canvas do
       pos: coords,
       attrs: %{
         color: Map.get(attrs, "color", "rebeccapurple"),
-        thickness: Map.get(attrs, "thickness", 1)
+        thickness: Map.get(attrs, "thickness", 1),
+        source_tip: Map.get(attrs, "source_tip", false),
+        target_tip: Map.get(attrs, "target_tip", false)
       }
     }
 
