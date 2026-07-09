@@ -683,18 +683,19 @@ defmodule GeomextricWeb.HomeLive do
           items: [
             %{
               label: if(@grid, do: "Hide Grid", else: "Show Grid"),
-              shortcut: [key: "g", ctrl: true],
+              shortcut: [key: "g", alt: true],
               send: "set_grid",
               value: if(@grid, do: "false", else: "true")
             },
             %{
               label: if(@axis, do: "Hide Axis", else: "Show Axis"),
+              shortcut: [key: "a", alt: true],
               send: "set_axis",
               value: if(@axis, do: "false", else: "true")
             },
             %{
               label: if(@bounds, do: "Hide Bounds", else: "Show Bounds"),
-              shortcut: [key: "b", ctrl: true],
+              shortcut: [key: "b", alt: true],
               send: "set_bounds",
               value: if(@bounds, do: "false", else: "true")
             }
@@ -719,54 +720,85 @@ defmodule GeomextricWeb.HomeLive do
     </div>
     <div style={"--auto-stroke: #{@pen}; --auto-fill: #{@pen}"}>
       <.canvas grid={@grid} bounds={@bounds} box={@box}>
-        <g :if={@axis and @bounds} shape-rendering="geometricPrecision">
+        <g :if={@axis} shape-rendering="geometricPrecision">
           <line
-            x1={@box.x}
+            x1={@box.x + @box.width * 0.01}
             y1="0"
-            x2={@box.x + @box.width}
+            x2={@box.x + @box.width * 0.98}
+            y2="0"
+            stroke-width="6"
+            shape-rendering="geometricPrecision"
+            vector-effect="non-scaling-stroke"
+            stroke="#fff"
+          />
+          <line
+            y1={@box.y + @box.height * 0.01}
+            x1="0"
+            y2={@box.y + @box.height * 0.98}
+            x2="0"
+            stroke-width="6"
+            shape-rendering="geometricPrecision"
+            vector-effect="non-scaling-stroke"
+            stroke="#fff"
+          />
+          <line
+            x1={@box.x + @box.width * 0.01}
+            y1="0"
+            x2={@box.x + @box.width * 0.98}
             y2="0"
             stroke-width="1"
             shape-rendering="geometricPrecision"
             vector-effect="non-scaling-stroke"
-            stroke="#aaa"
+            stroke="#333"
           />
           <line
-            y1={@box.y}
+            y1={@box.y + @box.height * 0.01}
             x1="0"
-            y2={@box.y + @box.height}
+            y2={@box.y + @box.height * 0.98}
             x2="0"
             stroke-width="1"
             shape-rendering="geometricPrecision"
             vector-effect="non-scaling-stroke"
-            stroke="#aaa"
+            stroke="#333"
           />
 
           <path
-            fill="white"
-            d={"M  #{@box.x + @box.width} 0 v -10 h -10 v 20 h 10"}
+            d={"M  #{@box.x + @box.width * 0.98} 0 l -16 -10 l 5 10 l -5 10 z"}
             data-non-scaling
+            stroke="white"
+            stroke-width="4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
             style=" transform-origin: 100% 50%; "
+            fill="white"
           />
+
           <path
-            d={"M  #{@box.x + @box.width} 0 l -10 -10 v 20"}
+            d={"M 0 #{@box.y + @box.height * 0.01} l -10 16 l 10 -5 l 10 5 z"}
+            data-non-scaling
+            stroke="white"
+            stroke-width="4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            style=" transform-origin: 50% 0%; "
+            fill="white"
+          />
+
+          <path
+            d={"M  #{@box.x + @box.width * 0.98} 0 l -16 -10 l 5 10 l -5 10 z"}
             data-non-scaling
             style=" transform-origin: 100% 50%; "
             fill="#777"
           />
+
           <path
-            d={"M 0 #{@box.y} h 10 v 10 h -20 v -10"}
-            data-non-scaling
-            fill="white"
+            d={"M 0 #{@box.y + @box.height * 0.01} l -10 16 l 10 -5 l 10 5 z"}
             style=" transform-origin: 50% 0%; "
-          />
-          <path
-            d={"M 0 #{@box.y} l -10 10 h 20"}
             data-non-scaling
-            style=" transform-origin: 50% 0%; "
             fill="#777"
           />
 
-          <circle class="origin" cx={0} cy={0} r={3} fill="#666" data-non-scaling />
+          <circle class="origin" cx={0} cy={0} r={2} fill="#666" data-non-scaling />
         </g>
 
         <g id="layers">

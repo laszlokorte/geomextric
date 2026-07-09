@@ -178,8 +178,8 @@ defmodule GeomextricWeb.Canvas do
         e.setAttribute(
           "viewBox",
           `${cam.x - (cam.screen.width / 2) * Math.exp(-cam.zoom)} ${cam.y - (cam.screen.height / 2) * Math.exp(-cam.zoom)}
-                                                            ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
-                                                            `,
+                                                                ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
+                                                                `,
         );
 
         r.setAttribute("data-zoomed", cam.zoom < 0 ? "out" : "in");
@@ -189,7 +189,7 @@ defmodule GeomextricWeb.Canvas do
           Math.exp(Math.max(-2, Math.min(2, -cam.zoom))),
         );
         r.style.setProperty("--cam-scale-max", Math.exp(Math.max(-2, -cam.zoom)));
-        r.style.setProperty("--cam-scale-min", Math.exp(Math.min(2, -cam.zoom)));
+        r.style.setProperty("--cam-scale-min", Math.exp(Math.min(3, -cam.zoom)));
         const logScale = Math.pow(2, Math.round(-cam.zoom / Math.log(2)) + 2);
         scroller
           .querySelectorAll("pattern")
@@ -284,18 +284,33 @@ defmodule GeomextricWeb.Canvas do
             const cY =
               this.world.height.baseVal.value / 2 + this.world.y.baseVal.value;
 
+            const scrollLeft = this.scroller.scrollLeft;
+            const scrollTop = this.scroller.scrollTop;
+
+            const leftMax =
+              this.scroller.scrollLeftMax ??
+              this.scroller.scrollWidth - this.scroller.offsetWidth;
+            const topMax =
+              this.scroller.scrollTopMax ??
+              this.scroller.scrollHeight - this.scroller.offsetHeight;
             const dx =
-              this.scroller.scrollLeft -
-              0.5 * this.scroller.clientWidth -
-              (boundingX * s) / 2;
+              scrollLeft - 0.5 * this.scroller.clientWidth - (boundingX * s) / 2;
 
             const dy =
-              this.scroller.scrollTop -
-              0.5 * this.scroller.clientHeight -
-              (boundingY * s) / 2;
-            cam.x = (dx * cos + dy * sin) / s + cX;
-            cam.y = (-dx * sin + dy * cos) / s + cY;
-            updateViewBox(this.el, this.world, cam, this.scroller);
+              scrollTop - 0.5 * this.scroller.clientHeight - (boundingY * s) / 2;
+            const newCamX = (dx * cos + dy * sin) / s + cX;
+            const newCamY = (-dx * sin + dy * cos) / s + cY;
+            const leftLimit = scrollLeft <= 0 && cam.x < newCamX;
+            const rightLimit = scrollLeft >= leftMax && cam.x > newCamX;
+
+            const topLimit = scrollTop <= 0 && cam.x < newCamX;
+            const bottomLimit = scrollTop >= topMax && cam.y > newCamY;
+            if (!leftLimit && !rightLimit && !topLimit && !bottomLimit) {
+              cam.x = newCamX;
+              cam.y = newCamY;
+
+              updateViewBox(this.el, this.world, cam, this.scroller);
+            }
           };
           this.scroller.addEventListener("scroll", onScroll, { passive: false });
           const evtToSvg = (evt) => {

@@ -284,7 +284,7 @@ defmodule GeomextricWeb.Menu do
                 shortCut == evt.key &&
                 shortCutShift === evt.shiftKey &&
                 shortCutCtrl === evt.ctrlKey &&
-                shortCutAlt === evt.metaKey
+                shortCutAlt === evt.altKey
               ) {
                 evt.preventDefault();
                 this.el.click();
