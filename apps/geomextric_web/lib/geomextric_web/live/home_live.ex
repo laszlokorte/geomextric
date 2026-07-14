@@ -675,7 +675,7 @@ defmodule GeomextricWeb.HomeLive do
               send: "select",
               value: :all
             },
-            %{label: "Unselect", shortcut: [key: "d", ctrl: true], send: "select", value: ""}
+            %{label: "Unselect", shortcut: [key: "Escape"], send: "select", value: ""}
           ]
         },
         %{

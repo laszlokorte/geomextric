@@ -381,11 +381,11 @@ defmodule GeomextricWeb.Canvas do
               if (!this.rotor) {
                 return;
               }
-              cam.angle += dw;
+              cam.angle += dw / 3;
               const { x: nx, y: ny } = rotate(
                 cam,
                 { x: px, y: py },
-                (-Math.PI / 180) * dw,
+                (-Math.PI / 180) * dw / 3,
               );
               cam.x = nx;
               cam.y = ny;
