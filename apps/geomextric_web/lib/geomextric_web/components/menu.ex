@@ -125,6 +125,14 @@ defmodule GeomextricWeb.Menu do
        }
     </style>
 
+    <style rel="stylesheet" :type={GeomextricWeb.ColocatedCSS}>
+      @media(pointer: coarse) {
+       .m {
+         display: none;
+       }
+      }
+    </style>
+
     <div class="m">
       <div :for={{item, idx} <- @items |> Enum.with_index()} class="menu">
         <%= if Map.get(item, :items, []) |> Enum.empty? do %>

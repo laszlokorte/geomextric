@@ -19,6 +19,7 @@ defmodule GeomextricWeb.Canvas do
         width: 100%;
         height: 100%;
         shaper-rendering: geometricPrecision;
+        touch-action: none;
       }
 
       svg[with-bounds] {
@@ -63,97 +64,107 @@ defmodule GeomextricWeb.Canvas do
       touch-action: none;
       }
     </style>
+
+    <style rel="stylesheet" :type={GeomextricWeb.ColocatedCSS}>
+      .canvas-container {
+      touch-action: none;
+      }
+    </style>
     <div class="scroller" data-scrollbars tabindex="-1">
       <div class="scroller-body">
         <svg
+          class="canvas-container"
           with-bounds={if(@bounds, do: "yes")}
           preserveAspectRatio="xMidYMid meet"
           viewBox={"#{@box.x} #{@box.y} #{@box.width} #{@box.height}"}
           id="my-camera"
           phx-hook=".Camera"
         >
-          <svg
-            data-world
-            overflow="visible"
-            preserveAspectRatio="xMidYMid slice"
-            x={@box.x}
-            y={@box.y}
-            width={@box.width}
-            height={@box.height}
-            viewBox={"#{@box.x} #{@box.y} #{@box.width} #{@box.height}"}
-          >
-            <defs>
-              <pattern
-                id="grid"
-                width="20"
-                height="20"
-                patternTransform="scale(0)"
-                patternUnits="userSpaceOnUse"
-              >
-                <path
-                  shape-rendering="geometricPrecision"
-                  d="M 0 0 L 10 0 M 20 0 L 10 0 M 0 0 L 0 10 M 0 20 L 0 10"
-                  fill="none"
-                  stroke="#abc8"
-                  stroke-width="0.25px"
-                />
-              </pattern>
-              <pattern
-                id="grid-sec"
-                width="40"
-                height="40"
-                patternTransform="scale(0)"
-                patternUnits="userSpaceOnUse"
-              >
-                <path
-                  shape-rendering="geometricPrecision"
-                  d="M 0 0 L 20 0 M 40 0 L 20 0 M 0 0 L 0 20 M 0 40 L 0 20"
-                  fill="none"
-                  stroke="#cdea"
-                  stroke-width="0.5px"
-                />
-              </pattern>
-            </defs>
-            <rect
+          <g data-rotor>
+            <svg
+              data-world
+              overflow="visible"
+              preserveAspectRatio="xMidYMid slice"
               x={@box.x}
               y={@box.y}
               width={@box.width}
               height={@box.height}
-              fill="#fff"
-              stroke="#d0d0d0"
-              vector-effect="non-scaling-stroke"
-              stroke-width={if(@bounds, do: "2", else: "0")}
-              rx="32"
-              ry="32"
-            />
-            <rect
-              x={@box.x}
-              y={@box.y}
-              width={@box.width}
-              height={@box.height}
-              fill={if(@grid and @bounds, do: "url(#grid)", else: "none")}
-              opacity="0.8"
-              rx="32"
-              ry="32"
-            />
+              viewBox={"#{@box.x} #{@box.y} #{@box.width} #{@box.height}"}
+            >
+              <defs>
+                <pattern
+                  id="grid"
+                  width="20"
+                  height="20"
+                  patternTransform="scale(0)"
+                  patternUnits="userSpaceOnUse"
+                >
+                  <path
+                    shape-rendering="geometricPrecision"
+                    d="M 0 0 L 10 0 M 20 0 L 10 0 M 0 0 L 0 10 M 0 20 L 0 10"
+                    fill="none"
+                    stroke="#abc8"
+                    stroke-width="0.25px"
+                  />
+                </pattern>
+                <pattern
+                  id="grid-sec"
+                  width="40"
+                  height="40"
+                  patternTransform="scale(0)"
+                  patternUnits="userSpaceOnUse"
+                >
+                  <path
+                    shape-rendering="geometricPrecision"
+                    d="M 0 0 L 20 0 M 40 0 L 20 0 M 0 0 L 0 20 M 0 40 L 0 20"
+                    fill="none"
+                    stroke="#cdea"
+                    stroke-width="0.5px"
+                  />
+                </pattern>
+              </defs>
+              <rect
+                x={@box.x}
+                y={@box.y}
+                width={@box.width}
+                height={@box.height}
+                fill="#fff"
+                stroke="#d0d0d0"
+                vector-effect="non-scaling-stroke"
+                stroke-width={if(@bounds, do: "2", else: "0")}
+                rx="32"
+                ry="32"
+              />
+              <rect
+                x={@box.x}
+                y={@box.y}
+                width={@box.width}
+                height={@box.height}
+                fill={if(@grid and @bounds, do: "url(#grid)", else: "none")}
+                opacity="0.8"
+                rx="32"
+                ry="32"
+              />
 
-            <rect
-              x={@box.x}
-              y={@box.y}
-              width={@box.width}
-              height={@box.height}
-              fill={if(@grid and @bounds, do: "url(#grid-sec)", else: "none")}
-              rx="32"
-              ry="32"
-            />
+              <rect
+                x={@box.x}
+                y={@box.y}
+                width={@box.width}
+                height={@box.height}
+                fill={if(@grid and @bounds, do: "url(#grid-sec)", else: "none")}
+                rx="32"
+                ry="32"
+              />
 
-            {render_slot(@inner_block)}
-          </svg>
+              {render_slot(@inner_block)}
+            </svg>
+          </g>
         </svg>
       </div>
     </div>
 
     <script :type={Phoenix.LiveView.ColocatedHook} name=".Camera">
+      import { bindEvents } from "@/js/touch-cam.js";
       const cam = {
         zoom: 0,
         angle: 0,
@@ -171,25 +182,25 @@ defmodule GeomextricWeb.Canvas do
         },
       };
       let resumeScroll = null;
-      function updateViewBox(e, r, cam, scroller) {
+      function updateViewBox(e, w, r, cam, scroller) {
         if (r) {
           r.setAttribute("transform", `rotate(${cam.angle} ${cam.x} ${cam.y})`);
         }
         e.setAttribute(
           "viewBox",
           `${cam.x - (cam.screen.width / 2) * Math.exp(-cam.zoom)} ${cam.y - (cam.screen.height / 2) * Math.exp(-cam.zoom)}
-                                                                ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
-                                                                `,
+                                                                      ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
+                                                                      `,
         );
 
-        r.setAttribute("data-zoomed", cam.zoom < 0 ? "out" : "in");
-        r.style.setProperty("--cam-scale", Math.exp(-cam.zoom));
-        r.style.setProperty(
+        w.setAttribute("data-zoomed", cam.zoom < 0 ? "out" : "in");
+        w.style.setProperty("--cam-scale", Math.exp(-cam.zoom));
+        w.style.setProperty(
           "--cam-scale-clamped",
           Math.exp(Math.max(-2, Math.min(2, -cam.zoom))),
         );
-        r.style.setProperty("--cam-scale-max", Math.exp(Math.max(-2, -cam.zoom)));
-        r.style.setProperty("--cam-scale-min", Math.exp(Math.min(3, -cam.zoom)));
+        w.style.setProperty("--cam-scale-max", Math.exp(Math.max(-2, -cam.zoom)));
+        w.style.setProperty("--cam-scale-min", Math.exp(Math.min(3, -cam.zoom)));
         const logScale = Math.pow(2, Math.round(-cam.zoom / Math.log(2)) + 2);
         scroller
           .querySelectorAll("pattern")
@@ -202,11 +213,11 @@ defmodule GeomextricWeb.Canvas do
           const cosAbs = Math.abs(cos);
           const sinAbs = Math.abs(sin);
           const boundingX =
-            r.width.baseVal.value * cosAbs + r.height.baseVal.value * sinAbs;
+            w.width.baseVal.value * cosAbs + w.height.baseVal.value * sinAbs;
           const boundingY =
-            r.width.baseVal.value * sinAbs + r.height.baseVal.value * cosAbs;
-          const cX = r.width.baseVal.value / 2 + r.x.baseVal.value;
-          const cY = r.height.baseVal.value / 2 + r.y.baseVal.value;
+            w.width.baseVal.value * sinAbs + w.height.baseVal.value * cosAbs;
+          const cX = w.width.baseVal.value / 2 + w.x.baseVal.value;
+          const cY = w.height.baseVal.value / 2 + w.y.baseVal.value;
 
           const scrollWidth =
             boundingX * Math.exp(cam.zoom) + scroller.clientWidth * 2;
@@ -256,12 +267,8 @@ defmodule GeomextricWeb.Canvas do
       }
       export default {
         mounted() {
-          if (
-            this.el.firstElementChild &&
-            this.el.firstElementChild.dataset.hasOwnProperty("world")
-          ) {
-            this.world = this.el.firstElementChild;
-          }
+          this.world = this.el.querySelector("[data-world]");
+          this.rotor = this.el.querySelector("[data-rotor]");
           this.scroller = this.el.closest("[data-scrollbars]");
           this.scrollerBody = this.scroller.firstElementChild;
           const onScroll = (evt) => {
@@ -309,7 +316,7 @@ defmodule GeomextricWeb.Canvas do
               cam.x = newCamX;
               cam.y = newCamY;
 
-              updateViewBox(this.el, this.world, cam, this.scroller);
+              updateViewBox(this.el, this.world, this.rotor, cam, this.scroller);
             }
           };
           this.scroller.addEventListener("scroll", onScroll, { passive: false });
@@ -335,11 +342,11 @@ defmodule GeomextricWeb.Canvas do
           const resize = () => {
             cam.screen = { width: window.innerWidth, height: window.innerHeight };
 
-            updateViewBox(this.el, this.world, cam, this.scroller);
+            updateViewBox(this.el, this.world, this.rotor, cam, this.scroller);
           };
           resize();
 
-          updateViewBox(this.el, this.world, cam, this.scroller);
+          updateViewBox(this.el, this.world, this.rotor, cam, this.scroller);
 
           const clampZoom = (oldZoom, delta) => {
             const newZoom = Math.max(-6, oldZoom + delta);
@@ -360,41 +367,60 @@ defmodule GeomextricWeb.Canvas do
             }
           };
           let piv = null;
-          const onWheel = (evt) => {
-            if (!piv) {
-              piv = evtToSvg(evt);
-            }
-
-            if (evt.altKey) {
-              evt.preventDefault();
-              const { x: nx, y: ny } = rotate(
-                cam,
-                piv,
-                ((-Math.PI / 180) * evt.deltaY) / 10,
-              );
-              cam.angle += evt.deltaY / 10;
-              cam.x = nx;
-              cam.y = ny;
-
-              updateViewBox(this.el, this.world, cam, this.scroller);
-            } else if (evt.ctrlKey) {
-              evt.preventDefault();
+          const camControl = bindEvents({
+            eventToWorld: evtToSvg,
+            zoomBy: ({ dz, px, py }) => {
               const oldZoom = Math.exp(cam.zoom);
-
-              cam.zoom = clampZoom(cam.zoom, -evt.deltaY / 1000);
+              cam.zoom = clampZoom(cam.zoom, dz);
               const newZoom = Math.exp(cam.zoom);
               const factor = oldZoom / newZoom;
+              cam.x = px - (px - cam.x) * factor;
+              cam.y = py - (py - cam.y) * factor;
+            },
+            rotateBy: ({ dw, px, py }) => {
+              if (!this.rotor) {
+                return;
+              }
+              cam.angle += dw;
+              const { x: nx, y: ny } = rotate(
+                cam,
+                { x: px, y: py },
+                (-Math.PI / 180) * dw,
+              );
+              cam.x = nx;
+              cam.y = ny;
+            },
+            panBy: ({ dx, dy }) => {
+              cam.x +=
+                Math.exp(-cam.zoom) *
+                (Math.cos((cam.angle * Math.PI) / 180) * dx +
+                  Math.sin((cam.angle * Math.PI) / 180) * dy);
+              cam.y +=
+                Math.exp(-cam.zoom) *
+                (Math.cos((cam.angle * Math.PI) / 180) * dy -
+                  Math.sin((cam.angle * Math.PI) / 180) * dx);
+            },
+            commit: () => {
+              updateViewBox(this.el, this.world, this.rotor, cam, this.scroller);
+            },
+          });
 
-              cam.x = piv.x - (piv.x - cam.x) * factor;
-              cam.y = piv.y - (piv.y - cam.y) * factor;
+          camControl(this.el.parentNode);
 
-              updateViewBox(this.el, this.world, cam, this.scroller);
-            }
-          };
           let skipclick = false;
-          const onPointerCancel = (evt) => {};
+          const onPointerCancel = (evt) => {
+            pointing = false;
+            selecting = false;
+          };
+          const onPointerLost = (evt) => {
+            pointing = false;
+            selecting = false;
+          };
           const onPointerUp = (evt) => {
             const { x, y } = evtToSvg(evt);
+            if (!evt.currentTarget.hasPointerCapture(evt.pointerId)) {
+              return;
+            }
 
             if (movement > 10) {
               if (evt.button === 2 && !evt.shiftKey) {
@@ -442,11 +468,17 @@ defmodule GeomextricWeb.Canvas do
           let movement = 0;
           const onPointerMove = (evt) => {
             piv = null;
+            let movementX = evt.clientX - lastClientPos.x;
+            let movementY = evt.clientY - lastClientPos.y;
+            if (evt.isPrimary) {
+              lastClientPos.x = evt.clientX;
+              lastClientPos.y = evt.clientY;
+            }
             if (evt.currentTarget.hasPointerCapture(evt.pointerId)) {
               evt.stopPropagation();
               if (selecting) {
                 const { x, y } = evtToSvg(evt);
-                movement += Math.hypot(evt.movementX, evt.movementY);
+                movement += Math.hypot(movementX, movementY);
 
                 skipclick ||= movement > 10;
                 if (skipclick) {
@@ -459,20 +491,13 @@ defmodule GeomextricWeb.Canvas do
               } else if (pointing) {
                 const { x, y } = evtToSvg(evt);
 
-                movement += Math.hypot(evt.movementX, evt.movementY);
+                movement += Math.hypot(movementX, movementY);
                 arrow.setAttribute("opacity", 1);
                 arrow.setAttribute("x1", x);
                 arrow.setAttribute("y1", y);
                 arrow.setAttribute("x2", offset.x);
                 arrow.setAttribute("y2", offset.y);
               } else {
-                {
-                  const { x: x, y: y } = evtToSvg(evt);
-
-                  cam.x -= x - offset.x;
-                  cam.y -= y - offset.y;
-                }
-                updateViewBox(this.el, this.world, cam, this.scroller);
                 {
                   const { x, y } = evtToSvg(evt);
                   offset.x = x;
@@ -529,8 +554,16 @@ defmodule GeomextricWeb.Canvas do
             this.tools.appendChild(arrow);
           }
           this.world.appendChild(this.tools);
+          const lastClientPos = {
+            x: null,
+            y: null,
+          };
           const onPointerDown = (evt) => {
             const { x, y } = evtToSvg(evt);
+            if (evt.isPrimary) {
+              lastClientPos.x = evt.clientX;
+              lastClientPos.y = evt.clientY;
+            }
             if (evt.isPrimary && evt.button == 1 && evt.shiftKey) {
               evt.stopPropagation();
               evt.preventDefault();
@@ -635,8 +668,8 @@ defmodule GeomextricWeb.Canvas do
           this.el.addEventListener("pointerdown", onPointerDown);
           this.el.addEventListener("pointerup", onPointerUp);
           this.el.addEventListener("pointercancel", onPointerCancel);
+          this.el.addEventListener("lostpointercapture", onPointerLost);
           this.el.addEventListener("pointermove", onPointerMove);
-          this.el.addEventListener("wheel", onWheel);
           this.el.addEventListener("click", onClick);
           this.el.addEventListener("drop", onDrop);
           this.el.addEventListener("contextmenu", (evt) => evt.preventDefault());
@@ -647,14 +680,13 @@ defmodule GeomextricWeb.Canvas do
             pointerdown: onPointerDown,
             pointerup: onPointerUp,
             pointermove: onPointerMove,
-            wheel: onWheel,
             click: onClick,
             scroll: onScroll,
             drop: onDrop,
             resize,
           };
 
-          updateViewBox(this.el, this.world, cam, this.scroller);
+          updateViewBox(this.el, this.world, this.rotor, cam, this.scroller);
         },
         destroyed() {
           this.el.removeEventListener("pointerdown", this.listeners.pointerdown);
@@ -671,10 +703,12 @@ defmodule GeomextricWeb.Canvas do
           this.world.removeChild(this.tools);
         },
         updated() {
-          updateViewBox(this.el, this.world, cam, this.scroller);
+          this.world = this.el.querySelector("[data-world]");
 
-          this.world = this.el.firstElementChild;
+          this.rotor = this.el.querySelector("[data-rotor]");
           this.world.appendChild(this.tools);
+
+          updateViewBox(this.el, this.world, this.rotor, cam, this.scroller);
         },
       };
     </script>
