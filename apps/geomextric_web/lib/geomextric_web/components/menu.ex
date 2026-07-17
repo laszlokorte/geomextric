@@ -280,9 +280,23 @@ defmodule GeomextricWeb.Menu do
     </div>
 
     <script :type={Phoenix.LiveView.ColocatedHook} name=".Shortcut">
+      function throttle(fun, delay, fallback) {
+        let lastTime = 0;
+        return function (...args) {
+          let now = Date.now();
+          if (now - lastTime >= delay) {
+            fun(...args);
+            lastTime = now;
+          } else if (fallback) {
+            fallback(...args);
+          }
+        };
+      }
       export default {
         mounted() {
           if (this.el.hasAttribute("data-shortcut")) {
+            const click = throttle(() => this.el.click(), 4);
+
             const shortCut = this.el.getAttribute("data-shortcut");
             const shortCutShift = this.el.hasAttribute("data-shortcut-shift");
             const shortCutCtrl = this.el.hasAttribute("data-shortcut-ctrl");
@@ -295,7 +309,7 @@ defmodule GeomextricWeb.Menu do
                 shortCutAlt === evt.altKey
               ) {
                 evt.preventDefault();
-                this.el.click();
+                click();
               }
             });
           }

@@ -189,8 +189,8 @@ defmodule GeomextricWeb.Canvas do
         e.setAttribute(
           "viewBox",
           `${cam.x - (cam.screen.width / 2) * Math.exp(-cam.zoom)} ${cam.y - (cam.screen.height / 2) * Math.exp(-cam.zoom)}
-                                                                      ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
-                                                                      `,
+                                                                        ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
+                                                                        `,
         );
 
         w.setAttribute("data-zoomed", cam.zoom < 0 ? "out" : "in");
@@ -385,7 +385,7 @@ defmodule GeomextricWeb.Canvas do
               const { x: nx, y: ny } = rotate(
                 cam,
                 { x: px, y: py },
-                (-Math.PI / 180) * dw / 3,
+                ((-Math.PI / 180) * dw) / 3,
               );
               cam.x = nx;
               cam.y = ny;
