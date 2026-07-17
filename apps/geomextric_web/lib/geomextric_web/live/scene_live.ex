@@ -147,7 +147,7 @@ defmodule GeomextricWeb.SceneLive do
 
       {x, y, z} = PGA3.point_coordinates(camera_point)
 
-      if z == 0 do
+      if z < 0 do
         nil
       else
         screen_x = x * 100 / z
@@ -191,6 +191,27 @@ defmodule GeomextricWeb.SceneLive do
 
          new_len = :math.sqrt(new_x * new_x + new_y * new_y)
          {(x - y * v) * len / new_len, (y + x * v) * len / new_len, z}
+       end
+     )}
+  end
+
+  def handle_event("zoom", %{"value" => v}, socket) do
+    v = parse_number(v)
+
+    {:noreply,
+     socket
+     |> update(
+       :eye,
+       fn {x, y, z} ->
+         factor = :math.exp(v)
+
+         new_dist = :math.sqrt(x * x + y * y + z * z) * factor
+
+         if new_dist > 1 and new_dist < 100 do
+           {x * factor, y * factor, z * factor}
+         else
+           {x, y, z}
+         end
        end
      )}
   end
@@ -278,14 +299,17 @@ defmodule GeomextricWeb.SceneLive do
         height: 100%;
         display: block;
         grid-area: 1 / 1 / -1 / -1;
+        touch-action: none;
         }
         .screen {
         display: grid;
         position: absolute;
         inset: 0;
         }
-        line {
+        .line3d {
       vector-effect: non-scaling-stroke;
+      stroke-linecap: round;
+      stroke-linecap: round;
       }
 
       line[stroke="black"] {
@@ -334,6 +358,7 @@ defmodule GeomextricWeb.SceneLive do
       }
       .bar {
         grid-row: 1;
+        align-self: start;
         grid-column: 1 / -1;
         z-index: 100;
       }
@@ -521,6 +546,8 @@ defmodule GeomextricWeb.SceneLive do
         viewBox="-100 -100 200 200"
         width="100"
         height="50"
+        phx-hook=".Orb"
+        id="scene"
         preserveAspectRatio="xMidYMid slice"
       >
         <g id="layers">
@@ -551,11 +578,12 @@ defmodule GeomextricWeb.SceneLive do
                   />
                   <% else _ -> %>
                 <% end %>
-              <% %{pos: {{x1, y1}, {x2, y2}}, attrs: %{color: col}} -> %>
-                <%= with {x1, y1, _z1} <- project(@camera, PGA3.point(x1 / 100, y1 / 100, 0)),
-                 {x2, y2, _z2}  <- project(@camera, PGA3.point(x2 / 100, y2 / 100, 0)) do %>
+              <% %{pos: {{x1, y1}, {x2, y2}}, attrs: %{color: col, thickness: t}} -> %>
+                <%= with {x1, y1, z1} <- project(@camera, PGA3.point(x1 / 100, y1 / 100, 0)),
+                 {x2, y2, z2}  <- project(@camera, PGA3.point(x2 / 100, y2 / 100, 0)) do %>
                   <line
-                    stroke_width={2}
+                    class="line3d"
+                    stroke-width={t / :math.sqrt(z1 + z2)}
                     x1={x1}
                     y1={y1}
                     x2={x2}
@@ -567,17 +595,7 @@ defmodule GeomextricWeb.SceneLive do
             <% end %>
           <% end %>
         </g>
-        <%= for {color, p} <- @points do %>
-          <%= with {screen_x, screen_y, z} <- project(@camera, p) do %>
-            <circle
-              fill={color}
-              r={10 / abs(z)}
-              cx={screen_x}
-              cy={screen_y}
-            />
-            <% else _ -> %>
-          <% end %>
-        <% end %>
+
         <%= for {color, ps}<- @faces, path =
                 (for p <- ps  do
                   with({screen_x, screen_y, _z} <- project(@camera, p), do:
@@ -589,14 +607,27 @@ defmodule GeomextricWeb.SceneLive do
             fill={color}
           />
         <% end %>
+
         <%= for {color, {p1, p2}} <- @edges  do %>
           <%= with {{x1, y1, _z1}, {x2,y2,_z2}} <- {project(@camera, p1), project(@camera, p2)} do %>
             <line
+              class="line3d"
               stroke={color}
               x1={x1}
               y1={y1}
               x2={x2}
               y2={y2}
+            />
+            <% else _ -> %>
+          <% end %>
+        <% end %>
+        <%= for {color, p} <- @points do %>
+          <%= with {screen_x, screen_y, z} <- project(@camera, p) do %>
+            <circle
+              fill={color}
+              r={10 / abs(z)}
+              cx={screen_x}
+              cy={screen_y}
             />
             <% else _ -> %>
           <% end %>
@@ -631,6 +662,46 @@ defmodule GeomextricWeb.SceneLive do
         </defs>
       </svg>
     </div>
+
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".Orb">
+      function throttle(fun, delay, fallback) {
+        let lastTime = 0;
+        return function (...args) {
+          let now = Date.now();
+          if (now - lastTime >= delay) {
+            fun(...args);
+            lastTime = now;
+          } else if (fallback) {
+            fallback(...args);
+          }
+        };
+      }
+
+      export default {
+        mounted() {
+          const rot = throttle((r) => this.pushEvent("rotz", { value: "" + r }), 30);
+          const zoom = throttle((r) => this.pushEvent("zoom", { value: "" + r }), 30);
+          this.el.addEventListener("wheel", (evt) => {
+            evt.preventDefault();
+            zoom(evt.deltaY / 600);
+          });
+          this.el.addEventListener("pointerdown", (evt) => {
+            console.log(evt.isPrimary);
+            if (evt.isPrimary) {
+              evt.preventDefault();
+              evt.currentTarget.setPointerCapture(evt.pointerId);
+            }
+          });
+          this.el.addEventListener("pointermove", (evt) => {
+            if (evt.currentTarget.hasPointerCapture(evt.pointerId)) {
+              evt.preventDefault();
+
+              rot(evt.movementX / 200);
+            }
+          });
+        },
+      };
+    </script>
     """
   end
 end
