@@ -18,6 +18,7 @@ defmodule GeomextricWeb.Router do
     scope "/", GeomextricWeb do
       pipe_through :browser
       live "/", HomeLive, :index
+      live "/canvas", CanvasLive, :index
       live "/scene", SceneLive, :index
     end
   end

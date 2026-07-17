@@ -1,11 +1,9 @@
 defmodule GeomextricWeb.SceneLive do
   alias Galixir.Algebras.PGA3
+  use GeomextricWeb, :live_view
 
-  import GeomextricWeb.CoreComponents
-  import GeomextricWeb.Canvas
-  import GeomextricWeb.Circle
   import GeomextricWeb.Menu
-  use Phoenix.LiveView
+
   @topic "canvas"
 
   def mount(%{}, _, socket) do
@@ -141,15 +139,21 @@ defmodule GeomextricWeb.SceneLive do
   end
 
   def project(cam, p) do
-    camera_point = PGA3.transform(cam, p)
-    {x, y, z} = PGA3.point_coordinates(camera_point)
-
-    if z == 0 do
+    if PGA3.zero?(cam) do
       nil
     else
-      screen_x = x * 100 / z
-      screen_y = -y * 100 / z
-      {screen_x, screen_y, z}
+      camera_point =
+        PGA3.transform(cam, p)
+
+      {x, y, z} = PGA3.point_coordinates(camera_point)
+
+      if z == 0 do
+        nil
+      else
+        screen_x = x * 100 / z
+        screen_y = -y * 100 / z
+        {screen_x, screen_y, z}
+      end
     end
   end
 
@@ -161,7 +165,7 @@ defmodule GeomextricWeb.SceneLive do
       {num, ""} ->
         num
 
-      e ->
+      _ ->
         :error
     end
   end
@@ -171,6 +175,24 @@ defmodule GeomextricWeb.SceneLive do
      socket
      |> assign(:eye, {7, 5, 3})
      |> assign(:focus, {0, 0, 0})}
+  end
+
+  def handle_event("rotz", %{"value" => v}, socket) do
+    v = parse_number(v)
+
+    {:noreply,
+     socket
+     |> update(
+       :eye,
+       fn {x, y, z} ->
+         len = :math.sqrt(x * x + y * y)
+         new_x = x - y * v
+         new_y = y + x * v
+
+         new_len = :math.sqrt(new_x * new_x + new_y * new_y)
+         {(x - y * v) * len / new_len, (y + x * v) * len / new_len, z}
+       end
+     )}
   end
 
   def handle_event("movex", %{"value" => v}, socket) do
@@ -274,10 +296,37 @@ defmodule GeomextricWeb.SceneLive do
       text {
       transform: translate(0, -5px);
       }
-      .panel{
-      z-index: 100;
-      padding: 1em;
-      }
+
+      .toolbar {
+            flex-wrap: wrap-reverse;
+            border-radius: 1ex;
+              position: fixed;
+              height: auto;
+              top: 2em;
+              left: 0;
+              right: 1em;
+              margin: 1ex;
+              padding: 1ex;
+              color: #fff;
+              display: flex;
+              gap: 1ex;
+
+              background: #0003;
+              z-index: 1000;
+              flex-direction: row;
+              align-items: center;
+            }
+            legend {
+            color: #000;
+            padding: 0;
+            font-size: 0.7em;
+            text-align: center;
+            border-bottom: 1px solid #000;
+            margin-bottom: 2px;
+            width: 100%;
+            position: relative;
+            margin-top: -0.5em;
+            }
       .controls{
       display: flex;
       flex-direction: row;
@@ -306,13 +355,13 @@ defmodule GeomextricWeb.SceneLive do
                   %{
                     label: "-",
                     send: "movex",
-                    value: 1,
+                    value: 0.9,
                     shortcut: [key: "e"]
                   },
                   %{
                     label: "+",
                     send: "movex",
-                    value: -1,
+                    value: -0.9,
                     shortcut: [key: "q"]
                   }
                 ]
@@ -323,13 +372,13 @@ defmodule GeomextricWeb.SceneLive do
                   %{
                     label: "+",
                     send: "movey",
-                    value: 1,
+                    value: 0.9,
                     shortcut: [key: "e", alt: true]
                   },
                   %{
                     label: "-",
                     send: "movey",
-                    value: -1,
+                    value: -0.9,
                     shortcut: [key: "q", alt: true]
                   }
                 ]
@@ -340,13 +389,13 @@ defmodule GeomextricWeb.SceneLive do
                   %{
                     label: "+",
                     send: "movez",
-                    value: 1,
+                    value: 0.9,
                     shortcut: [key: "w"]
                   },
                   %{
                     label: "-",
                     send: "movez",
-                    value: -1,
+                    value: -0.9,
                     shortcut: [key: "s"]
                   }
                 ]
@@ -354,13 +403,25 @@ defmodule GeomextricWeb.SceneLive do
             ]
           },
           %{
-            label: "Turn",
+            label: "Spin",
             items: [
               %{
-                label: "Reset",
-                send: "reset",
-                shortcut: [key: "Escape"]
+                label: "Left",
+                send: "rotz",
+                value: -0.1,
+                shortcut: [key: "Q", shift: true]
               },
+              %{
+                label: "Right",
+                send: "rotz",
+                value: 0.1,
+                shortcut: [key: "E", shift: true]
+              }
+            ]
+          },
+          %{
+            label: "Turn",
+            items: [
               %{
                 label: "X",
                 items: [
@@ -425,27 +486,32 @@ defmodule GeomextricWeb.SceneLive do
             ]
           }
         ]}>
+          <:head>
+            <.link navigate={~p"/canvas"}>
+              2D
+            </.link>
+          </:head>
           <div class="segment">
             <div class="connection-status connected">Connected 🟢</div>
             <div class="connection-status disconnected">Reconnecting... 🔴</div>
           </div>
         </.menu>
-        <div class="panel">
+        <div class="toolbar">
           <div class="controls">
             <fieldset>
               <legend>X</legend>
-              <button phx-click="movex" value="-1">+</button>
-              <button phx-click="movex" value="+1">-</button>
+              <button phx-click="movex" value="-0.9">+</button>
+              <button phx-click="movex" value="+0.9">-</button>
             </fieldset>
             <fieldset>
               <legend>Y</legend>
-              <button phx-click="movey" value="+1">+</button>
-              <button phx-click="movey" value="-1">-</button>
+              <button phx-click="movey" value="+0.9">+</button>
+              <button phx-click="movey" value="-0.9">-</button>
             </fieldset>
             <fieldset>
               <legend>Z</legend>
-              <button phx-click="movez" value="-1">-</button>
-              <button phx-click="movez" value="+1">+</button>
+              <button phx-click="movez" value="-0.9">-</button>
+              <button phx-click="movez" value="+0.9">+</button>
             </fieldset>
           </div>
         </div>
@@ -514,8 +580,8 @@ defmodule GeomextricWeb.SceneLive do
         <% end %>
         <%= for {color, ps}<- @faces, path =
                 (for p <- ps  do
-                  with({screen_x, screen_y, z} <- project(@camera, p), do:
-                  "#{screen_x} #{screen_y}", else: (e ->  ""))
+                  with({screen_x, screen_y, _z} <- project(@camera, p), do:
+                  "#{screen_x} #{screen_y}", else: (_e ->  ""))
                 end
                 |> Enum.join(" ")) do %>
           <polygon
@@ -524,7 +590,7 @@ defmodule GeomextricWeb.SceneLive do
           />
         <% end %>
         <%= for {color, {p1, p2}} <- @edges  do %>
-          <%= with {{x1, y1, z1}, {x2,y2,z2}} <- {project(@camera, p1), project(@camera, p2)} do %>
+          <%= with {{x1, y1, _z1}, {x2,y2,_z2}} <- {project(@camera, p1), project(@camera, p2)} do %>
             <line
               stroke={color}
               x1={x1}
@@ -538,6 +604,7 @@ defmodule GeomextricWeb.SceneLive do
         <%= for {color, p, l} <- @labels do %>
           <%= with {screen_x, screen_y, z} <- project(@camera, p)  do %>
             <text
+              font-size={24 / z}
               fill={color}
               x={screen_x}
               y={screen_y}

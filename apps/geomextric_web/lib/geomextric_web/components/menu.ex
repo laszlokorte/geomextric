@@ -4,6 +4,7 @@ defmodule GeomextricWeb.Menu do
 
   attr :items, :list, default: [], doc: "items", required: false
   slot :inner_block, required: false
+  slot :head, required: false
 
   def menu(assigns) do
     ~H"""
@@ -123,6 +124,12 @@ defmodule GeomextricWeb.Menu do
        margin-left: auto;
        font-size: 0.8em;
        }
+
+       .head {
+        align-self: center;
+        padding: 0 1ex;
+        font-size: 1em;
+       }
     </style>
 
     <style rel="stylesheet" :type={GeomextricWeb.ColocatedCSS}>
@@ -134,6 +141,9 @@ defmodule GeomextricWeb.Menu do
     </style>
 
     <div class="m">
+      <div class="head">
+        {render_slot(@head)}
+      </div>
       <div :for={{item, idx} <- @items |> Enum.with_index()} class="menu">
         <%= if Map.get(item, :items, []) |> Enum.empty? do %>
           <button
