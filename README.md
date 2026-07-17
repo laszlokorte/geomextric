@@ -2,6 +2,8 @@
 
 ![Preview Screenshot](./guide/preview.png)
 
+![Preview Screenshot](./guide/3d.png)
+
 ## Start developing
 
 To start your Phoenix server:

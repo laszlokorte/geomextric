@@ -1,15 +1,15 @@
 defmodule GeomextricWeb.SceneLive do
+  alias Geomextric.Bodies
   alias Galixir.Algebras.PGA3
   use GeomextricWeb, :live_view
 
+  import GeomextricWeb.Geometry
   import GeomextricWeb.Menu
 
   @topic "canvas"
 
   def mount(%{}, _, socket) do
     GeomextricWeb.Endpoint.subscribe(@topic)
-
-    pyramid_tip = PGA3.point(0, 0, 3)
 
     {:ok,
      socket
@@ -19,96 +19,41 @@ defmodule GeomextricWeb.SceneLive do
        Geomextric.Canvas.get_all(Geomextric.Canvas)
      )
      |> assign(:objects, %{
+       "trace" => %{
+         geo:
+           Geomextric.Bodies.make_trace(
+             [
+               PGA3.point(3.5, 4, 2),
+               PGA3.point(4, 3.5, 1),
+               PGA3.point(4.5, 3, 1)
+             ],
+             [
+               PGA3.point(-2.5, 3, 1),
+               PGA3.point(-3, 2.5, 1),
+               PGA3.point(-4, 2.5, 1)
+             ],
+             30
+           ),
+         editable: false,
+         scale: 1,
+         rotation: 0
+       },
+       "cube" => %{
+         geo: Geomextric.Bodies.gen_cube(),
+         editable: false,
+         scale: 1,
+         rotation: 0
+       },
        "pyramid" => %{
          editable: true,
          scale: 1,
          rotation: 0,
-         points: [
-           {"rebeccapurple", pyramid_tip},
-           {"tomato", PGA3.point(1, 1, 1)},
-           {"tomato", PGA3.point(1, -1, 1)},
-           {"tomato", PGA3.point(-1, -1, 1)},
-           {"tomato", PGA3.point(-1, 1, 1)},
-           {"yellowgreen", PGA3.point(1, 0, 1)},
-           {"yellowgreen", PGA3.point(-1, 0, 1)},
-           {"yellowgreen", PGA3.point(0, -1, 1)},
-           {"yellowgreen", PGA3.point(0, 1, 1)},
-           {"teal", PGA3.point(1, 1, 0)},
-           {"teal", PGA3.point(1, -1, 0)},
-           {"teal", PGA3.point(-1, -1, 0)},
-           {"teal", PGA3.point(-1, 1, 0)}
-         ],
-         edges: [
-           {"royalblue", {PGA3.point(1, 1, 1), pyramid_tip}},
-           {"royalblue", {PGA3.point(-1, 1, 1), pyramid_tip}},
-           {"royalblue", {PGA3.point(-1, -1, 1), pyramid_tip}},
-           {"royalblue", {PGA3.point(1, -1, 1), pyramid_tip}},
-           {"royalblue", {PGA3.point(1, 1, 1), PGA3.point(-1, 1, 1)}},
-           {"royalblue", {PGA3.point(1, -1, 1), PGA3.point(-1, -1, 1)}},
-           {"royalblue", {PGA3.point(-1, 1, 1), PGA3.point(-1, -1, 1)}},
-           {"royalblue", {PGA3.point(1, 1, 1), PGA3.point(1, -1, 1)}},
-           {"teal", {PGA3.point(1, 1, 0), PGA3.point(-1, 1, 0)}},
-           {"teal", {PGA3.point(1, -1, 0), PGA3.point(-1, -1, 0)}},
-           {"teal", {PGA3.point(-1, 1, 0), PGA3.point(-1, -1, 0)}},
-           {"teal", {PGA3.point(1, 1, 0), PGA3.point(1, -1, 0)}}
-         ],
-         faces: [
-           {"#4444",
-            [
-              PGA3.point(1, 1, 0),
-              PGA3.point(-1, 1, 0),
-              PGA3.point(-1, -1, 0),
-              PGA3.point(1, -1, 0)
-            ]},
-           {"#5554",
-            [
-              PGA3.point(1, 1, 1),
-              PGA3.point(-1, 1, 1),
-              PGA3.point(-1, -1, 1),
-              PGA3.point(1, -1, 1)
-            ]},
-           {"#0504",
-            [
-              PGA3.point(1, 1, 1),
-              PGA3.point(1, -1, 1),
-              pyramid_tip
-            ]},
-           {"#5504",
-            [
-              PGA3.point(-1, 1, 1),
-              PGA3.point(-1, -1, 1),
-              pyramid_tip
-            ]},
-           {"#0554",
-            [
-              PGA3.point(-1, -1, 1),
-              PGA3.point(1, -1, 1),
-              pyramid_tip
-            ]},
-           {"#5054",
-            [
-              PGA3.point(1, 1, 1),
-              PGA3.point(-1, 1, 1),
-              pyramid_tip
-            ]}
-         ],
-         labels: []
+         geo: Bodies.gen_pyramid()
        },
        "axis" => %{
          scale: 1,
          rotation: 0,
-         points: [],
-         edges: [
-           {"black", {PGA3.point(-5, 0, 0), PGA3.point(5, 0, 0)}},
-           {"black", {PGA3.point(0, -5, 0), PGA3.point(0, 5, 0)}},
-           {"black", {PGA3.point(0, 0, -3), PGA3.point(0, 0, 4)}}
-         ],
-         faces: [],
-         labels: [
-           {"black", PGA3.point(5, 0, 0), "X"},
-           {"black", PGA3.point(0, 5, 0), "Y"},
-           {"black", PGA3.point(0, 0, 4), "Z"}
-         ]
+         geo: Bodies.gen_axis()
        }
      })
      |> assign(:eye, {7, 5, 3})
@@ -152,43 +97,6 @@ defmodule GeomextricWeb.SceneLive do
       [position, target, pole],
       [point(0, 0, 0), point(0, 0, 1), ideal_point(0, 1, 0)]
     )
-  end
-
-  def rot(a, o) do
-    t =
-      PGA3.gp(PGA3.new(e1: 1), PGA3.new(e2: 1))
-      |> PGA3.add(PGA3.new(scalar: a / 100))
-      |> PGA3.normalize()
-
-    PGA3.transform(t, o)
-  end
-
-  def scale_point(p, s) do
-    PGA3.new(
-      e123: PGA3.coefficient(p, :e123),
-      e230: PGA3.coefficient(p, :e230) * s,
-      e013: PGA3.coefficient(p, :e013) * s,
-      e120: PGA3.coefficient(p, :e120) * s
-    )
-  end
-
-  def project(cam, p) do
-    if PGA3.zero?(cam) do
-      nil
-    else
-      camera_point =
-        PGA3.transform(cam, p)
-
-      {x, y, z} = PGA3.point_coordinates(camera_point)
-
-      if z < 0 do
-        nil
-      else
-        screen_x = x * 100 / z
-        screen_y = -y * 100 / z
-        {screen_x, screen_y, z}
-      end
-    end
   end
 
   def parse_number(str) do
@@ -342,6 +250,7 @@ defmodule GeomextricWeb.SceneLive do
     ~H"""
     <style rel="stylesheet" :type={GeomextricWeb.ColocatedCSS}>
         .scene{
+        background: #fff;
         inset: 0;
         width: 100%;
         height: 100%;
@@ -365,8 +274,8 @@ defmodule GeomextricWeb.SceneLive do
       stroke-width: 1;
       }
 
-      text {
-      transform: translate(0, -5px);
+      .text-label {
+        transform: translate(0, -2px);
       }
 
       .toolbar {
@@ -654,60 +563,9 @@ defmodule GeomextricWeb.SceneLive do
             <% end %>
           <% end %>
         </g>
-        <g id="pyramid">
-          <%= for {objid, %{faces: faces, points: points, edges: edges, labels: labels, rotation: rotation, scale: scale}} <- @objects do %>
-            <%= for {color, ps}<- faces, path =
-                (for p <- ps  do
-                  with({screen_x, screen_y, _z} <- project(@camera, rot(rotation, scale_point(p, scale))), do:
-                  "#{screen_x} #{screen_y}", else: (_e ->  ""))
-                end
-                |> Enum.join(" ")) do %>
-              <polygon
-                points={path}
-                fill={color}
-              />
-            <% end %>
-
-            <%= for {color, {p1, p2}} <- edges  do %>
-              <%= with {{x1, y1, _z1}, {x2,y2,_z2}} <- {project(@camera, rot(rotation, scale_point(p1, scale))), project(@camera, rot(rotation, scale_point(p2, scale)))} do %>
-                <line
-                  class="line3d"
-                  stroke={color}
-                  x1={x1}
-                  y1={y1}
-                  x2={x2}
-                  y2={y2}
-                />
-                <% else _ -> %>
-              <% end %>
-            <% end %>
-            <%= for {color, p} <- points do %>
-              <%= with {screen_x, screen_y, z} <- project(@camera, rot(rotation, scale_point(p, scale))) do %>
-                <circle
-                  fill={color}
-                  r={10 / abs(z)}
-                  cx={screen_x}
-                  cy={screen_y}
-                />
-                <% else _ -> %>
-              <% end %>
-            <% end %>
-            <%= for {color, p, l} <- labels do %>
-              <%= with {screen_x, screen_y, z} <- project(@camera, rot(rotation, scale_point(p, scale)))  do %>
-                <text
-                  font-size={24 / z}
-                  fill={color}
-                  x={screen_x}
-                  y={screen_y}
-                  font-size={6}
-                >
-                  {l}
-                </text>
-                <% else _ -> %>
-              <% end %>
-            <% end %>
-          <% end %>
-        </g>
+        <%= for {objid, %{geo: geo, rotation: rotation, scale: scale}} <- @objects do %>
+          <.geometry camera={@camera} id={objid} geo={geo} rotation={rotation} scale={scale} />
+        <% end %>
         <defs>
           <marker
             id="vector-head"

@@ -13,6 +13,7 @@ defmodule GeomextricWeb.Menu do
       margin: 0;
       padding: 0;
       background: #fff;
+      color: #000;
       }
       .submenu{
 
@@ -125,7 +126,8 @@ defmodule GeomextricWeb.Menu do
        font-size: 0.8em;
        }
 
-       .head {
+        :scope .head {
+       color: #000;
         align-self: center;
         padding: 0 1ex;
         font-size: 1em;
