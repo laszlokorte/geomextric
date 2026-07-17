@@ -10,6 +10,47 @@ defmodule Geomextric.Bodies do
     }
   end
 
+  def gen_grid(horizontal \\ true, vertical \\ true) do
+    %{
+      points: [],
+      edges:
+        Enum.concat([
+          for(
+            i <- -10..10,
+            horizontal,
+            do: {"#0001", {PGA3.point(i / 2, -5, 0), PGA3.point(i / 2, 5, 0)}}
+          ),
+          for(
+            i <- -10..10,
+            horizontal,
+            do: {"#0001", {PGA3.point(-5, i / 2, 0), PGA3.point(5, i / 2, 0)}}
+          ),
+          for(
+            i <- -10..10,
+            vertical,
+            do: {"#0001", {PGA3.point(5, -5, 5 + i / 2), PGA3.point(5, 5, 5 + i / 2)}}
+          ),
+          for(
+            i <- -10..10,
+            vertical,
+            do: {"#0001", {PGA3.point(-5, 5, 5 + i / 2), PGA3.point(5, 5, 5 + i / 2)}}
+          ),
+          for(
+            i <- -10..10,
+            vertical,
+            do: {"#0001", {PGA3.point(i / 2, 5, 0), PGA3.point(i / 2, 5, 10)}}
+          ),
+          for(
+            i <- -10..10,
+            vertical,
+            do: {"#0001", {PGA3.point(5, i / 2, 0), PGA3.point(5, i / 2, 10)}}
+          )
+        ]),
+      faces: [],
+      labels: []
+    }
+  end
+
   def gen_axis do
     %{
       points: [],

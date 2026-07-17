@@ -50,6 +50,11 @@ defmodule GeomextricWeb.SceneLive do
          rotation: 0,
          geo: Bodies.gen_pyramid()
        },
+       "grid" => %{
+         scale: 1,
+         rotation: 0,
+         geo: Bodies.gen_grid(true, false)
+       },
        "axis" => %{
          scale: 1,
          rotation: 0,
