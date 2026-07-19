@@ -14,30 +14,14 @@ defmodule GeomextricWeb.SceneLive do
     {:ok,
      socket
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
+     |> assign(:yy, 0)
+     |> assign(:zz, 0)
+     |> assign(:xx, 0)
      |> assign(
        :layers,
        Geomextric.Canvas.get_all(Geomextric.Canvas)
      )
      |> assign(:objects, %{
-       "trace" => %{
-         geo:
-           Geomextric.Bodies.make_trace(
-             [
-               PGA3.point(3.5, 4, 2),
-               PGA3.point(4, 3.5, 1),
-               PGA3.point(4.5, 3, 1)
-             ],
-             [
-               PGA3.point(-2.5, 3, 1),
-               PGA3.point(-3, 2.5, 1),
-               PGA3.point(-4, 2.5, 1)
-             ],
-             30
-           ),
-         editable: false,
-         scale: 1,
-         rotation: 0
-       },
        "cube" => %{
          geo: Geomextric.Bodies.gen_cube(),
          editable: false,
@@ -118,6 +102,22 @@ defmodule GeomextricWeb.SceneLive do
   end
 
   def handle_event(
+        "change_pos",
+        %{"x" => x, "y" => y, "z" => z},
+        socket
+      ) do
+    x = parse_number(x)
+    y = parse_number(y)
+    z = parse_number(z)
+
+    {:noreply,
+     socket
+     |> assign(:xx, x)
+     |> assign(:yy, y)
+     |> assign(:zz, z)}
+  end
+
+  def handle_event(
         "change_obj",
         %{"rot" => rot, "objid" => obj_id, "scale" => new_scale},
         socket
@@ -152,6 +152,25 @@ defmodule GeomextricWeb.SceneLive do
 
          new_len = :math.sqrt(new_x * new_x + new_y * new_y)
          {(x - y * v) * len / new_len, (y + x * v) * len / new_len, z}
+       end
+     )}
+  end
+
+  def handle_event("rot", %{"v" => v, "h" => h}, socket) do
+    v = parse_number(v) * 5
+    h = parse_number(h)
+
+    {:noreply,
+     socket
+     |> update(
+       :eye,
+       fn {x, y, z} ->
+         len = :math.sqrt(x * x + y * y)
+         new_x = x - y * h
+         new_y = y + x * h
+
+         new_len = :math.sqrt(new_x * new_x + new_y * new_y)
+         {(x - y * h) * len / new_len, (y + x * h) * len / new_len, z + v}
        end
      )}
   end
@@ -506,11 +525,58 @@ defmodule GeomextricWeb.SceneLive do
                 <input type="hidden" name="objid" value={objid} />
                 <fieldset>
                   <legend>{objid}</legend>
-                  <label><input name="rot" type="range" min="-100" max="100" value={rot} /></label>
-                  <label><input name="scale" type="range" min="0.1" max="4" step="0.1" value={scl} /></label>
+                  <label><input
+                    phx-throttle="16"
+                    name="rot"
+                    type="range"
+                    min="-100"
+                    max="100"
+                    value={rot}
+                  /></label>
+                  <label><input
+                    phx-throttle="16"
+                    name="scale"
+                    type="range"
+                    min="0.1"
+                    max="4"
+                    step="0.1"
+                    value={scl}
+                  /></label>
                 </fieldset>
               </form>
             <% end %>
+            <form phx-change="change_pos">
+              <fieldset>
+                <legend>Trace</legend>
+                <label><input
+                  phx-throttle="16"
+                  step="0.1"
+                  name="x"
+                  type="range"
+                  min="-5"
+                  max="5"
+                  value={@xx}
+                /></label>
+                <label><input
+                  phx-throttle="16"
+                  step="0.1"
+                  name="y"
+                  type="range"
+                  min="-5"
+                  max="5"
+                  value={@yy}
+                /></label>
+                <label><input
+                  phx-throttle="16"
+                  step="0.1"
+                  name="z"
+                  type="range"
+                  min="-5"
+                  max="5"
+                  value={@zz}
+                /></label>
+              </fieldset>
+            </form>
           </div>
         </div>
       </div>
@@ -571,6 +637,25 @@ defmodule GeomextricWeb.SceneLive do
         <%= for {objid, %{geo: geo, rotation: rotation, scale: scale}} <- @objects do %>
           <.geometry camera={@camera} id={objid} geo={geo} rotation={rotation} scale={scale} />
         <% end %>
+        <.geometry
+          id="trace2"
+          camera={@camera}
+          geo={
+            Geomextric.Bodies.make_trace(
+              [
+                PGA3.point(@xx, @yy + 1, @zz),
+                PGA3.point(@xx, @yy, @zz),
+                PGA3.point(@xx + 1, @yy, @zz + 1)
+              ],
+              [
+                PGA3.point(-3, 2, 1),
+                PGA3.point(-3, 2 + 1, 1 + 0.5),
+                PGA3.point(-3 + 1, 2 + 1, 1 + 0.5)
+              ],
+              30
+            )
+          }
+        />
         <defs>
           <marker
             id="vector-head"
@@ -604,11 +689,14 @@ defmodule GeomextricWeb.SceneLive do
 
       export default {
         mounted() {
-          const rot = throttle((r) => this.pushEvent("rotz", { value: "" + r }), 30);
+          const rot = throttle(
+            (h, v) => this.pushEvent("rot", { v: "" + v, h: "" + h }),
+            30,
+          );
           const zoom = throttle((r) => this.pushEvent("zoom", { value: "" + r }), 30);
           this.el.addEventListener("wheel", (evt) => {
             evt.preventDefault();
-            zoom(evt.deltaY / 600);
+            zoom((evt.deltaY / window.screen.height) * 10);
           });
           this.el.addEventListener("pointerdown", (evt) => {
             console.log(evt.isPrimary);
@@ -621,7 +709,10 @@ defmodule GeomextricWeb.SceneLive do
             if (evt.currentTarget.hasPointerCapture(evt.pointerId)) {
               evt.preventDefault();
 
-              rot(evt.movementX / 200);
+              rot(
+                (evt.movementX / window.screen.width) * 20,
+                (evt.movementY / window.screen.height) * 20,
+              );
             }
           });
         },
