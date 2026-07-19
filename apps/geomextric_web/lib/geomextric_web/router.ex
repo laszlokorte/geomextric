@@ -20,6 +20,7 @@ defmodule GeomextricWeb.Router do
       live "/", HomeLive, :index
       live "/canvas", CanvasLive, :index
       live "/scene", SceneLive, :index
+      live "/tut", TutLive, :index
     end
   end
 

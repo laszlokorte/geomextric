@@ -51,6 +51,34 @@ defmodule Geomextric.Bodies do
     }
   end
 
+  def gen_vector(x, y, z, attrs \\ []) do
+    %{
+      points: [],
+      edges: [
+        {Keyword.get(attrs, :color, "black"), {PGA3.point(0, 0, 0), PGA3.point(-x, y, z)}}
+      ],
+      faces: [],
+      labels: [
+        {Keyword.get(attrs, :color, "black"), PGA3.point(-x, y, z),
+         Keyword.get(attrs, :name, "v")}
+      ]
+    }
+  end
+
+  def gen_bivector(x, y, z, attrs \\ []) do
+    %{
+      points: [],
+      edges: [
+        {Keyword.get(attrs, :color, "black"), {PGA3.point(0, 0, 0), PGA3.point(-x, y, z)}}
+      ],
+      faces: [],
+      labels: [
+        {Keyword.get(attrs, :color, "black"), PGA3.point(-x, y, z),
+         Keyword.get(attrs, :name, "v")}
+      ]
+    }
+  end
+
   def gen_axis do
     %{
       points: [],
