@@ -1,4 +1,4 @@
-defmodule GeomextricWeb.SceneLive do
+defmodule GeomextricWeb.PlaygroundLive do
   alias Geomextric.Bodies
   alias Galixir.Algebras.PGA3
   use GeomextricWeb, :live_view
@@ -6,19 +6,25 @@ defmodule GeomextricWeb.SceneLive do
   import GeomextricWeb.Geometry
   import GeomextricWeb.Menu
 
-  @topic "canvas"
-
   def mount(%{}, _, socket) do
-    GeomextricWeb.Endpoint.subscribe(@topic)
-
     {:ok,
      socket
-     |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
-     |> assign(
-       :layers,
-       Geomextric.Canvas.get_all(Geomextric.Canvas)
-     )
+     |> assign(:yy, 0)
+     |> assign(:zz, 0)
+     |> assign(:xx, 0)
      |> assign(:objects, %{
+       "cube" => %{
+         geo: Geomextric.Bodies.gen_cube(),
+         editable: false,
+         scale: 1,
+         rotation: 0
+       },
+       "pyramid" => %{
+         editable: true,
+         scale: 1,
+         rotation: 0,
+         geo: Bodies.gen_pyramid()
+       },
        "grid" => %{
          scale: 1,
          rotation: 0,
@@ -32,16 +38,6 @@ defmodule GeomextricWeb.SceneLive do
      })
      |> assign(:eye, {7, 5, 3})
      |> assign(:focus, {0, 0, 0})}
-  end
-
-  def handle_info(_, socket) do
-    {:noreply,
-     socket
-     |> assign(
-       :layers,
-       Geomextric.Canvas.get_all(Geomextric.Canvas)
-     )
-     |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))}
   end
 
   def align(ps, qs) do
@@ -478,8 +474,8 @@ defmodule GeomextricWeb.SceneLive do
           }
         ]}>
           <:head>
-            <.link navigate={~p"/canvas"}>
-              2D
+            <.link navigate={~p"/tut"}>
+              Tut
             </.link>
           </:head>
           <div class="segment">
@@ -530,6 +526,38 @@ defmodule GeomextricWeb.SceneLive do
                 </fieldset>
               </form>
             <% end %>
+            <form phx-change="change_pos">
+              <fieldset>
+                <legend>Trace</legend>
+                <label><input
+                  phx-throttle="16"
+                  step="0.1"
+                  name="x"
+                  type="range"
+                  min="-5"
+                  max="5"
+                  value={@xx}
+                /></label>
+                <label><input
+                  phx-throttle="16"
+                  step="0.1"
+                  name="y"
+                  type="range"
+                  min="-5"
+                  max="5"
+                  value={@yy}
+                /></label>
+                <label><input
+                  phx-throttle="16"
+                  step="0.1"
+                  name="z"
+                  type="range"
+                  min="-5"
+                  max="5"
+                  value={@zz}
+                /></label>
+              </fieldset>
+            </form>
           </div>
         </div>
       </div>
@@ -542,55 +570,33 @@ defmodule GeomextricWeb.SceneLive do
         id="scene"
         preserveAspectRatio="xMidYMid slice"
       >
-        <g id="layers">
-          <%= for %{id: id} = l <- @layers |> Enum.reverse() do %>
-            <%= case l do %>
-              <% %{pos: {x, y}, attrs: %{color: col, radius: r}} -> %>
-                <%= with {x, y, z} <- project(@camera, PGA3.point(x / 100, y / 100, 0)) do %>
-                  <circle
-                    id={"#{id}"}
-                    cx={x}
-                    cy={y}
-                    r={r / z}
-                    fill={col}
-                  />
-                  <% else _ -> %>
-                <% end %>
-              <% %{pos: {x, y, w, h}, attrs: %{color: col, radius: r}} -> %>
-                <%= with {x1, y1, _z1} <- project(@camera, PGA3.point(x / 100, y / 100, 0)),
-               {x2, y2, _z2} <- project(@camera, PGA3.point((x + w) / 100, y / 100, 0)),
-               {x3, y3, _z3} <- project(@camera, PGA3.point((x + w) / 100, (y + h) / 100, 0)),
-               {x4, y4, _z4} <- project(@camera, PGA3.point(x / 100, (y + h) / 100, 0))
-                 do %>
-                  <polygon
-                    fill={col}
-                    rx={r}
-                    ry={r}
-                    points={"#{x1} #{y1} #{x2} #{y2} #{x3} #{y3} #{x4} #{y4}"}
-                  />
-                  <% else _ -> %>
-                <% end %>
-              <% %{pos: {{x1, y1}, {x2, y2}}, attrs: %{color: col, thickness: t}} -> %>
-                <%= with {x1, y1, z1} <- project(@camera, PGA3.point(x1 / 100, y1 / 100, 0)),
-                 {x2, y2, z2}  <- project(@camera, PGA3.point(x2 / 100, y2 / 100, 0)) do %>
-                  <line
-                    class="line3d"
-                    stroke-width={t / :math.sqrt(z1 + z2)}
-                    x1={x1}
-                    y1={y1}
-                    x2={x2}
-                    y2={y2}
-                    stroke={col}
-                  />
-                  <% else _ -> %>
-                <% end %>
-            <% end %>
-          <% end %>
-        </g>
         <%= for {objid, %{geo: geo, rotation: rotation, scale: scale}} <- @objects do %>
           <.geometry camera={@camera} id={objid} geo={geo} rotation={rotation} scale={scale} />
         <% end %>
-
+        <.geometry
+          id="trace2"
+          camera={@camera}
+          geo={
+            Geomextric.Bodies.make_trace(
+              [
+                PGA3.point(@xx, @yy + 1, @zz),
+                PGA3.point(@xx, @yy, @zz),
+                PGA3.point(@xx + 1, @yy, @zz + 1)
+              ],
+              [
+                PGA3.point(-3, 2, 1),
+                PGA3.point(-3, 2 + 1, 1 + 0.5),
+                PGA3.point(-3 + 1, 2 + 1, 1 + 0.5)
+              ],
+              30
+            )
+          }
+        />
+        <.geometry
+          id="fourier"
+          camera={@camera}
+          geo={Geomextric.Bodies.make_exp(1, 5, 0, offset: %{x: 0, y: 5, z: 1})}
+        />
         <defs>
           <marker
             id="vector-head"

@@ -1,5 +1,4 @@
 defmodule GeomextricWeb.TutLive do
-  alias Geomextric.Bodies
   alias Galixir.Algebras.PGA3
   use GeomextricWeb, :live_view
 
@@ -10,6 +9,10 @@ defmodule GeomextricWeb.TutLive do
     {:ok,
      socket
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
+     |> assign(:y, 1)
+     |> assign(:show_ellipse, false)
+     |> assign(:z, 2)
+     |> assign(:x, 3)
      |> assign(:yy, 1)
      |> assign(:zz, 2)
      |> assign(:xx, 3)
@@ -60,7 +63,24 @@ defmodule GeomextricWeb.TutLive do
   end
 
   def handle_event(
-        "change_pos",
+        "change_bivector",
+        %{"xx" => xx, "yy" => yy, "zz" => zz, "ellipse" => e},
+        socket
+      ) do
+    xx = parse_number(xx)
+    yy = parse_number(yy)
+    zz = parse_number(zz)
+
+    {:noreply,
+     socket
+     |> assign(:xx, xx)
+     |> assign(:show_ellipse, e == "1")
+     |> assign(:yy, yy)
+     |> assign(:zz, zz)}
+  end
+
+  def handle_event(
+        "change_vector",
         %{"x" => x, "y" => y, "z" => z},
         socket
       ) do
@@ -70,23 +90,9 @@ defmodule GeomextricWeb.TutLive do
 
     {:noreply,
      socket
-     |> assign(:xx, x)
-     |> assign(:yy, y)
-     |> assign(:zz, z)}
-  end
-
-  def handle_event(
-        "change_obj",
-        %{"rot" => rot, "objid" => obj_id, "scale" => new_scale},
-        socket
-      ) do
-    new_rot = parse_number(rot)
-    new_scale = parse_number(new_scale)
-
-    {:noreply,
-     socket
-     |> update(:objects, &put_in(&1, [obj_id, :rotation], new_rot))
-     |> update(:objects, &put_in(&1, [obj_id, :scale], new_scale))}
+     |> assign(:x, x)
+     |> assign(:y, y)
+     |> assign(:z, z)}
   end
 
   def handle_event("reset", %{}, socket) do
@@ -247,9 +253,9 @@ defmodule GeomextricWeb.TutLive do
         grid-auto-columns: 1fr;
         align-items: stretch;
         grid-auto-flow: column;
-        gap: 0.5ex;
+        gap: 0.25ex;
         padding: 0.5ex;
-        background: black;
+        background: #aaa;
         }
         .scene-sub{
               background: #fff;
@@ -461,6 +467,11 @@ defmodule GeomextricWeb.TutLive do
             ]
           }
         ]}>
+          <:head>
+            <.link navigate={~p"/playground"}>
+              Playground
+            </.link>
+          </:head>
           <div class="segment">
             <div class="connection-status connected">Connected 🟢</div>
             <div class="connection-status disconnected">Reconnecting... 🔴</div>
@@ -468,13 +479,49 @@ defmodule GeomextricWeb.TutLive do
         </.menu>
         <div class="toolbar">
           <div class="controls">
-            <form phx-change="change_pos">
+            <form phx-change="change_vector">
               <fieldset>
-                <legend>Trace</legend>
+                <legend>Vector</legend>
                 <label><input
                   phx-throttle="16"
                   step="0.1"
                   name="x"
+                  style="accent-color:red"
+                  type="range"
+                  min="-5"
+                  max="5"
+                  value={@x}
+                /></label>
+                <label><input
+                  phx-throttle="16"
+                  step="0.1"
+                  name="y"
+                  style="accent-color:green"
+                  type="range"
+                  min="-5"
+                  max="5"
+                  value={@y}
+                /></label>
+                <label><input
+                  phx-throttle="16"
+                  step="0.1"
+                  name="z"
+                  style="accent-color:blue"
+                  type="range"
+                  min="-5"
+                  max="5"
+                  value={@z}
+                /></label>
+              </fieldset>
+            </form>
+            <form phx-change="change_bivector">
+              <fieldset>
+                <legend>Bivector</legend>
+                <label><input
+                  phx-throttle="16"
+                  step="0.1"
+                  name="xx"
+                  style="accent-color:red"
                   type="range"
                   min="-5"
                   max="5"
@@ -483,7 +530,8 @@ defmodule GeomextricWeb.TutLive do
                 <label><input
                   phx-throttle="16"
                   step="0.1"
-                  name="y"
+                  name="yy"
+                  style="accent-color:green"
                   type="range"
                   min="-5"
                   max="5"
@@ -492,12 +540,26 @@ defmodule GeomextricWeb.TutLive do
                 <label><input
                   phx-throttle="16"
                   step="0.1"
-                  name="z"
+                  name="zz"
+                  style="accent-color:blue"
                   type="range"
                   min="-5"
                   max="5"
                   value={@zz}
                 /></label>
+                <input
+                  phx-throttle="16"
+                  name="ellipse"
+                  type="hidden"
+                  value="0"
+                />
+                <label><input
+                  phx-throttle="16"
+                  name="ellipse"
+                  type="checkbox"
+                  checked={@show_ellipse}
+                  value="1"
+                /> Show as ellipse</label>
               </fieldset>
             </form>
           </div>
@@ -514,35 +576,91 @@ defmodule GeomextricWeb.TutLive do
           preserveAspectRatio="xMidYMid slice"
         >
           <.geometry
+            labels={false}
             id="axis"
             camera={@camera}
             geo={Geomextric.Bodies.gen_axis()}
           />
           <.geometry
+            labels={false}
             id="coord-grid"
             camera={@camera}
             geo={Geomextric.Bodies.gen_grid(true, false)}
           />
           <g class="vectors">
             <.geometry
+              labels={false}
               id="vector"
               camera={@camera}
-              geo={Geomextric.Bodies.gen_vector(@xx, @yy, @zz, name: "v")}
+              geo={Geomextric.Bodies.gen_vector(@x, @y, @z, name: "v")}
             />
             <.geometry
+              labels={false}
               id="vector-x"
               camera={@camera}
-              geo={Geomextric.Bodies.gen_vector(@xx, 0, 0, color: "red", name: "v_x")}
+              geo={Geomextric.Bodies.gen_vector(@x, 0, 0, color: "#c00", name: "v_x")}
             />
             <.geometry
+              labels={false}
               id="vector-y"
               camera={@camera}
-              geo={Geomextric.Bodies.gen_vector(0, @yy, 0, color: "green", name: "v_y")}
+              geo={Geomextric.Bodies.gen_vector(0, @y, 0, color: "#0c0", name: "v_y")}
             />
             <.geometry
+              labels={false}
               id="vector-z"
               camera={@camera}
-              geo={Geomextric.Bodies.gen_vector(0, 0, @zz, color: "blue", name: "v_z")}
+              geo={Geomextric.Bodies.gen_vector(0, 0, @z, color: "blue", name: "v_z")}
+            />
+          </g>
+          <.geometry
+            labels={true}
+            faces={false}
+            edges={false}
+            id="axis-label"
+            camera={@camera}
+            geo={Geomextric.Bodies.gen_axis()}
+          />
+          <.geometry
+            labels={true}
+            faces={false}
+            edges={false}
+            id="coord-grid-label"
+            camera={@camera}
+            geo={Geomextric.Bodies.gen_grid(true, false)}
+          />
+          <g class="vectors">
+            <.geometry
+              labels={true}
+              faces={false}
+              edges={false}
+              id="vector-label"
+              camera={@camera}
+              geo={Geomextric.Bodies.gen_vector(@x, @y, @z, name: "v")}
+            />
+            <.geometry
+              labels={true}
+              faces={false}
+              edges={false}
+              id="vector-x-label"
+              camera={@camera}
+              geo={Geomextric.Bodies.gen_vector(@x, 0, 0, color: "#c00", name: "v_x")}
+            />
+            <.geometry
+              labels={true}
+              faces={false}
+              edges={false}
+              id="vector-y-label"
+              camera={@camera}
+              geo={Geomextric.Bodies.gen_vector(0, @y, 0, color: "#0c0", name: "v_y")}
+            />
+            <.geometry
+              labels={true}
+              faces={false}
+              edges={false}
+              id="vector-z-label"
+              camera={@camera}
+              geo={Geomextric.Bodies.gen_vector(0, 0, @z, color: "blue", name: "v_z")}
             />
           </g>
           <defs>
@@ -570,37 +688,163 @@ defmodule GeomextricWeb.TutLive do
           preserveAspectRatio="xMidYMid slice"
         >
           <.geometry
+            labels={false}
             id="axis-2"
             camera={@camera}
             geo={Geomextric.Bodies.gen_axis()}
           />
           <.geometry
+            labels={false}
             id="coord-grid-2"
             camera={@camera}
             geo={Geomextric.Bodies.gen_grid(true, false)}
           />
           <g class="vectors">
             <.geometry
+              labels={false}
+              quad_ellipse={@show_ellipse}
+              edges={not @show_ellipse}
               id="vector-2"
               camera={@camera}
-              geo={Geomextric.Bodies.gen_bivector(@xx, @yy, @zz, name: "v")}
+              geo={
+                Geomextric.Bodies.gen_bivector(@xx, @yy, @zz,
+                  name: "bv",
+                  stroke: "#000",
+                  fill: "#0003",
+                  text: "black",
+                  offset: %{x: -1, y: 1, z: 1}
+                )
+              }
             />
             <.geometry
+              labels={false}
+              quad_ellipse={@show_ellipse}
+              edges={not @show_ellipse}
               id="vector-x-2"
               camera={@camera}
-              geo={Geomextric.Bodies.gen_bivector(@xx, 0, 0, color: "red", name: "v_x")}
+              geo={
+                Geomextric.Bodies.gen_bivector(@xx, 0, 0,
+                  fill: "#c005",
+                  stroke: "#c00",
+                  text: "#c00",
+                  name: "bv_yz",
+                  offset: %{x: 0, y: 1, z: 1}
+                )
+              }
             />
             <.geometry
+              labels={false}
+              quad_ellipse={@show_ellipse}
+              edges={not @show_ellipse}
               id="vector-y-2"
               camera={@camera}
-              geo={Geomextric.Bodies.gen_bivector(0, @yy, 0, color: "green", name: "v_y")}
+              geo={
+                Geomextric.Bodies.gen_bivector(0, @yy, 0,
+                  stroke: "#0c0",
+                  fill: "#0c05",
+                  text: "#0c0",
+                  name: "bv_xz",
+                  offset: %{x: -1, y: 0, z: 1}
+                )
+              }
             />
             <.geometry
+              labels={false}
+              quad_ellipse={@show_ellipse}
+              edges={not @show_ellipse}
               id="vector-z-2"
               camera={@camera}
-              geo={Geomextric.Bodies.gen_bivector(0, 0, @zz, color: "blue", name: "v_z")}
+              geo={
+                Geomextric.Bodies.gen_bivector(0, 0, @zz,
+                  fill: "#00c5",
+                  stroke: "#00c",
+                  text: "blue",
+                  name: "bv_yx",
+                  offset: %{x: -1, y: 1, z: 0}
+                )
+              }
             />
           </g>
+          <.geometry
+            labels={true}
+            edges={false}
+            faces={false}
+            id="axis-2-label"
+            camera={@camera}
+            geo={Geomextric.Bodies.gen_axis()}
+          />
+          <.geometry
+            labels={true}
+            edges={false}
+            faces={false}
+            id="coord-grid-2-labels"
+            camera={@camera}
+            geo={Geomextric.Bodies.gen_grid(true, false)}
+          />
+          <.geometry
+            labels={true}
+            edges={false}
+            faces={false}
+            id="vector-2-labels"
+            camera={@camera}
+            geo={
+              Geomextric.Bodies.gen_bivector(@xx, @yy, @zz,
+                name: "bv",
+                stroke: "#000c",
+                fill: "#0003",
+                text: "black",
+                offset: %{x: -1, y: 1, z: 1}
+              )
+            }
+          />
+          <.geometry
+            labels={true}
+            edges={false}
+            faces={false}
+            id="vector-x-2-labels"
+            camera={@camera}
+            geo={
+              Geomextric.Bodies.gen_bivector(@xx, 0, 0,
+                fill: "#c005",
+                stroke: "#c00c",
+                text: "#c00",
+                name: "bv_yz",
+                offset: %{x: 0, y: 1, z: 1}
+              )
+            }
+          />
+          <.geometry
+            labels={true}
+            edges={false}
+            faces={false}
+            id="vector-y-2-labels"
+            camera={@camera}
+            geo={
+              Geomextric.Bodies.gen_bivector(0, @yy, 0,
+                stroke: "#0c0a",
+                fill: "#0c05",
+                text: "#0c0",
+                name: "bv_xz",
+                offset: %{x: -1, y: 0, z: 1}
+              )
+            }
+          />
+          <.geometry
+            labels={true}
+            edges={false}
+            faces={false}
+            id="vector-z-2-labels"
+            camera={@camera}
+            geo={
+              Geomextric.Bodies.gen_bivector(0, 0, @zz,
+                fill: "#00c5",
+                stroke: "#00ca",
+                text: "#00c",
+                name: "bv_yx",
+                offset: %{x: -1, y: 1, z: 0}
+              )
+            }
+          />
         </svg>
       </div>
     </div>
@@ -623,12 +867,12 @@ defmodule GeomextricWeb.TutLive do
         mounted() {
           const rot = throttle(
             (h, v) => this.pushEvent("rot", { v: "" + v, h: "" + h }),
-            30,
+            100,
           );
           const zoom = throttle((r) => this.pushEvent("zoom", { value: "" + r }), 30);
           this.el.addEventListener("wheel", (evt) => {
             evt.preventDefault();
-            zoom((evt.deltaY / window.screen.height) * 10);
+            zoom((evt.deltaY / window.screen.height) * 2);
           });
           this.el.addEventListener("pointerdown", (evt) => {
             console.log(evt.isPrimary);

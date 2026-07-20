@@ -66,15 +66,104 @@ defmodule Geomextric.Bodies do
   end
 
   def gen_bivector(x, y, z, attrs \\ []) do
+    area = :math.sqrt(x * x + y * y + z * z)
+    area = if(area == 0.0, do: 1, else: area)
+    size = :math.sqrt(area)
+    offset = size / 2
+    o = Keyword.get(attrs, :offset, %{x: 1, y: 1, z: 1})
+
+    n = %{
+      x: -x / area,
+      y: y / area,
+      z: -z / area
+    }
+
+    len = :math.sqrt(n.x * n.x + n.y * n.y + n.z * n.z)
+
+    face =
+      if len == 0 do
+        [
+          %{
+            x: 0,
+            y: 0,
+            z: 0
+          },
+          %{
+            x: 0,
+            y: 0,
+            z: 0
+          },
+          %{
+            x: 0,
+            y: 0,
+            z: 0
+          },
+          %{
+            x: 0,
+            y: 0,
+            z: 0
+          }
+        ]
+      else
+        a = if(abs(n.x) < 0.001, do: %{x: 1, y: 0, z: 0}, else: %{x: 0, y: 1, z: 0})
+
+        u = %{
+          x: a.y * n.z - a.z * n.y,
+          y: a.z * n.x - a.x * n.z,
+          z: a.x * n.y - a.y * n.x
+        }
+
+        ulen = :math.sqrt(u.x * u.x + u.y * u.y + u.z * u.z)
+
+        u = %{u | x: u.x / ulen * size, y: u.y / ulen * size, z: u.z / ulen * size}
+
+        v = %{
+          x: n.y * u.z - n.z * u.y,
+          y: n.z * u.x - n.x * u.z,
+          z: n.x * u.y - n.y * u.x
+        }
+
+        [
+          %{
+            x: u.x / 2 - v.x / 2 + offset * o.x,
+            y: u.y / 2 - v.y / 2 + offset * o.y,
+            z: u.z / 2 - v.z / 2 + offset * o.z
+          },
+          %{
+            x: -v.x / 2 - u.x / 2 + offset * o.x,
+            y: -v.y / 2 - u.y / 2 + offset * o.y,
+            z: -v.z / 2 - u.z / 2 + offset * o.z
+          },
+          %{
+            x: v.x / 2 - u.x / 2 + offset * o.x,
+            y: v.y / 2 - u.y / 2 + offset * o.y,
+            z: v.z / 2 - u.z / 2 + offset * o.z
+          },
+          %{
+            x: u.x / 2 + v.x / 2 + offset * o.x,
+            y: u.y / 2 + v.y / 2 + offset * o.y,
+            z: u.z / 2 + v.z / 2 + offset * o.z
+          }
+        ]
+      end
+
     %{
       points: [],
-      edges: [
-        {Keyword.get(attrs, :color, "black"), {PGA3.point(0, 0, 0), PGA3.point(-x, y, z)}}
+      edges:
+        for {a, b} <- face |> Enum.zip(face |> Enum.concat(face) |> Enum.drop(1)) do
+          {Keyword.get(attrs, :stroke, "black"),
+           {PGA3.point(a.x, a.y, a.z), PGA3.point(b.x, b.y, b.z)}}
+        end,
+      faces: [
+        {Keyword.get(attrs, :fill, "black"),
+         for v <- face do
+           PGA3.point(v.x, v.y, v.z)
+         end}
       ],
-      faces: [],
       labels: [
-        {Keyword.get(attrs, :color, "black"), PGA3.point(-x, y, z),
-         Keyword.get(attrs, :name, "v")}
+        {Keyword.get(attrs, :text, "black"),
+         Enum.map(face, fn p -> PGA3.point(p.x, p.y, p.z) end) |> Enum.reduce(&PGA3.add/2),
+         Keyword.get(attrs, :name)}
       ]
     }
   end
@@ -223,6 +312,27 @@ defmodule Geomextric.Bodies do
       {new_m, new_q}
     end)
     |> elem(0)
+  end
+
+  def make_exp(ampl, freq, phase \\ 0, attr \\ []) do
+    offset = Keyword.get(attr, :offset, %{x: 0, y: 0, z: 0})
+
+    samples =
+      for t <- -40..40 do
+        sin = :math.sin(t / 20 * freq + phase)
+        cos = :math.cos(t / 20 * freq + phase)
+        PGA3.point(t / 10 + offset.x, sin * ampl + offset.y, cos * ampl + offset.z)
+      end
+
+    %{
+      points: [],
+      edges:
+        for {p, q} <- Enum.zip(samples, Enum.drop(samples, 1)) do
+          {"red", {p, q}}
+        end,
+      faces: [],
+      labels: []
+    }
   end
 
   def make_trace(from, to, steps \\ 20) do
