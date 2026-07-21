@@ -40,22 +40,6 @@ defmodule GeomextricWeb.PlaygroundLive do
      |> assign(:focus, {0, 0, 0})}
   end
 
-  def align(ps, qs) do
-    import PGA3
-    # https://observablehq.com/@enkimute/glu-lookat-in-3d-pga
-    initial_m = one = PGA3.new(scalar: 1)
-    initial_q = PGA3.dual(PGA3.new(scalar: 1))
-
-    Enum.zip_reduce(ps, qs, {initial_m, initial_q}, fn p, q, {m, prev_q} ->
-      p = prev_q |> PGA3.join(PGA3.transform(m, p)) |> normalize()
-      new_q = prev_q |> PGA3.join(q) |> normalize() |> PGA3.blade_inverse()
-      new_m = new_q |> PGA3.gp(p) |> add(one) |> PGA3.gp(m)
-
-      {new_m, new_q}
-    end)
-    |> elem(0)
-  end
-
   def look_at(
         position \\ PGA3.point(0, 10, 0),
         target \\ PGA3.point(0, 0, 0),

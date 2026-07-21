@@ -30,7 +30,11 @@ defmodule GeomextricWeb.SceneLive do
          geo: Bodies.gen_axis()
        }
      })
-     |> assign(:eye, {7, 5, 3})
+     |> assign(:camera, %{
+       yaw: 0.0,
+       pitch: 0.3,
+       radius: 10.0
+     })
      |> assign(:focus, {0, 0, 0})}
   end
 
@@ -42,22 +46,6 @@ defmodule GeomextricWeb.SceneLive do
        Geomextric.Canvas.get_all(Geomextric.Canvas)
      )
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))}
-  end
-
-  def align(ps, qs) do
-    import PGA3
-    # https://observablehq.com/@enkimute/glu-lookat-in-3d-pga
-    initial_m = one = PGA3.new(scalar: 1)
-    initial_q = PGA3.dual(PGA3.new(scalar: 1))
-
-    Enum.zip_reduce(ps, qs, {initial_m, initial_q}, fn p, q, {m, prev_q} ->
-      p = prev_q |> PGA3.join(PGA3.transform(m, p)) |> normalize()
-      new_q = prev_q |> PGA3.join(q) |> normalize() |> PGA3.blade_inverse()
-      new_m = new_q |> PGA3.gp(p) |> add(one) |> PGA3.gp(m)
-
-      {new_m, new_q}
-    end)
-    |> elem(0)
   end
 
   def look_at(
@@ -119,7 +107,11 @@ defmodule GeomextricWeb.SceneLive do
   def handle_event("reset", %{}, socket) do
     {:noreply,
      socket
-     |> assign(:eye, {7, 5, 3})
+     |> assign(:camera, %{
+       yaw: 0.0,
+       pitch: 0.3,
+       radius: 10.0
+     })
      |> assign(:focus, {0, 0, 0})}
   end
 
@@ -129,36 +121,28 @@ defmodule GeomextricWeb.SceneLive do
     {:noreply,
      socket
      |> update(
-       :eye,
-       fn {x, y, z} ->
-         len = :math.sqrt(x * x + y * y)
-         new_x = x - y * v
-         new_y = y + x * v
-
-         new_len = :math.sqrt(new_x * new_x + new_y * new_y)
-         {(x - y * v) * len / new_len, (y + x * v) * len / new_len, z}
+       :camera,
+       fn c = %{yaw: y} ->
+         %{c | yaw: y + v}
        end
      )}
   end
 
   def handle_event("rot", %{"v" => v, "h" => h}, socket) do
-    v = parse_number(v) * 5
-    h = parse_number(h)
+    dp = parse_number(v) * 0.5
+    dy = parse_number(h) * 0.5
 
     {:noreply,
-     socket
-     |> update(
-       :eye,
-       fn {x, y, z} ->
-         len = :math.sqrt(x * x + y * y)
-         new_x = x - y * h
-         new_y = y + x * h
-
-         new_len = :math.sqrt(new_x * new_x + new_y * new_y)
-         {(x - y * h) * len / new_len, (y + x * h) * len / new_len, z + v}
-       end
-     )}
+     update(socket, :camera, fn %{pitch: pitch, yaw: yaw} = c ->
+       %{
+         c
+         | pitch: clamp(pitch + dp, -:math.pi() / 2.01, :math.pi() / 2.01),
+           yaw: yaw + dy
+       }
+     end)}
   end
+
+  defp clamp(x, min, max), do: max(min, min(max, x))
 
   def handle_event("zoom", %{"value" => v}, socket) do
     v = parse_number(v)
@@ -166,40 +150,30 @@ defmodule GeomextricWeb.SceneLive do
     {:noreply,
      socket
      |> update(
-       :eye,
-       fn {x, y, z} ->
-         factor = :math.exp(v)
-
-         new_dist = :math.sqrt(x * x + y * y + z * z) * factor
-
-         if new_dist > 1 and new_dist < 100 do
-           {x * factor, y * factor, z * factor}
-         else
-           {x, y, z}
-         end
-       end
+       :camera,
+       fn c = %{radius: r} -> %{c | radius: clamp(r + v, 1, 100)} end
      )}
   end
 
   def handle_event("movex", %{"value" => v}, socket) do
-    v = parse_number(v)
+    v = parse_number(v) * 0.1
 
     {:noreply,
      socket
      |> update(
-       :eye,
-       fn {x, y, z} -> {x + v, y, z} end
+       :camera,
+       fn c = %{pitch: p} -> %{c | pitch: clamp(p + v, -:math.pi() / 2.01, :math.pi() / 2.01)} end
      )}
   end
 
   def handle_event("movey", %{"value" => v}, socket) do
-    v = parse_number(v)
+    v = parse_number(v) * 0.1
 
     {:noreply,
      socket
      |> update(
-       :eye,
-       fn {x, y, z} -> {x, y + v, z} end
+       :camera,
+       fn c = %{yaw: y} -> %{c | yaw: y - v} end
      )}
   end
 
@@ -209,8 +183,8 @@ defmodule GeomextricWeb.SceneLive do
     {:noreply,
      socket
      |> update(
-       :eye,
-       fn {x, y, z} -> {x, y, z + v} end
+       :camera,
+       fn c = %{radius: r} -> %{c | radius: clamp(r - v, 1, 100)} end
      )}
   end
 
@@ -247,8 +221,16 @@ defmodule GeomextricWeb.SceneLive do
      )}
   end
 
+  def eye_from_camera(%{yaw: yaw, pitch: pitch, radius: r}) do
+    {
+      r * :math.cos(pitch) * :math.cos(yaw),
+      r * :math.cos(pitch) * :math.sin(yaw),
+      r * :math.sin(pitch)
+    }
+  end
+
   def render(assigns) do
-    {eye_x, eye_y, eye_z} = assigns.eye
+    {eye_x, eye_y, eye_z} = eye_from_camera(assigns.camera)
     {fx, fy, fz} = assigns.focus
     eye = PGA3.point(eye_x, eye_y, eye_z)
     target = PGA3.point(fx, fy, fz)

@@ -59,7 +59,7 @@ defmodule GeomextricWeb.MixProject do
       {:geomextric, in_umbrella: true},
       {:jason, "~> 1.2"},
       {:bandit, "~> 1.5"},
-      {:galixir, "~> 0.12"}
+      {:galixir, "~> 0.15"}
     ]
   end
 

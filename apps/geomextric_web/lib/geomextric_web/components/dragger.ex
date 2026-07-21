@@ -162,10 +162,12 @@ defmodule GeomextricWeb.Dragger do
               const y = py - offset.y;
               noClick ||= movement > 5;
 
-              move(
-                x + 1 * this.base.x,
-                y + 1 * this.base.y,
-              )(this.multiDragRoot || clonedEl(this)).setAttribute(
+              //  move(
+              //    x + 1 * this.base.x,
+              //    y + 1 * this.base.y,
+              //  );
+
+              (this.multiDragRoot || clonedEl(this)).setAttribute(
                 "transform",
                 `translate(${x}, ${y})`,
               );
