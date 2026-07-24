@@ -22,15 +22,23 @@ defmodule GeomextricWeb.CGA2Live do
        "p9" => CGA2.point(600, -600),
        "p10" => CGA2.point(-300, -300)
      })
+     |> assign(
+       :samples,
+       for x <- -5..5, y <- -5..5 do
+         CGA2.point(20 * x, 20 * y)
+       end
+     )
      |> assign(:axis, true)
-     |> assign(:grid, true)
+     |> assign(:grid, false)
      |> assign(:bounds, true)
+     |> assign(:transforms, false)
+     |> assign(:intersections, false)
      |> assign(:extra_pen, "#0077ff")
      |> assign(:box, %{
-       x: -800,
-       y: -500,
-       width: 1600,
-       height: 1000
+       x: -1200,
+       y: -800,
+       width: 2400,
+       height: 1600
      })}
   end
 
@@ -47,7 +55,21 @@ defmodule GeomextricWeb.CGA2Live do
   def point?(p) do
     CGA2.grades(p) == [1] and
       null?(p) and
-      abs(CGA2.dot(p, CGA2.e_inf())) > 1.0e-10
+      abs(CGA2.dot(p, CGA2.e_o())) > 1.0e-10
+  end
+
+  def cleanup(m, eps \\ 1.0e-8) do
+    %CGA2{data: data} = m
+
+    data =
+      data
+      |> Tuple.to_list()
+      |> Enum.map(fn x ->
+        if abs(x) < eps, do: 0.0, else: x
+      end)
+      |> List.to_tuple()
+
+    %CGA2{data: data}
   end
 
   defp null?(p) do
@@ -222,6 +244,22 @@ defmodule GeomextricWeb.CGA2Live do
     {:noreply, socket |> assign(:axis, false)}
   end
 
+  def handle_event("set_transforms", %{"value" => "true"}, socket) do
+    {:noreply, socket |> assign(:transforms, true)}
+  end
+
+  def handle_event("set_transforms", %{"value" => "false"}, socket) do
+    {:noreply, socket |> assign(:transforms, false)}
+  end
+
+  def handle_event("set_intersections", %{"value" => "true"}, socket) do
+    {:noreply, socket |> assign(:intersections, true)}
+  end
+
+  def handle_event("set_intersections", %{"value" => "false"}, socket) do
+    {:noreply, socket |> assign(:intersections, false)}
+  end
+
   def handle_event("set_bounds", %{"value" => "true"}, socket) do
     {:noreply, socket |> assign(:bounds, true)}
   end
@@ -238,55 +276,91 @@ defmodule GeomextricWeb.CGA2Live do
     {:noreply,
      socket
      |> update(:points, fn ps ->
-       np = CGA2.point(parse_number(x), parse_number(y))
-       Map.replace(ps, p, np)
+       np =
+         CGA2.point(parse_number(x), parse_number(y)) |> cleanup()
+
+       if point?(np) do
+         Map.replace(ps, p, np)
+       else
+         ps
+       end
      end)}
   end
 
   def render(assigns) do
-    c1 = CGA2.circle(assigns.points |> Map.get("p0"), 150)
+    c1 =
+      CGA2.circle(assigns.points |> Map.get("p0") |> cleanup(), 150)
+      |> CGA2.normalize()
 
     cc =
       CGA2.wedge(assigns.points |> Map.get("p4"), assigns.points |> Map.get("p5"))
       |> CGA2.wedge(assigns.points |> Map.get("p6"))
+      |> CGA2.normalize()
 
     ln1 =
       CGA2.wedge(assigns.points |> Map.get("p7"), assigns.points |> Map.get("p8"))
       |> CGA2.wedge(CGA2.e_inf())
+      |> CGA2.normalize()
 
     ln2 =
       CGA2.wedge(assigns.points |> Map.get("p7"), assigns.points |> Map.get("p9"))
       |> CGA2.wedge(CGA2.e_inf())
+      |> CGA2.normalize()
 
     ln3 =
       CGA2.wedge(assigns.points |> Map.get("p8"), assigns.points |> Map.get("p9"))
       |> CGA2.wedge(CGA2.e_inf())
+      |> CGA2.normalize()
 
-    c4 = CGA2.circle(assigns.points |> Map.get("p10"), 250)
+    c4 =
+      CGA2.circle(assigns.points |> Map.get("p10"), 250)
+      |> CGA2.normalize()
 
     assigns =
       assigns
-      |> assign(:elements, [
-        {"C1", :royalblue, c1},
-        {"C3", :hotpink, cc},
-        {"C5", :yellowgreen, c4},
-        {"Line 1", :tomato, ln1},
-        {"Line 2", :teal, ln2},
-        {"Line 3", :orchid, ln3},
-        {"P0", :purple, assigns.points |> Map.get("p0")},
-        {"P4", :purple, assigns.points |> Map.get("p4")},
-        {"P5", :purple, assigns.points |> Map.get("p5")},
-        {"P6", :purple, assigns.points |> Map.get("p6")},
-        {"P7", :purple, assigns.points |> Map.get("p7")},
-        {"P8", :purple, assigns.points |> Map.get("p8")},
-        {"P9", :purple, assigns.points |> Map.get("p9")},
-        {"P10", :purple, assigns.points |> Map.get("p10")},
-        {"u", {:yellowgreen, :royalblue}, CGA2.meet(c1, c4)},
-        {"v", {:royalblue, :hotpink}, CGA2.meet(cc, c1)},
-        {"w", {:yellowgreen, :tomato}, CGA2.meet(ln1, c4)},
-        {"p", {:yellowgreen, :teal}, CGA2.meet(ln2, c4)},
-        {"q", {:yellowgreen, :orchid}, CGA2.meet(ln3, c4)}
-      ])
+      |> assign(
+        :elements,
+        [
+          [
+            {"C1", :royalblue, c1},
+            {"C3", :hotpink, cc},
+            {"C5", :yellowgreen, c4},
+            {"Line 1", :tomato, ln1},
+            {"Line 2", :teal, ln2},
+            {"Line 3", :orchid, ln3},
+            {"P0", :purple, assigns.points |> Map.get("p0")},
+            {"P4", :purple, assigns.points |> Map.get("p4")},
+            {"P5", :purple, assigns.points |> Map.get("p5")},
+            {"P6", :purple, assigns.points |> Map.get("p6")},
+            {"P7", :purple, assigns.points |> Map.get("p7")},
+            {"P8", :purple, assigns.points |> Map.get("p8")},
+            {"P9", :purple, assigns.points |> Map.get("p9")},
+            {"P10", :purple, assigns.points |> Map.get("p10")}
+          ],
+          if(assigns.intersections,
+            do: [
+              {"u", {:yellowgreen, :royalblue}, CGA2.meet(c1, c4)},
+              {"v", {:royalblue, :hotpink}, CGA2.meet(cc, c1)},
+              {"w", {:yellowgreen, :tomato}, CGA2.meet(ln1, c4)},
+              {"p", {:yellowgreen, :teal}, CGA2.meet(ln2, c4)},
+              {"q", {:yellowgreen, :orchid}, CGA2.meet(ln3, c4)}
+            ]
+          ),
+          if(assigns.transforms,
+            do:
+              assigns.samples
+              |> Enum.flat_map(
+                &[
+                  {"", "#FF6347aa", CGA2.transform(ln1, &1) |> cleanup()},
+                  {"", "#FF69B4aa", CGA2.transform(cc, &1) |> cleanup()},
+                  {"", "#aaa5", &1}
+                ]
+              ),
+            else: []
+          )
+        ]
+        |> List.flatten()
+      )
 
     ~H"""
     <style rel="stylesheet" :type={GeomextricWeb.ColocatedCSS}>
@@ -537,6 +611,18 @@ defmodule GeomextricWeb.CGA2Live do
               shortcut: [key: "a", alt: true],
               send: "set_axis",
               value: if(@axis, do: "false", else: "true")
+            },
+            %{
+              label: if(@transforms, do: "Hide Transforms", else: "Show Transforms"),
+              shortcut: [key: "t", alt: true],
+              send: "set_transforms",
+              value: if(@transforms, do: "false", else: "true")
+            },
+            %{
+              label: if(@intersections, do: "Hide Intersections", else: "Show Intersections"),
+              shortcut: [key: "i", alt: true],
+              send: "set_intersections",
+              value: if(@intersections, do: "false", else: "true")
             },
             %{
               label: if(@bounds, do: "Hide Bounds", else: "Show Bounds"),
