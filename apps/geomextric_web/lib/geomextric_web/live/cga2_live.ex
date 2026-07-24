@@ -77,11 +77,11 @@ defmodule GeomextricWeb.CGA2Live do
   def circle_parameters(c) do
     v = CGA2.gp(c, CGA2.inverse(CGA2.pseudoscalar()))
 
-    e1 = CGA2.coefficient(v, :e1) || 0.0
-    e2 = CGA2.coefficient(v, :e2) || 0.0
+    e1 = CGA2.coefficient(v, :e1)
+    e2 = CGA2.coefficient(v, :e2)
 
-    ep = CGA2.coefficient(v, :ep) || 0.0
-    em = CGA2.coefficient(v, :em) || 0.0
+    ep = CGA2.coefficient(v, :ep)
+    em = CGA2.coefficient(v, :em)
 
     w = em - ep
 
@@ -663,17 +663,12 @@ defmodule GeomextricWeb.CGA2Live do
                 />
                 <text pointer-events="none" x={cx + 10} y={-cy}>{label}</text>
               <% {:point_pair, :real, {{cx1, cy1}, {cx2, cy2}}} -> %>
-                <% {col1, col2} =
-                  case color do
-                    {c1, c2} -> {c1, c2}
-                    c -> {c, c}
-                  end %>
                 <circle
                   cx={cx1}
                   cy={-cy1}
                   r="6"
-                  fill={col1}
-                  stroke={col2}
+                  fill={elem(color, 0)}
+                  stroke={elem(color, 1)}
                   data-non-scaling-full
                   stroke-width="5"
                 />
@@ -681,8 +676,8 @@ defmodule GeomextricWeb.CGA2Live do
                   cx={cx2}
                   cy={-cy2}
                   r="6"
-                  fill={col1}
-                  stroke={col2}
+                  fill={elem(color, 0)}
+                  stroke={elem(color, 1)}
                   data-non-scaling-full
                   stroke-width="5"
                 />
@@ -690,17 +685,12 @@ defmodule GeomextricWeb.CGA2Live do
                 <text pointer-events="none" x={cx1 + 5} y={-cy1}>{label}/1</text>
                 <text pointer-events="none" x={cx2 + 5} y={-cy2}>{label}/2</text>
               <% {:point_pair, :imag, {{cx1, cy1}, {cx2, cy2}}} -> %>
-                <% {col1, col2} =
-                  case color do
-                    {c1, c2} -> {c1, c2}
-                    c -> {c, c}
-                  end %>
                 <g>
                   <circle
                     cx={cx1}
                     cy={-cy1}
                     r="5"
-                    stroke={col1}
+                    stroke={elem(color, 0)}
                     data-non-scaling-full
                     fill="none"
                     stroke-dasharray="5 5"
@@ -710,7 +700,7 @@ defmodule GeomextricWeb.CGA2Live do
                     cx={cx1}
                     cy={-cy1}
                     r="5"
-                    stroke={col2}
+                    stroke={elem(color, 1)}
                     data-non-scaling-full
                     fill="none"
                     stroke-dasharray="5 5"
@@ -725,7 +715,7 @@ defmodule GeomextricWeb.CGA2Live do
                     r="5"
                     fill="none"
                     stroke-dasharray="5 5"
-                    stroke={col1}
+                    stroke={elem(color, 0)}
                     stroke-width="5"
                     data-non-scaling-full
                   />
@@ -737,7 +727,7 @@ defmodule GeomextricWeb.CGA2Live do
                     fill="none"
                     stroke-dasharray="5 5"
                     stroke-dashoffset="5"
-                    stroke={col2}
+                    stroke={elem(color, 1)}
                     stroke-width="5"
                     data-non-scaling-full
                   />
