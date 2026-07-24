@@ -15,13 +15,12 @@ defmodule GeomextricWeb.CGA2Live do
      |> assign(:points, %{
        "p6" => CGA2.point(600, 100),
        "p0" => CGA2.point(100, 40),
-       "p1" => CGA2.point(100, 150),
-       "p2" => CGA2.point(0, 100),
        "p4" => CGA2.point(504.14453125, 68.11901092529297),
        "p5" => CGA2.point(430, 200),
        "p7" => CGA2.point(-300, 200),
        "p8" => CGA2.point(-600, -400),
-       "p9" => CGA2.point(600, -600)
+       "p9" => CGA2.point(600, -600),
+       "p10" => CGA2.point(-300, -300)
      })
      |> assign(:axis, true)
      |> assign(:grid, true)
@@ -246,8 +245,6 @@ defmodule GeomextricWeb.CGA2Live do
 
   def render(assigns) do
     c1 = CGA2.circle(assigns.points |> Map.get("p0"), 150)
-    c2 = CGA2.circle(assigns.points |> Map.get("p2"), 100)
-    c3 = CGA2.circle(assigns.points |> Map.get("p1"), 250)
 
     cc =
       CGA2.wedge(assigns.points |> Map.get("p4"), assigns.points |> Map.get("p5"))
@@ -265,230 +262,228 @@ defmodule GeomextricWeb.CGA2Live do
       CGA2.wedge(assigns.points |> Map.get("p8"), assigns.points |> Map.get("p9"))
       |> CGA2.wedge(CGA2.e_inf())
 
+    c4 = CGA2.circle(assigns.points |> Map.get("p10"), 250)
+
     assigns =
       assigns
       |> assign(:elements, [
-        {"C1", :blue, c1},
-        {"C2", :green, c2},
+        {"C1", :royalblue, c1},
         {"C3", :hotpink, cc},
-        {"C4", :orange, c3},
+        {"C5", :yellowgreen, c4},
         {"Line 1", :tomato, ln1},
         {"Line 2", :teal, ln2},
         {"Line 3", :orchid, ln3},
-        {"P1", :green, assigns.points |> Map.get("p2")},
-        {"P2", :orange, assigns.points |> Map.get("p1")},
-        {"P3", :blue, assigns.points |> Map.get("p0")},
+        {"P0", :purple, assigns.points |> Map.get("p0")},
         {"P4", :purple, assigns.points |> Map.get("p4")},
         {"P5", :purple, assigns.points |> Map.get("p5")},
         {"P6", :purple, assigns.points |> Map.get("p6")},
         {"P7", :purple, assigns.points |> Map.get("p7")},
         {"P8", :purple, assigns.points |> Map.get("p8")},
         {"P9", :purple, assigns.points |> Map.get("p9")},
-        {"x", {:green, :orange}, CGA2.meet(c2, c3)},
-        {"x", {:blue, :green}, CGA2.meet(c1, c2)},
-        {"x", {:blue, :orange}, CGA2.meet(c1, c3)}
+        {"P10", :purple, assigns.points |> Map.get("p10")},
+        {"u", {:yellowgreen, :royalblue}, CGA2.meet(c1, c4)},
+        {"v", {:royalblue, :hotpink}, CGA2.meet(cc, c1)},
+        {"w", {:yellowgreen, :tomato}, CGA2.meet(ln1, c4)},
+        {"p", {:yellowgreen, :teal}, CGA2.meet(ln2, c4)},
+        {"q", {:yellowgreen, :orchid}, CGA2.meet(ln3, c4)}
       ])
 
     ~H"""
     <style rel="stylesheet" :type={GeomextricWeb.ColocatedCSS}>
       body {
-      font-family: monospace, monospace;
-      font-size: 1em;
+        font-family: monospace, monospace;
+        font-size: 1em;
       }
-       @keyframes enter {
-         from { transform: scale(0); }
-         to   { transform: scale(1); }
-       }
-        .origin {
-       scale: var(--cam-scale);
-       transform-box: fill-box;
-       transform-origin: 50% 50%;
-       }
+      @keyframes enter {
+        from {
+          transform: scale(0);
+        }
+        to {
+          transform: scale(1);
+        }
+      }
+      .origin {
+        scale: var(--cam-scale);
+        transform-box: fill-box;
+        transform-origin: 50% 50%;
+      }
 
-       svg[data-zoomed="out"] [data-non-zoom-stroke="yes"] {
-       vector-effect: non-scaling-stroke;
+      svg[data-zoomed="out"] [data-non-zoom-stroke="yes"] {
+        vector-effect: non-scaling-stroke;
+      }
 
-            }
+      svg[data-zoomed="out"] [data-non-zoom-stroke="min"] {
+        vector-effect: non-scaling-stroke;
+        stroke-width: 5;
+      }
+      [data-non-scaling] {
+        scale: var(--cam-scale-min);
+        transform-box: fill-box;
+        transform-origin: 50% 50%;
+      }
+      [data-zoomed="out"] [data-non-scaling-max] {
+        scale: var(--cam-scale-max);
+        transform-box: fill-box;
+        transform-origin: 50% 50%;
+        stroke-width: 1;
+      }
+      [data-non-scaling-full] {
+        scale: var(--cam-scale);
+        transform-box: fill-box;
+        transform-origin: 50% 50%;
+      }
 
-            svg[data-zoomed="out"] [data-non-zoom-stroke="min"] {
-            vector-effect: non-scaling-stroke;
-            stroke-width: 5;
-
-                 }
-       [data-non-scaling] {
-         scale: var(--cam-scale-min);
-         transform-box: fill-box;
-         transform-origin: 50% 50%;
-         }
-        [data-zoomed=out] [data-non-scaling-max] {
-                scale: var(--cam-scale-max);
-                transform-box: fill-box;
-                transform-origin: 50% 50%;
-                stroke-width: 1;
-                }
-         [data-non-scaling-full] {
-                 scale: var(--cam-scale);
-                 transform-box: fill-box;
-                 transform-origin: 50% 50%;
-                 }
-
-        .auto-color {
+      .auto-color {
         fill: var(--auto-fill, attr("fill"));
         stroke: var(--auto-stroke, attr("stroke"));
-        }
-       .toolbar {
-       flex-wrap: wrap-reverse;
-       border-radius: 1ex;
-         position: fixed;
-         height: auto;
-         top: 2em;
-         left: 0;
-         right: 1em;
-         margin: 1ex;
-         padding: 1ex;
-         color: #fff;
-         display: flex;
-         gap: 1ex;
+      }
+      .toolbar {
+        flex-wrap: wrap-reverse;
+        border-radius: 1ex;
+        position: fixed;
+        height: auto;
+        top: 2em;
+        left: 0;
+        right: 1em;
+        margin: 1ex;
+        padding: 1ex;
+        color: #fff;
+        display: flex;
+        gap: 1ex;
 
-         background: #0003;
-         z-index: 1000;
-         flex-direction: row;
-         align-items: center;
-       }
-       button {
-       background: #000;
-       color: #fff;
-       padding: 0.5ex 1em;
-       cursor: pointer;
+        background: #0003;
+        z-index: 1000;
+        flex-direction: row;
+        align-items: center;
+      }
+      button {
+        background: #000;
+        color: #fff;
+        padding: 0.5ex 1em;
+        cursor: pointer;
 
-       border-radius: 0.5ex;
-       align-self: stretch;
-       }
+        border-radius: 0.5ex;
+        align-self: stretch;
+      }
 
-       [draggable="true"]{
-         cursor: grab;
-         background: none;
-         padding: 0;
-         border: none;
-       }
+      [draggable="true"] {
+        cursor: grab;
+        background: none;
+        padding: 0;
+        border: none;
+      }
 
-       ::-moz-color-swatch {
-       border: none;
-       }
+      ::-moz-color-swatch {
+        border: none;
+      }
 
-       input[type=color] {
-       border: none;
-       display: block;
-       width: 100%;
-       height: 100%;
-       appearance: none;
-       	-webkit-appearance: none;
-       width: 3ex;
-       height: 3ex;
-       margin: 0;
-       padding: 0;
-       }
-       .color-border {
-       display: grid;
-       border-radius: 100vw;
-       width: 3ex;
-       height: 3ex;
-       overflow: hidden;
-       padding: 0;
-       outline: 2px solid white;
-       }
+      input[type="color"] {
+        border: none;
+        display: block;
+        width: 100%;
+        height: 100%;
+        appearance: none;
+        -webkit-appearance: none;
+        width: 3ex;
+        height: 3ex;
+        margin: 0;
+        padding: 0;
+      }
+      .color-border {
+        display: grid;
+        border-radius: 100vw;
+        width: 3ex;
+        height: 3ex;
+        overflow: hidden;
+        padding: 0;
+        outline: 2px solid white;
+      }
 
-       .pallette {
-       display: inherit;
-       gap: inherit;
-       flex-wrap: wrap;
-       }
+      .pallette {
+        display: inherit;
+        gap: inherit;
+        flex-wrap: wrap;
+      }
 
-       .ghost {
-         display: contents;
-       }
-       label {
-       display: flex;
-       align-items: center;
-       flex-direction: row;
-       gap: 1ex;
-       margin-right: 1em;
-       }
+      .ghost {
+        display: contents;
+      }
+      label {
+        display: flex;
+        align-items: center;
+        flex-direction: row;
+        gap: 1ex;
+        margin-right: 1em;
+      }
 
-       .connection-status {
-         display: flex;
-         flex-direction: row;
-         margin-left: auto;
-         margin-right: 1em;
-         white-space: nowrap;
-         color: black;
-       }
-       .push-right {
-       display: inherit;
-       align-self: stretch;
-       align-items: inherit;
-       margin-left: auto;
-       }
+      .connection-status {
+        display: flex;
+        flex-direction: row;
+        margin-left: auto;
+        margin-right: 1em;
+        white-space: nowrap;
+        color: black;
+      }
+      .push-right {
+        display: inherit;
+        align-self: stretch;
+        align-items: inherit;
+        margin-left: auto;
+      }
 
-       .color-list {
-       display: flex;
-       background: #0005;
-       padding: 0.8ex;
-       border-radius: 0.5ex;
-       }
-       .connection-status {
-       display: none;
-       }
+      .color-list {
+        display: flex;
+        background: #0005;
+        padding: 0.8ex;
+        border-radius: 0.5ex;
+      }
+      .connection-status {
+        display: none;
+      }
 
-       .phx-loading .disconnected {
-         display: block;
-       }
+      .phx-loading .disconnected {
+        display: block;
+      }
 
-       .phx-connected .connected {
-         display: block;
-       }
+      .phx-connected .connected {
+        display: block;
+      }
 
       .menu-bar {
-      position: absolute;
-      top: 0em;
-      left: 0em;
-      right: 0em;
-      z-index: 1000;
+        position: absolute;
+        top: 0em;
+        left: 0em;
+        right: 0em;
+        z-index: 1000;
       }
-      input[type=checkbox] {
-      display: none;
+      input[type="checkbox"] {
+        display: none;
       }
-      label:has(input[type=checkbox]) {
-      color: #fff;
-      align-self: stretch;
-      display: flex;
-      align-items: center;
-      border-radius: 0.5ex;
-      padding: 0.5ex;
-      margin: 0;
-      background: #0001;
-      user-select: none;
-      filter: saturate(0%) brightness(500%) ;
+      label:has(input[type="checkbox"]) {
+        color: #fff;
+        align-self: stretch;
+        display: flex;
+        align-items: center;
+        border-radius: 0.5ex;
+        padding: 0.5ex;
+        margin: 0;
+        background: #0001;
+        user-select: none;
+        filter: saturate(0%) brightness(500%);
       }
-      label:has(input[type=checkbox]:checked) {
-
-      color: #fff;
-      background: #000a;
-      filter:  saturate(100%);
-
+      label:has(input[type="checkbox"]:checked) {
+        color: #fff;
+        background: #000a;
+        filter: saturate(100%);
       }
 
-      label:has(input[type=checkbox]) svg {
+      label:has(input[type="checkbox"]) svg {
+        opacity: 0.5;
+      }
 
-            opacity: 0.5;
-
-            }
-
-      label:has(input[type=checkbox]:checked) svg {
-
-            opacity: 1;
-
-            }
+      label:has(input[type="checkbox"]:checked) svg {
+        opacity: 1;
+      }
     </style>
     <nav class="toolbar"></nav>
 

@@ -286,203 +286,199 @@ defmodule GeomextricWeb.CanvasLive do
     ~H"""
     <style rel="stylesheet" :type={GeomextricWeb.ColocatedCSS}>
       body {
-      font-family: monospace, monospace;
-      font-size: 1em;
+        font-family: monospace, monospace;
+        font-size: 1em;
       }
-       @keyframes enter {
-         from { transform: scale(0); }
-         to   { transform: scale(1); }
-       }
-        .origin {
-       scale: var(--cam-scale);
-       transform-box: fill-box;
-       transform-origin: 50% 50%;
-       }
+      @keyframes enter {
+        from {
+          transform: scale(0);
+        }
+        to {
+          transform: scale(1);
+        }
+      }
+      .origin {
+        scale: var(--cam-scale);
+        transform-box: fill-box;
+        transform-origin: 50% 50%;
+      }
 
-       svg[data-zoomed="out"] [data-non-zoom-stroke="yes"] {
-       vector-effect: non-scaling-stroke;
+      svg[data-zoomed="out"] [data-non-zoom-stroke="yes"] {
+        vector-effect: non-scaling-stroke;
+      }
 
-            }
+      svg[data-zoomed="out"] [data-non-zoom-stroke="min"] {
+        vector-effect: non-scaling-stroke;
+        stroke-width: 5;
+      }
+      [data-non-scaling] {
+        scale: var(--cam-scale-min);
+        transform-box: fill-box;
+        transform-origin: 50% 50%;
+      }
+      [data-zoomed="out"] [data-non-scaling-max] {
+        scale: var(--cam-scale-max);
+        transform-box: fill-box;
+        transform-origin: 50% 50%;
+        stroke-width: 1;
+      }
+      [data-non-scaling-full] {
+        scale: var(--cam-scale);
+        transform-box: fill-box;
+        transform-origin: 50% 50%;
+      }
 
-            svg[data-zoomed="out"] [data-non-zoom-stroke="min"] {
-            vector-effect: non-scaling-stroke;
-            stroke-width: 5;
-
-                 }
-       [data-non-scaling] {
-         scale: var(--cam-scale-min);
-         transform-box: fill-box;
-         transform-origin: 50% 50%;
-         }
-        [data-zoomed=out] [data-non-scaling-max] {
-                scale: var(--cam-scale-max);
-                transform-box: fill-box;
-                transform-origin: 50% 50%;
-                stroke-width: 1;
-                }
-         [data-non-scaling-full] {
-                 scale: var(--cam-scale);
-                 transform-box: fill-box;
-                 transform-origin: 50% 50%;
-                 }
-
-        .auto-color {
+      .auto-color {
         fill: var(--auto-fill, attr("fill"));
         stroke: var(--auto-stroke, attr("stroke"));
-        }
-       .toolbar {
-       flex-wrap: wrap-reverse;
-       border-radius: 1ex;
-         position: fixed;
-         height: auto;
-         top: 2em;
-         left: 0;
-         right: 1em;
-         margin: 1ex;
-         padding: 1ex;
-         color: #fff;
-         display: flex;
-         gap: 1ex;
+      }
+      .toolbar {
+        flex-wrap: wrap-reverse;
+        border-radius: 1ex;
+        position: fixed;
+        height: auto;
+        top: 2em;
+        left: 0;
+        right: 1em;
+        margin: 1ex;
+        padding: 1ex;
+        color: #fff;
+        display: flex;
+        gap: 1ex;
 
-         background: #0003;
-         z-index: 1000;
-         flex-direction: row;
-         align-items: center;
-       }
-       button {
-       background: #000;
-       color: #fff;
-       padding: 0.5ex 1em;
-       cursor: pointer;
+        background: #0003;
+        z-index: 1000;
+        flex-direction: row;
+        align-items: center;
+      }
+      button {
+        background: #000;
+        color: #fff;
+        padding: 0.5ex 1em;
+        cursor: pointer;
 
-       border-radius: 0.5ex;
-       align-self: stretch;
-       }
+        border-radius: 0.5ex;
+        align-self: stretch;
+      }
 
-       [draggable="true"]{
-         cursor: grab;
-         background: none;
-         padding: 0;
-         border: none;
-       }
+      [draggable="true"] {
+        cursor: grab;
+        background: none;
+        padding: 0;
+        border: none;
+      }
 
-       ::-moz-color-swatch {
-       border: none;
-       }
+      ::-moz-color-swatch {
+        border: none;
+      }
 
-       input[type=color] {
-       border: none;
-       display: block;
-       width: 100%;
-       height: 100%;
-       appearance: none;
-       	-webkit-appearance: none;
-       width: 3ex;
-       height: 3ex;
-       margin: 0;
-       padding: 0;
-       }
-       .color-border {
-       display: grid;
-       border-radius: 100vw;
-       width: 3ex;
-       height: 3ex;
-       overflow: hidden;
-       padding: 0;
-       outline: 2px solid white;
-       }
+      input[type="color"] {
+        border: none;
+        display: block;
+        width: 100%;
+        height: 100%;
+        appearance: none;
+        -webkit-appearance: none;
+        width: 3ex;
+        height: 3ex;
+        margin: 0;
+        padding: 0;
+      }
+      .color-border {
+        display: grid;
+        border-radius: 100vw;
+        width: 3ex;
+        height: 3ex;
+        overflow: hidden;
+        padding: 0;
+        outline: 2px solid white;
+      }
 
-       .pallette {
-       display: inherit;
-       gap: inherit;
-       flex-wrap: wrap;
-       }
+      .pallette {
+        display: inherit;
+        gap: inherit;
+        flex-wrap: wrap;
+      }
 
-       .ghost {
-         display: contents;
-       }
-       label {
-       display: flex;
-       align-items: center;
-       flex-direction: row;
-       gap: 1ex;
-       margin-right: 1em;
-       }
+      .ghost {
+        display: contents;
+      }
+      label {
+        display: flex;
+        align-items: center;
+        flex-direction: row;
+        gap: 1ex;
+        margin-right: 1em;
+      }
 
-       .connection-status {
-         display: flex;
-         flex-direction: row;
-         margin-left: auto;
-         margin-right: 1em;
-         white-space: nowrap;
-         color: black;
-       }
-       .push-right {
-       display: inherit;
-       align-self: stretch;
-       align-items: inherit;
-       margin-left: auto;
-       }
+      .connection-status {
+        display: flex;
+        flex-direction: row;
+        margin-left: auto;
+        margin-right: 1em;
+        white-space: nowrap;
+        color: black;
+      }
+      .push-right {
+        display: inherit;
+        align-self: stretch;
+        align-items: inherit;
+        margin-left: auto;
+      }
 
-       .color-list {
-       display: flex;
-       background: #0005;
-       padding: 0.8ex;
-       border-radius: 0.5ex;
-       }
-       .connection-status {
-       display: none;
-       }
+      .color-list {
+        display: flex;
+        background: #0005;
+        padding: 0.8ex;
+        border-radius: 0.5ex;
+      }
+      .connection-status {
+        display: none;
+      }
 
-       .phx-loading .disconnected {
-         display: block;
-       }
+      .phx-loading .disconnected {
+        display: block;
+      }
 
-       .phx-connected .connected {
-         display: block;
-       }
+      .phx-connected .connected {
+        display: block;
+      }
 
       .menu-bar {
-      position: absolute;
-      top: 0em;
-      left: 0em;
-      right: 0em;
-      z-index: 1000;
+        position: absolute;
+        top: 0em;
+        left: 0em;
+        right: 0em;
+        z-index: 1000;
       }
-      input[type=checkbox] {
-      display: none;
+      input[type="checkbox"] {
+        display: none;
       }
-      label:has(input[type=checkbox]) {
-      color: #fff;
-      align-self: stretch;
-      display: flex;
-      align-items: center;
-      border-radius: 0.5ex;
-      padding: 0.5ex;
-      margin: 0;
-      background: #0001;
-      user-select: none;
-      filter: saturate(0%) brightness(500%) ;
+      label:has(input[type="checkbox"]) {
+        color: #fff;
+        align-self: stretch;
+        display: flex;
+        align-items: center;
+        border-radius: 0.5ex;
+        padding: 0.5ex;
+        margin: 0;
+        background: #0001;
+        user-select: none;
+        filter: saturate(0%) brightness(500%);
       }
-      label:has(input[type=checkbox]:checked) {
-
-      color: #fff;
-      background: #000a;
-      filter:  saturate(100%);
-
+      label:has(input[type="checkbox"]:checked) {
+        color: #fff;
+        background: #000a;
+        filter: saturate(100%);
       }
 
-      label:has(input[type=checkbox]) svg {
+      label:has(input[type="checkbox"]) svg {
+        opacity: 0.5;
+      }
 
-            opacity: 0.5;
-
-            }
-
-      label:has(input[type=checkbox]:checked) svg {
-
-            opacity: 1;
-
-            }
+      label:has(input[type="checkbox"]:checked) svg {
+        opacity: 1;
+      }
     </style>
     <nav class="toolbar">
       <div class="pallette">

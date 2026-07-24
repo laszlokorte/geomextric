@@ -24,8 +24,7 @@ defmodule GeomextricWeb.Canvas do
       }
 
       svg[with-bounds] {
-
-      background: #23875daa;
+        background: #23875daa;
       }
 
       :scope.scroller {
@@ -38,13 +37,13 @@ defmodule GeomextricWeb.Canvas do
         inset: 0;
       }
       :scope.scroller::after {
-      content: "";
-      position: absolute;
-      left: 0;
-      top: 0;
-      display: block;
-      width: var(--scroll-width);
-      height: var(--scroll-height);
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        display: block;
+        width: var(--scroll-width);
+        height: var(--scroll-height);
       }
 
       :scope .scroller-body {
@@ -61,14 +60,14 @@ defmodule GeomextricWeb.Canvas do
       }
 
       :scope {
-      user-select: none;
-      touch-action: none;
+        user-select: none;
+        touch-action: none;
       }
     </style>
 
     <style rel="stylesheet" :type={GeomextricWeb.ColocatedCSS}>
       .canvas-container {
-      touch-action: none;
+        touch-action: none;
       }
     </style>
     <div class="scroller" data-scrollbars tabindex="-1">
@@ -191,8 +190,8 @@ defmodule GeomextricWeb.Canvas do
         e.setAttribute(
           "viewBox",
           `${cam.x - (cam.screen.width / 2) * Math.exp(-cam.zoom)} ${cam.y - (cam.screen.height / 2) * Math.exp(-cam.zoom)}
-                                                                                                  ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
-                                                                                                  `,
+                                                                                                      ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
+                                                                                                      `,
         );
 
         w.setAttribute("data-zoomed", cam.zoom < 0 ? "out" : "in");

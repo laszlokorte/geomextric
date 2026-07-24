@@ -10,19 +10,18 @@ defmodule GeomextricWeb.Menu do
     ~H"""
     <style rel="stylesheet" :type={GeomextricWeb.ColocatedScopedCSS}>
       .menu {
-      margin: 0;
-      padding: 0;
-      background: #fff;
-      color: #000;
+        margin: 0;
+        padding: 0;
+        background: #fff;
+        color: #000;
       }
-      .submenu{
+      .submenu {
+        background: inherit;
+        border: 1px solid #aaa;
+        padding: 3px;
+        gap: 2px;
 
-      background: inherit;
-      border: 1px solid #aaa;
-      padding: 3px;
-      gap: 2px;
-
-      margin: -2px 1px 1px 1px;
+        margin: -2px 1px 1px 1px;
         display: none;
       }
 
@@ -32,7 +31,7 @@ defmodule GeomextricWeb.Menu do
       }
 
       .m:scope {
-      user-select: none;
+        user-select: none;
         display: flex;
         margin: 0;
         gap: 0;
@@ -41,7 +40,7 @@ defmodule GeomextricWeb.Menu do
         border-bottom: 1px solid #aaa;
       }
       .submenu:popover-open {
-      position: fixed;
+        position: fixed;
         display: flex;
         flex-direction: column;
 
@@ -52,93 +51,92 @@ defmodule GeomextricWeb.Menu do
       }
 
       .subsubmenu {
-      border: 1px solid #aaa;
+        border: 1px solid #aaa;
 
-      background: inherit;
+        background: inherit;
 
-      padding: 3px;
-      gap: 2px;
-      margin: 1px;
+        padding: 3px;
+        gap: 2px;
+        margin: 1px;
 
-      inset: auto;
-      top: anchor(top);
-      left: anchor(right);
-      position-try-fallbacks: flip-block;
+        inset: auto;
+        top: anchor(top);
+        left: anchor(right);
+        position-try-fallbacks: flip-block;
       }
 
       .subsubmenu:popover-open {
-      position: fixed;
+        position: fixed;
         display: flex;
         flex-direction: column;
-
       }
 
       .submenu::backdrop {
-         background-color: #abc0;
-       }
-       button:disabled {
-       color: #aaa;
-       }
-       button {
-       border: none;
-       padding-left: 1em;
-       padding-right: 1em;
-       text-align: left;
-       display: block;
-       border-radius: 0;
-       background: #fff;
-       color: #000;
-       position: relative;
-       cursor: pointer;
-       display: flex;
-       gap: 2em;
-       align-items: baseline;
-       }
-       button:hover {
-       background: #000;
-       color: #fff;
-       }
-
-       .submenu button {
-         interest-delay: 0s 0s;
-       }
-
-       .menu > button {
-         interest-delay: 10000s 0s;
-       }
-
-       :scope:has(:popover-open) .menu > button {
-         interest-delay: 0s 1000s;
-       }
-
-       .inner {
-       margin-left: auto;
-       align-self: center;
-       }
-       [popovertarget]:has(+:popover-open) {
+        background-color: #abc0;
+      }
+      button:disabled {
+        color: #aaa;
+      }
+      button {
+        border: none;
+        padding-left: 1em;
+        padding-right: 1em;
+        text-align: left;
+        display: block;
+        border-radius: 0;
+        background: #fff;
+        color: #000;
+        position: relative;
+        cursor: pointer;
+        display: flex;
+        gap: 2em;
+        align-items: baseline;
+      }
+      button:hover {
         background: #000;
         color: #fff;
-       }
+      }
 
-       kbd {
-       color: #aaaa;
-       margin-left: auto;
-       font-size: 0.8em;
-       }
+      .submenu button {
+        interest-delay: 0s 0s;
+      }
 
-        :scope .head {
-       color: #000;
+      .menu > button {
+        interest-delay: 10000s 0s;
+      }
+
+      :scope:has(:popover-open) .menu > button {
+        interest-delay: 0s 1000s;
+      }
+
+      .inner {
+        margin-left: auto;
+        align-self: center;
+      }
+      [popovertarget]:has(+ :popover-open) {
+        background: #000;
+        color: #fff;
+      }
+
+      kbd {
+        color: #aaaa;
+        margin-left: auto;
+        font-size: 0.8em;
+      }
+
+      :scope .head {
+        color: #000;
         align-self: center;
         padding: 0 1ex;
         font-size: 1em;
-       }
+      }
     </style>
 
     <style rel="stylesheet" :type={GeomextricWeb.ColocatedCSS}>
-      @media(pointer: coarse) {
-       .m {
-         display: none;
-       }
+      @media (pointer: coarse) {
+        .m {
+          display: none;
+        }
       }
     </style>
 

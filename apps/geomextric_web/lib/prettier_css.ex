@@ -1,5 +1,5 @@
 if Mix.env() == :dev do
-  defmodule Prettier do
+  defmodule PrettierCSS do
     @moduledoc false
 
     @behaviour Phoenix.LiveView.HTMLFormatter.TagFormatter
@@ -7,22 +7,25 @@ if Mix.env() == :dev do
     require Logger
 
     @impl true
-    def render_tag({"script", attrs, content}, _opts)
+    def render_tag({"style", attrs, content}, _opts)
         when not is_map_key(attrs, "runtime") do
-      manifest = Map.get(attrs, "manifest", "index.js")
+      dbg("xxx")
 
       tmp_file =
-        Path.join(System.tmp_dir!(), "prettier_#{System.unique_integer([:positive])}_#{manifest}")
+        Path.join(
+          System.tmp_dir!(),
+          "prettier_#{System.unique_integer([:positive])}.css"
+        )
 
       try do
         File.write!(tmp_file, content)
 
-        case System.cmd("npx", ["prettier", tmp_file], stderr_to_stdout: false) do
+        case System.cmd("npx", ["prettier", "--parser", "css", tmp_file], stderr_to_stdout: false) do
           {output, 0} ->
             {:ok, String.trim(output)}
 
           {error, _} ->
-            Logger.error("Failed to format with prettier: #{error}")
+            Logger.error("Failed to format CSS with prettier: #{error}")
             :skip
         end
       after

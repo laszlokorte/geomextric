@@ -8,7 +8,7 @@ defmodule GeomextricWeb.HomeLive do
   def render(assigns) do
     ~H"""
     <style rel="stylesheet" :type={GeomextricWeb.ColocatedCSS}>
-        .full {
+      .full {
         display: grid;
         position: absolute;
         inset: 0;
@@ -18,38 +18,39 @@ defmodule GeomextricWeb.HomeLive do
 
         gap: 1em;
         padding: 1em;
-        }
-        h1 {
+      }
+      h1 {
         text-align: center;
         font-size: 1.5em;
         grid-column: 1 / -1;
-        }
+      }
 
-        .split {
+      .split {
         display: grid;
         grid-template-columns: subgrid;
         grid-column: 1 / -1;
         align-items: stretch;
         justify-items: stretch;
         text-align: center;
-        }
+      }
 
-        .enter-link {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 10vmin;
-          opacity: 0.8;
-          transition: opacity 50ms linear;
-        }
-        .enter-link:hover, .enter-link:focus {
-          opacity: 1;
-        }
-        .left {
+      .enter-link {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10vmin;
+        opacity: 0.8;
+        transition: opacity 50ms linear;
+      }
+      .enter-link:hover,
+      .enter-link:focus {
+        opacity: 1;
+      }
+      .left {
         background: royalblue;
       }
       .right {
-      background: tomato;
+        background: tomato;
       }
     </style>
     <div class="full">

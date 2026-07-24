@@ -224,9 +224,9 @@ defmodule GeomextricWeb.TutLive do
       .vectors .line3d {
         marker-end: url("#vector-head");
         stroke-width: 2;
-        }
+      }
 
-        .scenes{
+      .scenes {
         background: #fff;
         width: 100%;
         height: 100%;
@@ -240,71 +240,71 @@ defmodule GeomextricWeb.TutLive do
         gap: 0.25ex;
         padding: 0.5ex;
         background: #aaa;
-        }
-        .scene-sub{
-              background: #fff;
-              inset: 0;
-              width: 100%;
-              height: 100%;
-              display: block;
-              touch-action: none;
-              display: grid;
-              grid-auto-columns: 1fr;
-              align-items: stretch;
-              }
-        .screen {
+      }
+      .scene-sub {
+        background: #fff;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+        touch-action: none;
+        display: grid;
+        grid-auto-columns: 1fr;
+        align-items: stretch;
+      }
+      .screen {
         display: grid;
         position: absolute;
         inset: 0;
-        }
-        .line3d {
-      vector-effect: non-scaling-stroke;
-      stroke-linecap: round;
-      stroke-linecap: round;
+      }
+      .line3d {
+        vector-effect: non-scaling-stroke;
+        stroke-linecap: round;
+        stroke-linecap: round;
       }
 
       line[stroke="black"] {
-      marker-end: url("#vector-head");
-      stroke-width: 1;
+        marker-end: url("#vector-head");
+        stroke-width: 1;
       }
-        .text-label {
+      .text-label {
         transform: translate(0, -2px);
       }
 
       .toolbar {
-            flex-wrap: wrap-reverse;
-            border-radius: 1ex;
-              position: fixed;
-              height: auto;
-              top: 2em;
-              left: 0;
-              right: 1em;
-              margin: 1ex;
-              padding: 1ex;
-              color: #fff;
-              display: flex;
-              gap: 1ex;
+        flex-wrap: wrap-reverse;
+        border-radius: 1ex;
+        position: fixed;
+        height: auto;
+        top: 2em;
+        left: 0;
+        right: 1em;
+        margin: 1ex;
+        padding: 1ex;
+        color: #fff;
+        display: flex;
+        gap: 1ex;
 
-              background: #0003;
-              z-index: 1000;
-              flex-direction: row;
-              align-items: center;
-            }
-            legend {
-            color: #000;
-            padding: 0;
-            font-size: 0.7em;
-            text-align: center;
-            border-bottom: 1px solid #000;
-            margin-bottom: 2px;
-            width: 100%;
-            position: relative;
-            margin-top: -0.5em;
-            }
-      .controls{
-      display: flex;
-      flex-direction: row;
-      gap: 1em;
+        background: #0003;
+        z-index: 1000;
+        flex-direction: row;
+        align-items: center;
+      }
+      legend {
+        color: #000;
+        padding: 0;
+        font-size: 0.7em;
+        text-align: center;
+        border-bottom: 1px solid #000;
+        margin-bottom: 2px;
+        width: 100%;
+        position: relative;
+        margin-top: -0.5em;
+      }
+      .controls {
+        display: flex;
+        flex-direction: row;
+        gap: 1em;
       }
       .bar {
         grid-row: 1;
