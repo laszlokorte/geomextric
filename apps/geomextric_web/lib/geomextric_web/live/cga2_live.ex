@@ -18,7 +18,10 @@ defmodule GeomextricWeb.CGA2Live do
        "p1" => CGA2.point(100, 150),
        "p2" => CGA2.point(0, 100),
        "p4" => CGA2.point(504.14453125, 68.11901092529297),
-       "p5" => CGA2.point(430, 200)
+       "p5" => CGA2.point(430, 200),
+       "p7" => CGA2.point(-300, 200),
+       "p8" => CGA2.point(-600, -400),
+       "p9" => CGA2.point(600, -600)
      })
      |> assign(:axis, true)
      |> assign(:grid, true)
@@ -36,7 +39,6 @@ defmodule GeomextricWeb.CGA2Live do
     w = CGA2.dot(p, CGA2.e_o())
 
     if abs(w) < 1.0e-5 do
-      dbg(p)
       raise ArgumentError, "cannot normalize point with zero weight"
     end
 
@@ -67,7 +69,7 @@ defmodule GeomextricWeb.CGA2Live do
 
   def line?(l) do
     CGA2.grades(l) == [3] and
-      CGA2.coefficient(l, :e12pm) == 0
+      CGA2.norm(CGA2.wedge(l, CGA2.e_inf())) < 1.0e-5
   end
 
   def point_pair?(x) do
@@ -85,13 +87,8 @@ defmodule GeomextricWeb.CGA2Live do
 
     w = em - ep
 
-    if abs(w) < 1.0e-10 do
-      {:line,
-       {
-         e1,
-         e2,
-         (em + ep) / 2
-       }}
+    if CGA2.norm(CGA2.wedge(c, CGA2.e_inf())) < 1.0e-5 do
+      {:line, line_parameters(c)}
     else
       x = e1 / w
       y = e2 / w
@@ -160,11 +157,11 @@ defmodule GeomextricWeb.CGA2Live do
       point?(x) ->
         {:point, CGA2.point_coordinates(x)}
 
-      circle?(x) ->
-        {:circle, circle_parameters(x)}
-
       line?(x) ->
         {:line, line_parameters(x)}
+
+      circle?(x) ->
+        {:circle, circle_parameters(x)}
 
       point_pair?(x) ->
         split(x)
@@ -186,10 +183,12 @@ defmodule GeomextricWeb.CGA2Live do
   end
 
   def line_parameters(l) do
+    l = CGA2.dual(l)
+
     {
-      CGA2.coefficient(l, :e12p),
-      CGA2.coefficient(l, :e12m),
-      CGA2.coefficient(l, :e1pm)
+      CGA2.coefficient(l, :e1),
+      CGA2.coefficient(l, :e2),
+      0.5 * (CGA2.coefficient(l, :ep) - CGA2.coefficient(l, :em))
     }
   end
 
@@ -254,6 +253,18 @@ defmodule GeomextricWeb.CGA2Live do
       CGA2.wedge(assigns.points |> Map.get("p4"), assigns.points |> Map.get("p5"))
       |> CGA2.wedge(assigns.points |> Map.get("p6"))
 
+    ln1 =
+      CGA2.wedge(assigns.points |> Map.get("p7"), assigns.points |> Map.get("p8"))
+      |> CGA2.wedge(CGA2.e_inf())
+
+    ln2 =
+      CGA2.wedge(assigns.points |> Map.get("p7"), assigns.points |> Map.get("p9"))
+      |> CGA2.wedge(CGA2.e_inf())
+
+    ln3 =
+      CGA2.wedge(assigns.points |> Map.get("p8"), assigns.points |> Map.get("p9"))
+      |> CGA2.wedge(CGA2.e_inf())
+
     assigns =
       assigns
       |> assign(:elements, [
@@ -261,12 +272,18 @@ defmodule GeomextricWeb.CGA2Live do
         {"C2", :green, c2},
         {"C3", :hotpink, cc},
         {"C4", :orange, c3},
+        {"Line 1", :tomato, ln1},
+        {"Line 2", :teal, ln2},
+        {"Line 3", :orchid, ln3},
         {"P1", :green, assigns.points |> Map.get("p2")},
         {"P2", :orange, assigns.points |> Map.get("p1")},
         {"P3", :blue, assigns.points |> Map.get("p0")},
         {"P4", :purple, assigns.points |> Map.get("p4")},
         {"P5", :purple, assigns.points |> Map.get("p5")},
         {"P6", :purple, assigns.points |> Map.get("p6")},
+        {"P7", :purple, assigns.points |> Map.get("p7")},
+        {"P8", :purple, assigns.points |> Map.get("p8")},
+        {"P9", :purple, assigns.points |> Map.get("p9")},
         {"x", {:green, :orange}, CGA2.meet(c2, c3)},
         {"x", {:blue, :green}, CGA2.meet(c1, c2)},
         {"x", {:blue, :orange}, CGA2.meet(c1, c3)}
@@ -582,7 +599,7 @@ defmodule GeomextricWeb.CGA2Live do
             y1="0"
             x2={@box.x + @box.width * 0.98}
             y2="0"
-            stroke-width="4"
+            stroke-width="2"
             shape-rendering="geometricPrecision"
             vector-effect="non-scaling-stroke"
             stroke="#333"
@@ -592,7 +609,7 @@ defmodule GeomextricWeb.CGA2Live do
             x1="0"
             y2={@box.y + @box.height * 0.98}
             x2="0"
-            stroke-width="4"
+            stroke-width="2"
             shape-rendering="geometricPrecision"
             vector-effect="non-scaling-stroke"
             stroke="#333"
@@ -640,6 +657,38 @@ defmodule GeomextricWeb.CGA2Live do
         <g id="elements">
           <%= for {label, color, s} <-@elements do %>
             <%= classify(s) |> case do %>
+              <% {:line, {a, b, c}} when abs(b) > abs(a) -> %>
+                <%= with x1 <- @box.x,
+                  x2 <- @box.x + @box.width,
+                  y1 <- -(a * x1 + c) / b,
+                  y2 <- -(a * x2 + c) / b
+                do %>
+                  <line
+                    x1={-x1}
+                    y1={y1}
+                    x2={-x2}
+                    y2={y2}
+                    data-non-scaling-full
+                    stroke-width="2"
+                    stroke={color}
+                  />
+                <% end %>
+              <% {:line, {a, b, c}} -> %>
+                <%= with y1 <- -@box.y,
+                  y2 <- -(@box.y + @box.height),
+                  x1 <- -(b * y1 + c) / a,
+                  x2 <- -(b * y2 + c) / a
+                do %>
+                  <line
+                    x1={-x1}
+                    y1={y1}
+                    x2={-x2}
+                    y2={y2}
+                    stroke-width="2"
+                    data-non-scaling-full
+                    stroke={color}
+                  />
+                <% end %>
               <% {:circle, {:circle, {{cx, cy}, r}}} -> %>
                 <circle
                   cx={cx}
@@ -747,9 +796,11 @@ defmodule GeomextricWeb.CGA2Live do
                 cy={-cy}
                 r={20}
                 fill-opacity="0.2"
-                fill="red"
+                stroke-opacity="0.5"
+                fill="teal"
+                stroke="teal"
                 vector-effect="non-scaling-stroke"
-                stroke-width="3"
+                stroke-width="1"
                 data-non-scaling
                 id={id}
                 phx-hook=".PointDragger"
@@ -796,22 +847,30 @@ defmodule GeomextricWeb.CGA2Live do
           };
 
           const offset = { x: 0, y: 0 };
-          this.el.addEventListener("pointerdown", (evt) => {
-            if (evt.isPrimary) {
-              evt.preventDefault();
-              evt.currentTarget.setPointerCapture(evt.pointerId);
-              const pos = evtToSvg(evt);
-              offset.x = pos.x - evt.currentTarget.getAttribute("cx");
-              offset.y = -pos.y - evt.currentTarget.getAttribute("cy");
-            }
-          });
-          this.el.addEventListener("pointermove", (evt) => {
-            if (evt.currentTarget.hasPointerCapture(evt.pointerId)) {
-              evt.preventDefault();
-              move(evtToSvg(evt, null, offset));
-            }
-          });
+          this.listeners = {
+            pointerdown: (evt) => {
+                        if (evt.isPrimary) {
+                          evt.preventDefault();
+                          evt.currentTarget.setPointerCapture(evt.pointerId);
+                          const pos = evtToSvg(evt);
+                          offset.x = pos.x - evt.currentTarget.getAttribute("cx");
+                          offset.y = -pos.y - evt.currentTarget.getAttribute("cy");
+                        }
+                      },
+                      pointermove: (evt) => {
+                                  if (evt.currentTarget.hasPointerCapture(evt.pointerId)) {
+                                    evt.preventDefault();
+                                    move(evtToSvg(evt, null, offset));
+                                  }
+                      }
+          };
+          this.el.addEventListener("pointerdown", this.listeners.pointerdown);
+          this.el.addEventListener("pointermove", this.listeners.pointermove);
         },
+        destroy() {
+          this.el.removeEventListener('pointermove', this.listeners.pointermove)
+          this.el.removeEventListener('pointerdown', this.listeners.pointerdown )
+        }
       };
     </script>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".Draggable">
