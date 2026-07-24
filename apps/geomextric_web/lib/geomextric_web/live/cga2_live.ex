@@ -849,28 +849,28 @@ defmodule GeomextricWeb.CGA2Live do
           const offset = { x: 0, y: 0 };
           this.listeners = {
             pointerdown: (evt) => {
-                        if (evt.isPrimary) {
-                          evt.preventDefault();
-                          evt.currentTarget.setPointerCapture(evt.pointerId);
-                          const pos = evtToSvg(evt);
-                          offset.x = pos.x - evt.currentTarget.getAttribute("cx");
-                          offset.y = -pos.y - evt.currentTarget.getAttribute("cy");
-                        }
-                      },
-                      pointermove: (evt) => {
-                                  if (evt.currentTarget.hasPointerCapture(evt.pointerId)) {
-                                    evt.preventDefault();
-                                    move(evtToSvg(evt, null, offset));
-                                  }
-                      }
+              if (evt.isPrimary) {
+                evt.preventDefault();
+                evt.currentTarget.setPointerCapture(evt.pointerId);
+                const pos = evtToSvg(evt);
+                offset.x = pos.x - evt.currentTarget.getAttribute("cx");
+                offset.y = -pos.y - evt.currentTarget.getAttribute("cy");
+              }
+            },
+            pointermove: (evt) => {
+              if (evt.currentTarget.hasPointerCapture(evt.pointerId)) {
+                evt.preventDefault();
+                move(evtToSvg(evt, null, offset));
+              }
+            },
           };
           this.el.addEventListener("pointerdown", this.listeners.pointerdown);
           this.el.addEventListener("pointermove", this.listeners.pointermove);
         },
         destroy() {
-          this.el.removeEventListener('pointermove', this.listeners.pointermove)
-          this.el.removeEventListener('pointerdown', this.listeners.pointerdown )
-        }
+          this.el.removeEventListener("pointermove", this.listeners.pointermove);
+          this.el.removeEventListener("pointerdown", this.listeners.pointerdown);
+        },
       };
     </script>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".Draggable">
