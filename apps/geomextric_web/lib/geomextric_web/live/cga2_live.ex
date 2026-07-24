@@ -9,42 +9,21 @@ defmodule GeomextricWeb.CGA2Live do
   def colors, do: @colors
 
   def mount(%{}, _, socket) do
-    p0 = CGA2.point(100, 40)
-    p1 = CGA2.point(100, 150)
-    p2 = CGA2.point(0, 100)
-
-    c1 = CGA2.circle(p0, 150)
-    c2 = CGA2.circle(p2, 100)
-    c3 = CGA2.circle(p1, 250)
-
-    p4 = CGA2.point(500, 80)
-    p5 = CGA2.point(430, 200)
-    p6 = CGA2.point(600, 100)
-
-    cc = CGA2.wedge(p4, p5) |> CGA2.wedge(p6)
-
     {:ok,
      socket
      |> assign(:pen, "#0077ff")
+     |> assign(:points, %{
+       "p6" => CGA2.point(600, 100),
+       "p0" => CGA2.point(100, 40),
+       "p1" => CGA2.point(100, 150),
+       "p2" => CGA2.point(0, 100),
+       "p4" => CGA2.point(504.14453125, 68.11901092529297),
+       "p5" => CGA2.point(430, 200)
+     })
      |> assign(:axis, true)
      |> assign(:grid, true)
      |> assign(:bounds, true)
      |> assign(:extra_pen, "#0077ff")
-     |> assign(:elements, [
-       {:blue, c1},
-       {:green, c2},
-       {:hotpink, cc},
-       {:orange, c3},
-       {:green, p2},
-       {:orange, p1},
-       {:blue, p0},
-       {:purple, p4},
-       {:purple, p5},
-       {:purple, p6},
-       {{:green, :orange}, CGA2.meet(c2, c3)},
-       {{:blue, :green}, CGA2.meet(c1, c2)},
-       {{:blue, :orange}, CGA2.meet(c1, c3)}
-     ])
      |> assign(:box, %{
        x: -800,
        y: -500,
@@ -53,10 +32,33 @@ defmodule GeomextricWeb.CGA2Live do
      })}
   end
 
+  def normalize_point(p) do
+    w = CGA2.dot(p, CGA2.e_o())
+
+    if abs(w) < 1.0e-5 do
+      dbg(p)
+      raise ArgumentError, "cannot normalize point with zero weight"
+    end
+
+    CGA2.scale(p, 1.0 / w)
+  end
+
   def point?(p) do
-    abs(CGA2.dot(p, p)) < 1.0e-10 and
-      CGA2.coefficient(p, :ep) != 0 and
-      CGA2.coefficient(p, :em) != 0
+    CGA2.grades(p) == [1] and
+      null?(p) and
+      abs(CGA2.dot(p, CGA2.e_inf())) > 1.0e-10
+  end
+
+  defp null?(p) do
+    n2 = abs(CGA2.dot(p, p))
+
+    scale =
+      p.data
+      |> Tuple.to_list()
+      |> Enum.map(&abs/1)
+      |> Enum.sum()
+
+    n2 < 1.0e-12 * max(scale * scale, 1.0)
   end
 
   def circle?(c) do
@@ -118,46 +120,39 @@ defmodule GeomextricWeb.CGA2Live do
     nix2 = scalar_part(inner(nix, nix))
 
     if abs(nix2) < 1.0e-12 do
-      raise ArgumentError, "invalid point pair"
+      :invalid
+      # raise ArgumentError, "invalid point pair"
+    else
+      r2 =
+        scalar_part(inner(o, o)) / nix2
+
+      r = :math.sqrt(abs(r2))
+
+      pos =
+        o
+        |> gp(inverse(nix))
+
+      attitude =
+        wedge(ei, eo)
+        |> inner(nix)
+        |> normalize()
+        |> scale(r)
+
+      kind =
+        cond do
+          r2 >= 0 ->
+            :real
+
+          true ->
+            :imag
+        end
+
+      {
+        kind,
+        normalize_point(add(pos, attitude)),
+        normalize_point(sub(pos, attitude))
+      }
     end
-
-    r2 =
-      scalar_part(inner(o, o)) / nix2
-
-    r = :math.sqrt(abs(r2))
-
-    pos =
-      o
-      |> gp(inverse(nix))
-      |> normalize_point()
-
-    attitude =
-      wedge(ei, eo)
-      |> inner(nix)
-      |> normalize()
-      |> scale(r)
-
-    kind =
-      cond do
-        r2 >= 0 ->
-          :real
-
-        true ->
-          :imag
-      end
-
-    {
-      kind,
-      normalize_point(add(pos, attitude)),
-      normalize_point(sub(pos, attitude))
-    }
-  end
-
-  def normalize_point(p) do
-    w =
-      -CGA2.scalar_part(CGA2.inner(p, CGA2.e_inf()))
-
-    CGA2.scale(p, 1 / w)
   end
 
   def classify(x) do
@@ -172,13 +167,18 @@ defmodule GeomextricWeb.CGA2Live do
         {:line, line_parameters(x)}
 
       point_pair?(x) ->
-        {kind, p1, p2} = split(x)
+        split(x)
+        |> case do
+          {kind, p1, p2} ->
+            {
+              :point_pair,
+              kind,
+              {CGA2.point_coordinates(p1), CGA2.point_coordinates(p2)}
+            }
 
-        {
-          :point_pair,
-          kind,
-          {CGA2.point_coordinates(p1), CGA2.point_coordinates(p2)}
-        }
+          :invalid ->
+            {:unknown, x}
+        end
 
       true ->
         {:unknown, x}
@@ -193,89 +193,19 @@ defmodule GeomextricWeb.CGA2Live do
     }
   end
 
-  def handle_event("move", %{"id" => <<id::binary>>, "x" => x, "y" => y}, socket) do
-    Geomextric.Canvas.move(Geomextric.Canvas, id, x, y)
-    {:noreply, socket}
-  end
+  def parse_number(n) when is_number(n), do: n
 
-  def handle_event("move", %{"dx" => dx, "dy" => dy}, socket) do
-    Geomextric.Canvas.move_by(Geomextric.Canvas, socket.assigns.selection, dx, dy)
-    {:noreply, socket}
-  end
+  def parse_number(str) do
+    with :error <- Float.parse(str),
+         :error <- Integer.parse(str) do
+      :error
+    else
+      {num, ""} ->
+        num
 
-  def handle_event("delete", %{"id" => <<id::binary>>}, socket) do
-    Geomextric.Canvas.delete(Geomextric.Canvas, id)
-    {:noreply, socket}
-  end
-
-  def handle_event("delete", %{"value" => "selected"}, socket) do
-    Geomextric.Canvas.delete_all(Geomextric.Canvas, socket.assigns.selection)
-    {:noreply, socket}
-  end
-
-  def handle_event("recent", %{"value" => _v}, socket) do
-    {:noreply, socket}
-  end
-
-  def handle_event("undo", %{}, socket) do
-    Geomextric.Canvas.undo(Geomextric.Canvas)
-    {:noreply, socket}
-  end
-
-  def handle_event("redo", %{}, socket) do
-    Geomextric.Canvas.redo(Geomextric.Canvas)
-    {:noreply, socket}
-  end
-
-  def handle_event("lasso", %{"width" => w, "height" => h, "x" => x, "y" => y}, socket) do
-    {:noreply,
-     socket
-     |> update(
-       :selection,
-       fn _ ->
-         Geomextric.Canvas.select_box(Geomextric.Canvas, %{width: w, height: h, x: x, y: y})
-       end
-     )}
-  end
-
-  def handle_event(
-        "create",
-        %{"pos" => %{"x" => x, "y" => y, "width" => w, "height" => h}} = params,
-        socket
-      ) do
-    Geomextric.Canvas.put(
-      Geomextric.Canvas,
-      x,
-      y,
-      w,
-      h,
-      Map.merge(%{"color" => socket.assigns.pen}, params)
-    )
-
-    {:noreply, socket}
-  end
-
-  def handle_event("create", %{"pos" => %{"x" => x, "y" => y}} = params, socket) do
-    Geomextric.Canvas.put(
-      Geomextric.Canvas,
-      x,
-      y,
-      Map.merge(%{"color" => socket.assigns.pen}, params)
-    )
-
-    {:noreply, socket}
-  end
-
-  def handle_event("clear", %{}, socket) do
-    Geomextric.Canvas.reset(Geomextric.Canvas)
-    {:noreply, socket}
-  end
-
-  def handle_event("change_pen", %{"value" => color}, socket) do
-    {:noreply,
-     socket
-     |> assign(:pen, color)
-     |> update(:extra_pen, fn p -> if(Enum.member?(@colors, color), do: p, else: color) end)}
+      _ ->
+        :error
+    end
   end
 
   def handle_event("set_grid", %{"value" => "true"}, socket) do
@@ -302,112 +232,46 @@ defmodule GeomextricWeb.CGA2Live do
     {:noreply, socket |> assign(:bounds, false)}
   end
 
-  def handle_event("select", %{"value" => ""}, socket) do
-    {:noreply, socket |> assign(:selection, [])}
-  end
-
-  def handle_event("select", %{"value" => "all"}, socket) do
-    {:noreply, socket |> assign(:selection, socket.assigns.layers |> Enum.map(& &1.id))}
-  end
-
-  def handle_event("select", %{"value" => id, "op" => "union"}, socket) do
-    {:noreply, socket |> assign(:selection, [id | socket.assigns.selection] |> Enum.uniq())}
-  end
-
-  def handle_event("select", %{"value" => id, "op" => "toggle"}, socket) do
+  def handle_event(
+        "move_point",
+        %{"id" => p, "pos" => %{"x" => x, "y" => y}},
+        socket
+      ) do
     {:noreply,
      socket
-     |> assign(
-       :selection,
-       MapSet.new(socket.assigns.selection)
-       |> MapSet.symmetric_difference(MapSet.new([id]))
-       |> Enum.to_list()
-     )}
-  end
-
-  def handle_event("select", %{"value" => id, "op" => "replace"}, socket) do
-    {:noreply, socket |> assign(:selection, [id])}
-  end
-
-  def handle_info({:inserted, new}, socket) do
-    {:noreply,
-     socket
-     |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
-     |> assign(
-       :history,
-       Geomextric.Canvas.get_history(Geomextric.Canvas)
-     )
-     |> update(:layers, &[new | &1])}
-  end
-
-  def handle_info({:moved, id, new_coords}, socket) do
-    {:noreply,
-     socket
-     |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
-     |> assign(
-       :history,
-       Geomextric.Canvas.get_history(Geomextric.Canvas)
-     )
-     |> update(
-       :layers,
-       &Enum.map(&1, fn
-         %{id: ^id} = old -> %{old | pos: new_coords}
-         e -> e
-       end)
-     )}
-  end
-
-  def handle_info({:delete, id}, socket) do
-    {:noreply,
-     socket
-     |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
-     |> assign(
-       :history,
-       Geomextric.Canvas.get_history(Geomextric.Canvas)
-     )
-     |> update(
-       :layers,
-       &Enum.filter(&1, fn
-         %{id: ^id} -> false
-         _ -> true
-       end)
-     )
-     |> update(
-       :selection,
-       &Enum.filter(&1, fn
-         ^id -> false
-         _ -> true
-       end)
-     )}
-  end
-
-  def handle_info(:reload, socket) do
-    {:noreply,
-     socket
-     |> assign(
-       :history,
-       Geomextric.Canvas.get_history(Geomextric.Canvas)
-     )
-     |> assign(
-       :layers,
-       Geomextric.Canvas.get_all(Geomextric.Canvas)
-     )
-     |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))}
-  end
-
-  def handle_info(:clear, socket) do
-    {:noreply,
-     socket
-     |> assign(:layers, [])
-     |> assign(:selection, [])
-     |> assign(
-       :history,
-       Geomextric.Canvas.get_history(Geomextric.Canvas)
-     )
-     |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))}
+     |> update(:points, fn ps ->
+       np = CGA2.point(parse_number(x), parse_number(y))
+       Map.replace(ps, p, np)
+     end)}
   end
 
   def render(assigns) do
+    c1 = CGA2.circle(assigns.points |> Map.get("p0"), 150)
+    c2 = CGA2.circle(assigns.points |> Map.get("p2"), 100)
+    c3 = CGA2.circle(assigns.points |> Map.get("p1"), 250)
+
+    cc =
+      CGA2.wedge(assigns.points |> Map.get("p4"), assigns.points |> Map.get("p5"))
+      |> CGA2.wedge(assigns.points |> Map.get("p6"))
+
+    assigns =
+      assigns
+      |> assign(:elements, [
+        {"C1", :blue, c1},
+        {"C2", :green, c2},
+        {"C3", :hotpink, cc},
+        {"C4", :orange, c3},
+        {"P1", :green, assigns.points |> Map.get("p2")},
+        {"P2", :orange, assigns.points |> Map.get("p1")},
+        {"P3", :blue, assigns.points |> Map.get("p0")},
+        {"P4", :purple, assigns.points |> Map.get("p4")},
+        {"P5", :purple, assigns.points |> Map.get("p5")},
+        {"P6", :purple, assigns.points |> Map.get("p6")},
+        {"x", {:green, :orange}, CGA2.meet(c2, c3)},
+        {"x", {:blue, :green}, CGA2.meet(c1, c2)},
+        {"x", {:blue, :orange}, CGA2.meet(c1, c3)}
+      ])
+
     ~H"""
     <style rel="stylesheet" :type={GeomextricWeb.ColocatedCSS}>
       body {
@@ -774,7 +638,7 @@ defmodule GeomextricWeb.CGA2Live do
         </g>
 
         <g id="elements">
-          <%= for {color, s} <-@elements do %>
+          <%= for {label, color, s} <-@elements do %>
             <%= classify(s) |> case do %>
               <% {:circle, {:circle, {{cx, cy}, r}}} -> %>
                 <circle
@@ -786,6 +650,7 @@ defmodule GeomextricWeb.CGA2Live do
                   vector-effect="non-scaling-stroke"
                   stroke-width="3"
                 />
+                <text pointer-events="none" x={cx + r * 0.9} y={-cy}>{label}</text>
               <% {:point, {cx, cy}} -> %>
                 <circle
                   cx={cx}
@@ -796,6 +661,7 @@ defmodule GeomextricWeb.CGA2Live do
                   stroke="none"
                   stroke-width="4"
                 />
+                <text pointer-events="none" x={cx + 10} y={-cy}>{label}</text>
               <% {:point_pair, :real, {{cx1, cy1}, {cx2, cy2}}} -> %>
                 <% {col1, col2} =
                   case color do
@@ -820,6 +686,9 @@ defmodule GeomextricWeb.CGA2Live do
                   data-non-scaling-full
                   stroke-width="5"
                 />
+
+                <text pointer-events="none" x={cx1 + 5} y={-cy1}>{label}/1</text>
+                <text pointer-events="none" x={cx2 + 5} y={-cy2}>{label}/2</text>
               <% {:point_pair, :imag, {{cx1, cy1}, {cx2, cy2}}} -> %>
                 <% {col1, col2} =
                   case color do
@@ -872,15 +741,89 @@ defmodule GeomextricWeb.CGA2Live do
                     stroke-width="5"
                     data-non-scaling-full
                   />
+
+                  <text pointer-events="none" x={cx1 + 5} y={-cy1}>{label}/1</text>
+                  <text pointer-events="none" x={cx2 + 5} y={-cy2}>{label}/2</text>
                 </g>
               <% _ -> %>
             <% end %>
           <% end %>
         </g>
+        <%= for {id, s} <-@points do %>
+          <%= classify(s) |> case do %>
+            <% {:point, {cx, cy}} -> %>
+              <circle
+                cx={cx}
+                cy={-cy}
+                r={20}
+                fill-opacity="0.2"
+                fill="red"
+                vector-effect="non-scaling-stroke"
+                stroke-width="3"
+                data-non-scaling
+                id={id}
+                phx-hook=".PointDragger"
+              />
+            <% _ -> %>
+          <% end %>
+        <% end %>
         <g id="layers"></g>
         <g id="layers-selection" multi-drag-root></g>
       </.canvas>
     </div>
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".PointDragger">
+      export default {
+        mounted() {
+          function throttle(fun, delay, fallback) {
+            let lastTime = 0;
+            return function (...args) {
+              let now = Date.now();
+              if (now - lastTime >= delay) {
+                fun(...args);
+                lastTime = now;
+              } else if (fallback) {
+                fallback(...args);
+              }
+            };
+          }
+          const move = throttle(
+            (pos) => this.pushEvent("move_point", { id: this.el.id, pos }),
+            30,
+          );
+          const svg = this.el.ownerSVGElement;
+          const point = svg.createSVGPoint();
+
+          const evtToSvg = (evt, rel, offset) => {
+            point.x = evt.clientX;
+            point.y = evt.clientY;
+            const svgGlobal = point.matrixTransform(
+              (rel || svg).getScreenCTM().inverse(),
+            );
+            return {
+              x: svgGlobal.x - (offset?.x ?? 0),
+              y: -(svgGlobal.y - (offset?.y ?? 0)),
+            };
+          };
+
+          const offset = { x: 0, y: 0 };
+          this.el.addEventListener("pointerdown", (evt) => {
+            if (evt.isPrimary) {
+              evt.preventDefault();
+              evt.currentTarget.setPointerCapture(evt.pointerId);
+              const pos = evtToSvg(evt);
+              offset.x = pos.x - evt.currentTarget.getAttribute("cx");
+              offset.y = -pos.y - evt.currentTarget.getAttribute("cy");
+            }
+          });
+          this.el.addEventListener("pointermove", (evt) => {
+            if (evt.currentTarget.hasPointerCapture(evt.pointerId)) {
+              evt.preventDefault();
+              move(evtToSvg(evt, null, offset));
+            }
+          });
+        },
+      };
+    </script>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".Draggable">
       export default {
         mounted() {
