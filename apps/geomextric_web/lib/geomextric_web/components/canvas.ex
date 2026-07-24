@@ -6,6 +6,7 @@ defmodule GeomextricWeb.Canvas do
 
   attr :grid, :boolean, default: false, doc: "show grid"
   attr :bounds, :boolean, default: false, doc: "show grid"
+  attr :tools, :boolean, default: true, doc: "enable tools"
   attr :box, :map, default: %{}, doc: "The viewBox"
 
   def canvas(assigns) do
@@ -79,6 +80,7 @@ defmodule GeomextricWeb.Canvas do
           viewBox={"#{@box.x} #{@box.y} #{@box.width} #{@box.height}"}
           id="my-camera"
           phx-hook=".Camera"
+          data-tools={@tools}
         >
           <g data-rotor>
             <svg
@@ -189,8 +191,8 @@ defmodule GeomextricWeb.Canvas do
         e.setAttribute(
           "viewBox",
           `${cam.x - (cam.screen.width / 2) * Math.exp(-cam.zoom)} ${cam.y - (cam.screen.height / 2) * Math.exp(-cam.zoom)}
-                                                                                            ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
-                                                                                            `,
+                                                                                              ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
+                                                                                              `,
         );
 
         w.setAttribute("data-zoomed", cam.zoom < 0 ? "out" : "in");
@@ -267,6 +269,7 @@ defmodule GeomextricWeb.Canvas do
       }
       export default {
         mounted() {
+          const enableTools = this.el.hasAttribute("data-tools");
           this.world = this.el.querySelector("[data-world]");
           this.rotor = this.el.querySelector("[data-rotor]");
           this.scroller = this.el.closest("[data-scrollbars]");
@@ -665,13 +668,15 @@ defmodule GeomextricWeb.Canvas do
           const point = svg.createSVGPoint();
 
           const offset = { x: 0, y: 0 };
-          this.el.addEventListener("pointerdown", onPointerDown);
-          this.el.addEventListener("pointerup", onPointerUp);
-          this.el.addEventListener("pointercancel", onPointerCancel);
-          this.el.addEventListener("lostpointercapture", onPointerLost);
-          this.el.addEventListener("pointermove", onPointerMove);
-          this.el.addEventListener("click", onClick);
-          this.el.addEventListener("drop", onDrop);
+          if (enableTools) {
+            this.el.addEventListener("pointerdown", onPointerDown);
+            this.el.addEventListener("pointerup", onPointerUp);
+            this.el.addEventListener("pointercancel", onPointerCancel);
+            this.el.addEventListener("lostpointercapture", onPointerLost);
+            this.el.addEventListener("pointermove", onPointerMove);
+            this.el.addEventListener("click", onClick);
+            this.el.addEventListener("drop", onDrop);
+          }
           this.el.addEventListener("contextmenu", (evt) => evt.preventDefault());
 
           window.addEventListener("resize", resize);

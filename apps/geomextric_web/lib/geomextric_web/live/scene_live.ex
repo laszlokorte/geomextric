@@ -142,8 +142,6 @@ defmodule GeomextricWeb.SceneLive do
      end)}
   end
 
-  defp clamp(x, min, max), do: max(min, min(max, x))
-
   def handle_event("zoom", %{"value" => v}, socket) do
     v = parse_number(v)
 
@@ -220,6 +218,8 @@ defmodule GeomextricWeb.SceneLive do
        fn {x, y, z} -> {x, y, z + v} end
      )}
   end
+
+  defp clamp(x, min, max), do: max(min, min(max, x))
 
   def eye_from_camera(%{yaw: yaw, pitch: pitch, radius: r}) do
     {

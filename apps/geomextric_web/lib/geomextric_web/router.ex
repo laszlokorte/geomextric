@@ -19,6 +19,7 @@ defmodule GeomextricWeb.Router do
       pipe_through :browser
       live "/", HomeLive, :index
       live "/canvas", CanvasLive, :index
+      live "/cga", CGA2Live, :index
       live "/scene", SceneLive, :index
       live "/tut", TutLive, :index
       live "/playground", PlaygroundLive, :index
