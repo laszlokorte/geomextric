@@ -42,177 +42,6 @@ defmodule GeomextricWeb.CGA2Live do
      })}
   end
 
-  def normalize_point(p) do
-    w = CGA2.dot(p, CGA2.e_o())
-
-    if abs(w) < 1.0e-5 do
-      raise ArgumentError, "cannot normalize point with zero weight"
-    end
-
-    CGA2.scale(p, 1.0 / w)
-  end
-
-  def point?(p) do
-    CGA2.grades(p) == [1] and
-      null?(p) and
-      abs(CGA2.dot(p, CGA2.e_o())) > 1.0e-10
-  end
-
-  def cleanup(m, eps \\ 1.0e-8) do
-    %CGA2{data: data} = m
-
-    data =
-      data
-      |> Tuple.to_list()
-      |> Enum.map(fn x ->
-        if abs(x) < eps, do: 0.0, else: x
-      end)
-      |> List.to_tuple()
-
-    %CGA2{data: data}
-  end
-
-  defp null?(p) do
-    n2 = abs(CGA2.dot(p, p))
-
-    scale =
-      p.data
-      |> Tuple.to_list()
-      |> Enum.map(&abs/1)
-      |> Enum.sum()
-
-    n2 < 1.0e-12 * max(scale * scale, 1.0)
-  end
-
-  def circle?(c) do
-    CGA2.grades(c) == [3]
-  end
-
-  def line?(l) do
-    CGA2.grades(l) == [3] and
-      CGA2.norm(CGA2.wedge(l, CGA2.e_inf())) < 1.0e-5
-  end
-
-  def point_pair?(x) do
-    CGA2.grades(x) == [2]
-  end
-
-  def circle_parameters(c) do
-    v = CGA2.gp(c, CGA2.inverse(CGA2.pseudoscalar()))
-
-    e1 = CGA2.coefficient(v, :e1)
-    e2 = CGA2.coefficient(v, :e2)
-
-    ep = CGA2.coefficient(v, :ep)
-    em = CGA2.coefficient(v, :em)
-
-    w = em - ep
-
-    if CGA2.norm(CGA2.wedge(c, CGA2.e_inf())) < 1.0e-5 do
-      {:line, line_parameters(c)}
-    else
-      x = e1 / w
-      y = e2 / w
-
-      k = (em + ep) / (2 * w)
-
-      r =
-        :math.sqrt(
-          x * x +
-            y * y -
-            2 * k
-        )
-
-      {:circle, {{x, y}, r}}
-    end
-  end
-
-  def split(o) do
-    import Galixir.Algebras.CGA2
-
-    ei = e_inf()
-    eo = e_o()
-
-    nix = wedge(o, ei)
-
-    nix2 = scalar_part(inner(nix, nix))
-
-    if abs(nix2) < 1.0e-12 do
-      :invalid
-      # raise ArgumentError, "invalid point pair"
-    else
-      r2 =
-        scalar_part(inner(o, o)) / nix2
-
-      r = :math.sqrt(abs(r2))
-
-      pos =
-        o
-        |> gp(inverse(nix))
-
-      attitude =
-        wedge(ei, eo)
-        |> inner(nix)
-        |> normalize()
-        |> scale(r)
-
-      kind =
-        cond do
-          r2 >= 0 ->
-            :real
-
-          true ->
-            :imag
-        end
-
-      {
-        kind,
-        normalize_point(add(pos, attitude)),
-        normalize_point(sub(pos, attitude))
-      }
-    end
-  end
-
-  def classify(x) do
-    cond do
-      point?(x) ->
-        {:point, CGA2.point_coordinates(x)}
-
-      line?(x) ->
-        {:line, line_parameters(x)}
-
-      circle?(x) ->
-        {:circle, circle_parameters(x)}
-
-      point_pair?(x) ->
-        split(x)
-        |> case do
-          {kind, p1, p2} ->
-            {
-              :point_pair,
-              kind,
-              {CGA2.point_coordinates(p1), CGA2.point_coordinates(p2)}
-            }
-
-          :invalid ->
-            {:unknown, x}
-        end
-
-      true ->
-        {:unknown, x}
-    end
-  end
-
-  def line_parameters(l) do
-    l = CGA2.dual(l)
-
-    {
-      CGA2.coefficient(l, :e1),
-      CGA2.coefficient(l, :e2),
-      0.5 * (CGA2.coefficient(l, :ep) - CGA2.coefficient(l, :em))
-    }
-  end
-
   def parse_number(n) when is_number(n), do: n
 
   def parse_number(str) do
@@ -294,7 +123,7 @@ defmodule GeomextricWeb.CGA2Live do
      socket
      |> update(:points, fn ps ->
        np =
-         CGA2.point(parse_number(x), parse_number(y)) |> cleanup()
+         CGA2.point(parse_number(x), parse_number(y)) |> CGA2.cleanup(1.0e-8)
 
        Map.replace(ps, p, np)
      end)}
@@ -302,7 +131,7 @@ defmodule GeomextricWeb.CGA2Live do
 
   def render(assigns) do
     c1 =
-      CGA2.circle(assigns.points |> Map.get("p0") |> cleanup(), 150)
+      CGA2.circle(assigns.points |> Map.get("p0") |> CGA2.cleanup(1.0e-8), 150)
       |> CGA2.normalize()
 
     cc =
@@ -364,8 +193,8 @@ defmodule GeomextricWeb.CGA2Live do
               assigns.samples
               |> Enum.flat_map(
                 &[
-                  {"", "#FF6347aa", CGA2.transform(ln1, &1) |> cleanup()},
-                  {"", "#FF69B4aa", CGA2.transform(cc, &1) |> cleanup()},
+                  {"", "#FF6347aa", CGA2.transform(ln1, &1) |> CGA2.cleanup(1.0e-8)},
+                  {"", "#FF69B4aa", CGA2.transform(cc, &1) |> CGA2.cleanup(1.0e-8)},
                   {"", "#aaa5", &1}
                 ]
               ),
@@ -796,7 +625,7 @@ defmodule GeomextricWeb.CGA2Live do
 
         <g id="elements">
           <%= for {label, color, s} <-@elements do %>
-            <%= classify(s) |> case do %>
+            <%= CGA2.classify(s) |> case do %>
               <% {:line, {a, b, c}} when abs(b) > abs(a) -> %>
                 <%= with x1 <- @box.x,
                   x2 <- @box.x + @box.width,
@@ -831,7 +660,7 @@ defmodule GeomextricWeb.CGA2Live do
                     stroke={color}
                   />
                 <% end %>
-              <% {:circle, {:circle, {{cx, cy}, r}}} -> %>
+              <% {:circle, {{cx, cy}, r}} -> %>
                 <circle
                   cx={cx}
                   cy={-cy}
@@ -931,7 +760,7 @@ defmodule GeomextricWeb.CGA2Live do
           <% end %>
         </g>
         <%= for {id, s} <-@points do %>
-          <%= classify(s) |> case do %>
+          <%= CGA2.classify(s) |> case do %>
             <% {:point, {cx, cy}} -> %>
               <circle
                 cx={cx}

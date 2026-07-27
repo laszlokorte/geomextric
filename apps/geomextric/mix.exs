@@ -39,7 +39,7 @@ defmodule Geomextric.MixProject do
       {:dns_cluster, "~> 0.2.0"},
       {:uuid, "~> 1.1"},
       {:phoenix_pubsub, "~> 2.1"},
-      {:galixir, "~> 0.20"}
+      {:galixir, "~> 0.21"}
     ]
   end
 
