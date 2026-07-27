@@ -36,9 +36,15 @@ defmodule GeomextricWeb.PlaygroundLive do
          geo: Bodies.gen_axis()
        }
      })
-     |> assign(:eye, {7, 5, 3})
+     |> assign(:camera, %{
+       yaw: 0.0,
+       pitch: 0.3,
+       radius: 10.0
+     })
      |> assign(:focus, {0, 0, 0})}
   end
+
+  defp clamp(x, min, max), do: max(min, min(max, x))
 
   def look_at(
         position \\ PGA3.point(0, 10, 0),
@@ -96,10 +102,20 @@ defmodule GeomextricWeb.PlaygroundLive do
      |> update(:objects, &put_in(&1, [obj_id, :scale], new_scale))}
   end
 
+  def handle_event("close", %{}, socket) do
+    {:noreply,
+     socket
+     |> push_navigate(to: ~p"/")}
+  end
+
   def handle_event("reset", %{}, socket) do
     {:noreply,
      socket
-     |> assign(:eye, {7, 5, 3})
+     |> assign(:camera, %{
+       yaw: 0.0,
+       pitch: 0.3,
+       radius: 10.0
+     })
      |> assign(:focus, {0, 0, 0})}
   end
 
@@ -109,35 +125,25 @@ defmodule GeomextricWeb.PlaygroundLive do
     {:noreply,
      socket
      |> update(
-       :eye,
-       fn {x, y, z} ->
-         len = :math.sqrt(x * x + y * y)
-         new_x = x - y * v
-         new_y = y + x * v
-
-         new_len = :math.sqrt(new_x * new_x + new_y * new_y)
-         {(x - y * v) * len / new_len, (y + x * v) * len / new_len, z}
+       :camera,
+       fn c = %{yaw: y} ->
+         %{c | yaw: y + v}
        end
      )}
   end
 
   def handle_event("rot", %{"v" => v, "h" => h}, socket) do
-    v = parse_number(v) * 5
-    h = parse_number(h)
+    dp = parse_number(v) * 0.5
+    dy = parse_number(h) * 0.5
 
     {:noreply,
-     socket
-     |> update(
-       :eye,
-       fn {x, y, z} ->
-         len = :math.sqrt(x * x + y * y)
-         new_x = x - y * h
-         new_y = y + x * h
-
-         new_len = :math.sqrt(new_x * new_x + new_y * new_y)
-         {(x - y * h) * len / new_len, (y + x * h) * len / new_len, z + v}
-       end
-     )}
+     update(socket, :camera, fn %{pitch: pitch, yaw: yaw} = c ->
+       %{
+         c
+         | pitch: clamp(pitch + dp, -:math.pi() / 2.01, :math.pi() / 2.01),
+           yaw: yaw + dy
+       }
+     end)}
   end
 
   def handle_event("zoom", %{"value" => v}, socket) do
@@ -146,40 +152,30 @@ defmodule GeomextricWeb.PlaygroundLive do
     {:noreply,
      socket
      |> update(
-       :eye,
-       fn {x, y, z} ->
-         factor = :math.exp(v)
-
-         new_dist = :math.sqrt(x * x + y * y + z * z) * factor
-
-         if new_dist > 1 and new_dist < 100 do
-           {x * factor, y * factor, z * factor}
-         else
-           {x, y, z}
-         end
-       end
+       :camera,
+       fn c = %{radius: r} -> %{c | radius: clamp(r + v, 1, 100)} end
      )}
   end
 
   def handle_event("movex", %{"value" => v}, socket) do
-    v = parse_number(v)
+    v = parse_number(v) * 0.1
 
     {:noreply,
      socket
      |> update(
-       :eye,
-       fn {x, y, z} -> {x + v, y, z} end
+       :camera,
+       fn c = %{pitch: p} -> %{c | pitch: clamp(p + v, -:math.pi() / 2.01, :math.pi() / 2.01)} end
      )}
   end
 
   def handle_event("movey", %{"value" => v}, socket) do
-    v = parse_number(v)
+    v = parse_number(v) * 0.1
 
     {:noreply,
      socket
      |> update(
-       :eye,
-       fn {x, y, z} -> {x, y + v, z} end
+       :camera,
+       fn c = %{yaw: y} -> %{c | yaw: y - v} end
      )}
   end
 
@@ -189,8 +185,8 @@ defmodule GeomextricWeb.PlaygroundLive do
     {:noreply,
      socket
      |> update(
-       :eye,
-       fn {x, y, z} -> {x, y, z + v} end
+       :camera,
+       fn c = %{radius: r} -> %{c | radius: clamp(r - v, 1, 100)} end
      )}
   end
 
@@ -227,8 +223,16 @@ defmodule GeomextricWeb.PlaygroundLive do
      )}
   end
 
+  def eye_from_camera(%{yaw: yaw, pitch: pitch, radius: r}) do
+    {
+      r * :math.cos(pitch) * :math.cos(yaw),
+      r * :math.cos(pitch) * :math.sin(yaw),
+      r * :math.sin(pitch)
+    }
+  end
+
   def render(assigns) do
-    {eye_x, eye_y, eye_z} = assigns.eye
+    {eye_x, eye_y, eye_z} = eye_from_camera(assigns.camera)
     {fx, fy, fz} = assigns.focus
     eye = PGA3.point(eye_x, eye_y, eye_z)
     target = PGA3.point(fx, fy, fz)
@@ -312,6 +316,15 @@ defmodule GeomextricWeb.PlaygroundLive do
     <div class="screen">
       <div class="bar">
         <.menu items={[
+          %{
+            label: "File",
+            items: [
+              %{
+                label: "close",
+                send: "close"
+              }
+            ]
+          },
           %{
             label: "Move",
             items: [
@@ -624,7 +637,7 @@ defmodule GeomextricWeb.PlaygroundLive do
             zoom((evt.deltaY / window.screen.height) * 10);
           });
           this.el.addEventListener("pointerdown", (evt) => {
-            if (evt.isPrimary && (evt.pointerType !== "mouse" || evt.button == 1)) {
+            if (evt.isPrimary && (evt.pointerType !== "mouse" || evt.button == 0)) {
               evt.preventDefault();
               evt.currentTarget.setPointerCapture(evt.pointerId);
             }

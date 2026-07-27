@@ -22,7 +22,7 @@ defmodule GeomextricWeb.CanvasLive do
      |> assign(:bounds, true)
      |> assign(:extra_pen, "#0077ff")
      |> assign(:selection, [])
-     |> assign(:tips, to_form(%{"target" => false, "source" => false}))
+     |> assign(:tips, to_form(%{"target" => true, "source" => false}))
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))
      |> assign(
        :history,
@@ -32,6 +32,22 @@ defmodule GeomextricWeb.CanvasLive do
        :layers,
        Geomextric.Canvas.get_all(Geomextric.Canvas)
      )}
+  end
+
+  def handle_event("set_grid", %{"value" => "true"}, socket) do
+    {:noreply, socket |> assign(:grid, true)}
+  end
+
+  def handle_event("set_grid", %{"value" => "false"}, socket) do
+    {:noreply, socket |> assign(:grid, false)}
+  end
+
+  def handle_event("set_axis", %{"value" => "true"}, socket) do
+    {:noreply, socket |> assign(:axis, true)}
+  end
+
+  def handle_event("set_axis", %{"value" => "false"}, socket) do
+    {:noreply, socket |> assign(:axis, false)}
   end
 
   def handle_event("move", %{"id" => <<id::binary>>, "x" => x, "y" => y}, socket) do
@@ -127,6 +143,12 @@ defmodule GeomextricWeb.CanvasLive do
     )
 
     {:noreply, socket}
+  end
+
+  def handle_event("close", %{}, socket) do
+    {:noreply,
+     socket
+     |> push_navigate(to: ~p"/")}
   end
 
   def handle_event("clear", %{}, socket) do
@@ -625,6 +647,10 @@ defmodule GeomextricWeb.CanvasLive do
         %{
           label: "File",
           items: [
+            %{
+              label: "close",
+              send: "close"
+            },
             %{
               label: "Save"
             },

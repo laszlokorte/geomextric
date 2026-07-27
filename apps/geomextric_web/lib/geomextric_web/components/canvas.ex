@@ -205,8 +205,8 @@ defmodule GeomextricWeb.Canvas do
         e.setAttribute(
           "viewBox",
           `${cam.x - (cam.screen.width / 2) * Math.exp(-cam.zoom)} ${cam.y - (cam.screen.height / 2) * Math.exp(-cam.zoom)}
-                                                                                                            ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
-                                                                                                            `,
+                                                                                                              ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
+                                                                                                              `,
         );
 
         w.setAttribute("data-zoomed", cam.zoom < 0 ? "out" : "in");
@@ -499,7 +499,7 @@ defmodule GeomextricWeb.Canvas do
             piv = null;
             let movementX = evt.clientX - lastClientPos.x;
             let movementY = evt.clientY - lastClientPos.y;
-            if (evt.isPrimary && (evt.pointerType !== "mouse" || evt.button == 1)) {
+            if (evt.isPrimary && (evt.pointerType !== "mouse" || evt.button == 0)) {
               lastClientPos.x = evt.clientX;
               lastClientPos.y = evt.clientY;
             }
@@ -589,7 +589,7 @@ defmodule GeomextricWeb.Canvas do
           };
           const onPointerDown = (evt) => {
             const { x, y } = evtToSvg(evt);
-            if (evt.isPrimary && (evt.pointerType !== "mouse" || evt.button == 1)) {
+            if (evt.isPrimary && (evt.pointerType !== "mouse" || evt.button == 0)) {
               lastClientPos.x = evt.clientX;
               lastClientPos.y = evt.clientY;
             }

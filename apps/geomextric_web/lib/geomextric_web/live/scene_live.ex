@@ -20,16 +20,20 @@ defmodule GeomextricWeb.SceneLive do
      )
      |> assign(:objects, %{
        "grid" => %{
+         visible: true,
          scale: 1,
          rotation: 0,
          geo: Bodies.gen_grid(true, false)
        },
        "axis" => %{
+         visible: true,
          scale: 1,
          rotation: 0,
          geo: Bodies.gen_axis()
        }
      })
+     |> assign(:grid, true)
+     |> assign(:axis, true)
      |> assign(:camera, %{
        yaw: 0.0,
        pitch: 0.3,
@@ -102,6 +106,28 @@ defmodule GeomextricWeb.SceneLive do
      socket
      |> update(:objects, &put_in(&1, [obj_id, :rotation], new_rot))
      |> update(:objects, &put_in(&1, [obj_id, :scale], new_scale))}
+  end
+
+  def handle_event("close", %{}, socket) do
+    {:noreply,
+     socket
+     |> push_navigate(to: ~p"/")}
+  end
+
+  def handle_event("set_grid", %{"value" => "true"}, socket) do
+    {:noreply, socket |> assign(:grid, true)}
+  end
+
+  def handle_event("set_grid", %{"value" => "false"}, socket) do
+    {:noreply, socket |> assign(:grid, false)}
+  end
+
+  def handle_event("set_axis", %{"value" => "true"}, socket) do
+    {:noreply, socket |> assign(:axis, true)}
+  end
+
+  def handle_event("set_axis", %{"value" => "false"}, socket) do
+    {:noreply, socket |> assign(:axis, false)}
   end
 
   def handle_event("reset", %{}, socket) do
@@ -315,6 +341,15 @@ defmodule GeomextricWeb.SceneLive do
       <div class="bar">
         <.menu items={[
           %{
+            label: "File",
+            items: [
+              %{
+                label: "close",
+                send: "close"
+              }
+            ]
+          },
+          %{
             label: "Move",
             items: [
               %{
@@ -449,6 +484,23 @@ defmodule GeomextricWeb.SceneLive do
             ]
           },
           %{
+            label: "View",
+            items: [
+              %{
+                label: if(@grid, do: "Hide Grid", else: "Show Grid"),
+                shortcut: [key: "g", alt: true],
+                send: "set_grid",
+                value: if(@grid, do: "false", else: "true")
+              },
+              %{
+                label: if(@axis, do: "Hide Axis", else: "Show Axis"),
+                shortcut: [key: "a", alt: true],
+                send: "set_axis",
+                value: if(@axis, do: "false", else: "true")
+              }
+            ]
+          },
+          %{
             label: "Help",
             items: [
               %{
@@ -487,7 +539,7 @@ defmodule GeomextricWeb.SceneLive do
               <button phx-click="movez" value="+0.9">+</button>
             </fieldset>
 
-            <%= for {objid, %{rotation: rot, scale: scl, editable: true}} <- @objects do %>
+            <%= for {objid, %{rotation: rot, scale: scl, editable: true, visible: true}} <- @objects, (objid != "axis" || @axis), (objid != "grid" || @grid)  do %>
               <form phx-change="change_obj">
                 <input type="hidden" name="objid" value={objid} />
                 <fieldset>
@@ -552,7 +604,7 @@ defmodule GeomextricWeb.SceneLive do
                   />
                   <% else _ -> %>
                 <% end %>
-              <% %{pos: {{x1, y1}, {x2, y2}}, attrs: %{color: col, thickness: t}} -> %>
+              <% %{pos: {{x1, y1}, {x2, y2}}, attrs: %{color: col, thickness: t, target_tip: target_tip, source_tip: source_tip}} -> %>
                 <%= with {x1, y1, z1} <- project(@camera, PGA3.point(x1 / 100, y1 / 100, 0)),
                  {x2, y2, z2}  <- project(@camera, PGA3.point(x2 / 100, y2 / 100, 0)) do %>
                   <line
@@ -562,6 +614,8 @@ defmodule GeomextricWeb.SceneLive do
                     y1={y1}
                     x2={x2}
                     y2={y2}
+                    marker-end={if(target_tip, do: "url(#arrow-head)")}
+                    marker-start={if(source_tip, do: "url(#arrow-head)")}
                     stroke={col}
                   />
                   <% else _ -> %>
@@ -569,7 +623,7 @@ defmodule GeomextricWeb.SceneLive do
             <% end %>
           <% end %>
         </g>
-        <%= for {objid, %{geo: geo, rotation: rotation, scale: scale}} <- @objects do %>
+        <%= for {objid, %{geo: geo, rotation: rotation, scale: scale, visible: true}} <- @objects, (objid != "axis" || @axis), (objid != "grid" || @grid)  do %>
           <.geometry camera={@camera} id={objid} geo={geo} rotation={rotation} scale={scale} />
         <% end %>
 
@@ -585,6 +639,18 @@ defmodule GeomextricWeb.SceneLive do
             orient="auto-start-reverse"
           >
             <path d="M 10 5 l -10 5 l 3 -5 l -3 -5 z" />
+          </marker>
+          <marker
+            id="arrow-head"
+            viewBox="0 0 10 10"
+            refX="4"
+            refY="5"
+            markerWidth="5"
+            markerHeight="5"
+            fill="context-stroke"
+            orient="auto-start-reverse"
+          >
+            <path d="M 6 5 l -6 5  l 0 -10 z" />
           </marker>
         </defs>
       </svg>
@@ -616,7 +682,7 @@ defmodule GeomextricWeb.SceneLive do
             zoom((evt.deltaY / window.screen.height) * 10);
           });
           this.el.addEventListener("pointerdown", (evt) => {
-            if (evt.isPrimary && (evt.pointerType !== "mouse" || evt.button == 1)) {
+            if (evt.isPrimary && (evt.pointerType !== "mouse" || evt.button == 0)) {
               evt.preventDefault();
               evt.currentTarget.setPointerCapture(evt.pointerId);
             }

@@ -228,6 +228,12 @@ defmodule GeomextricWeb.CGA2Live do
     end
   end
 
+  def handle_event("close", %{}, socket) do
+    {:noreply,
+     socket
+     |> push_navigate(to: ~p"/")}
+  end
+
   def handle_event("set_grid", %{"value" => "true"}, socket) do
     {:noreply, socket |> assign(:grid, true)}
   end
@@ -266,6 +272,13 @@ defmodule GeomextricWeb.CGA2Live do
 
   def handle_event("set_bounds", %{"value" => "false"}, socket) do
     {:noreply, socket |> assign(:bounds, false)}
+  end
+
+  def handle_event("change_view", %{"intersections" => int, "transforms" => trans}, socket) do
+    {:noreply,
+     socket
+     |> assign(:intersections, int == "on")
+     |> assign(:transforms, trans == "on")}
   end
 
   def handle_event("select", _, socket) do
@@ -436,6 +449,9 @@ defmodule GeomextricWeb.CGA2Live do
         flex-direction: row;
         align-items: center;
       }
+      form {
+        display: contents;
+      }
       button {
         background: #000;
         color: #fff;
@@ -565,13 +581,50 @@ defmodule GeomextricWeb.CGA2Live do
         opacity: 1;
       }
     </style>
-    <nav class="toolbar"></nav>
+    <nav class="toolbar">
+      <form phx-change="change_view">
+        <div>
+          <input
+            name="intersections"
+            type="hidden"
+            value="off"
+          />
+          <label>
+            <input
+              phx-throttle="16"
+              name="intersections"
+              type="checkbox"
+              checked={@intersections}
+            /> Intersections
+          </label>
+        </div>
+        <div>
+          <input
+            name="transforms"
+            type="hidden"
+            value="off"
+          />
+          <label>
+            <input
+              phx-throttle="16"
+              name="transforms"
+              type="checkbox"
+              checked={@transforms}
+            /> Transforms
+          </label>
+        </div>
+      </form>
+    </nav>
 
     <div class="menu-bar">
       <.menu items={[
         %{
           label: "File",
           items: [
+            %{
+              label: "Close",
+              send: "close"
+            },
             %{
               label: "Save"
             },

@@ -29,6 +29,8 @@ defmodule GeomextricWeb.HomeLive do
         display: grid;
         grid-template-columns: subgrid;
         grid-column: 1 / -1;
+        grid-row: 2 / span 2;
+        gap: 1em;
         align-items: stretch;
         justify-items: stretch;
         text-align: center;
@@ -61,6 +63,16 @@ defmodule GeomextricWeb.HomeLive do
         </.link>
         <.link navigate={~p"/scene"} class="right enter-link">
           3D
+        </.link>
+
+        <.link navigate={~p"/playground"} class="right enter-link" style="background-color: #be398d;">
+          Play
+        </.link>
+        <.link navigate={~p"/tut"} class="right enter-link" style="background-color: #d49137;">
+          Split
+        </.link>
+        <.link navigate={~p"/cga"} class="right enter-link" style="background-color: #4fb06d;">
+          CGA
         </.link>
       </div>
     </div>
