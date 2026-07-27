@@ -123,7 +123,7 @@ defmodule GeomextricWeb.CGA2Live do
      socket
      |> update(:points, fn ps ->
        np =
-         CGA2.point(parse_number(x), parse_number(y)) |> CGA2.cleanup(1.0e-8)
+         CGA2.point(parse_number(x), parse_number(y)) |> CGA2.cleanup(1.0e-6)
 
        Map.replace(ps, p, np)
      end)}
@@ -131,7 +131,7 @@ defmodule GeomextricWeb.CGA2Live do
 
   def render(assigns) do
     c1 =
-      CGA2.circle(assigns.points |> Map.get("p0") |> CGA2.cleanup(1.0e-8), 150)
+      CGA2.circle(assigns.points |> Map.get("p0") |> CGA2.cleanup(1.0e-6), 150)
       |> CGA2.normalize()
 
     cc =
@@ -193,8 +193,8 @@ defmodule GeomextricWeb.CGA2Live do
               assigns.samples
               |> Enum.flat_map(
                 &[
-                  {"", "#FF6347aa", CGA2.transform(ln1, &1) |> CGA2.cleanup(1.0e-8)},
-                  {"", "#FF69B4aa", CGA2.transform(cc, &1) |> CGA2.cleanup(1.0e-8)},
+                  {"", "#FF6347aa", CGA2.transform(ln1, &1) |> CGA2.cleanup(1.0e-6)},
+                  {"", "#FF69B4aa", CGA2.transform(cc, &1) |> CGA2.cleanup(1.0e-6)},
                   {"", "#aaa5", &1}
                 ]
               ),
