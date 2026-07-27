@@ -175,13 +175,28 @@ defmodule GeomextricWeb.Canvas do
           width: 0,
           height: 0,
         },
-        viewBox: {
-          x: 0,
-          y: 0,
-          width: 0,
-          height: 0,
-        },
       };
+      function maxLineExtensionFactor(cam, r) {
+        const s = Math.exp(-cam.zoom);
+
+        const vx0 = cam.x - (cam.screen.width * s) / 2;
+        const vx1 = cam.x + (cam.screen.width * s) / 2;
+        const vy0 = cam.y - (cam.screen.height * s) / 2;
+        const vy1 = cam.y + (cam.screen.height * s) / 2;
+
+        // distance between two axis-aligned rectangles
+        const dx = Math.max(vx0 - (r.x + r.width), r.x - vx1, 0);
+
+        const dy = Math.max(vy0 - (r.y + r.height), r.y - vy1, 0);
+
+        const gap = Math.hypot(dx, dy);
+
+        // shortest possible line crossing the rectangle
+        // (touching two sides)
+        const minLineLength = Math.min(r.width, r.height);
+
+        return (gap + minLineLength) / minLineLength;
+      }
       let resumeScroll = null;
       function updateViewBox(e, w, r, cam, scroller) {
         if (r) {
@@ -190,12 +205,24 @@ defmodule GeomextricWeb.Canvas do
         e.setAttribute(
           "viewBox",
           `${cam.x - (cam.screen.width / 2) * Math.exp(-cam.zoom)} ${cam.y - (cam.screen.height / 2) * Math.exp(-cam.zoom)}
-                                                                                                      ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
-                                                                                                      `,
+                                                                                                            ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
+                                                                                                            `,
         );
 
         w.setAttribute("data-zoomed", cam.zoom < 0 ? "out" : "in");
         w.style.setProperty("--cam-scale", Math.exp(-cam.zoom));
+
+        const rayZoom = maxLineExtensionFactor(
+          cam,
+          {
+            width: w.width.baseVal.value,
+            height: w.height.baseVal.value,
+            x: w.x.baseVal.value,
+            y: w.y.baseVal.value,
+          },
+          (padding = 1.1),
+        );
+        w.style.setProperty("--cam-ray-scale", 2 * Math.exp(-cam.zoom));
         w.style.setProperty(
           "--cam-scale-clamped",
           Math.exp(Math.max(-2, Math.min(2, -cam.zoom))),
@@ -472,7 +499,7 @@ defmodule GeomextricWeb.Canvas do
             piv = null;
             let movementX = evt.clientX - lastClientPos.x;
             let movementY = evt.clientY - lastClientPos.y;
-            if (evt.isPrimary) {
+            if (evt.isPrimary && (evt.pointerType !== "mouse" || evt.button == 1)) {
               lastClientPos.x = evt.clientX;
               lastClientPos.y = evt.clientY;
             }
@@ -562,7 +589,7 @@ defmodule GeomextricWeb.Canvas do
           };
           const onPointerDown = (evt) => {
             const { x, y } = evtToSvg(evt);
-            if (evt.isPrimary) {
+            if (evt.isPrimary && (evt.pointerType !== "mouse" || evt.button == 1)) {
               lastClientPos.x = evt.clientX;
               lastClientPos.y = evt.clientY;
             }

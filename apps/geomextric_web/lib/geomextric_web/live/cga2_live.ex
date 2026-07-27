@@ -268,6 +268,10 @@ defmodule GeomextricWeb.CGA2Live do
     {:noreply, socket |> assign(:bounds, false)}
   end
 
+  def handle_event("select", _, socket) do
+    {:noreply, socket}
+  end
+
   def handle_event(
         "move_point",
         %{"id" => p, "pos" => %{"x" => x, "y" => y}},
@@ -279,11 +283,7 @@ defmodule GeomextricWeb.CGA2Live do
        np =
          CGA2.point(parse_number(x), parse_number(y)) |> cleanup()
 
-       if point?(np) do
-         Map.replace(ps, p, np)
-       else
-         ps
-       end
+       Map.replace(ps, p, np)
      end)}
   end
 
@@ -403,6 +403,12 @@ defmodule GeomextricWeb.CGA2Live do
       }
       [data-non-scaling-full] {
         scale: var(--cam-scale);
+        transform-box: fill-box;
+        transform-origin: 50% 50%;
+      }
+
+      [data-inf-line] {
+        scale: var(--cam-ray-scale);
         transform-box: fill-box;
         transform-origin: 50% 50%;
       }
@@ -749,7 +755,8 @@ defmodule GeomextricWeb.CGA2Live do
                     y1={y1}
                     x2={-x2}
                     y2={y2}
-                    data-non-scaling-full
+                    data-inf-line
+                    vector-effect="non-scaling-stroke"
                     stroke-width="2"
                     stroke={color}
                   />
@@ -766,7 +773,8 @@ defmodule GeomextricWeb.CGA2Live do
                     x2={-x2}
                     y2={y2}
                     stroke-width="2"
-                    data-non-scaling-full
+                    data-inf-line
+                    vector-effect="non-scaling-stroke"
                     stroke={color}
                   />
                 <% end %>
@@ -910,7 +918,7 @@ defmodule GeomextricWeb.CGA2Live do
           }
           const move = throttle(
             (pos) => this.pushEvent("move_point", { id: this.el.id, pos }),
-            30,
+            10,
           );
           const svg = this.el.ownerSVGElement;
           const point = svg.createSVGPoint();
@@ -930,7 +938,7 @@ defmodule GeomextricWeb.CGA2Live do
           const offset = { x: 0, y: 0 };
           this.listeners = {
             pointerdown: (evt) => {
-              if (evt.isPrimary) {
+              if (evt.isPrimary && (evt.pointerType !== "mouse" || evt.button == 0)) {
                 evt.preventDefault();
                 evt.currentTarget.setPointerCapture(evt.pointerId);
                 const pos = evtToSvg(evt);

@@ -859,8 +859,7 @@ defmodule GeomextricWeb.TutLive do
             zoom((evt.deltaY / window.screen.height) * 2);
           });
           this.el.addEventListener("pointerdown", (evt) => {
-            console.log(evt.isPrimary);
-            if (evt.isPrimary) {
+            if (evt.isPrimary && (evt.pointerType !== "mouse" || evt.button == 1)) {
               evt.preventDefault();
               evt.currentTarget.setPointerCapture(evt.pointerId);
             }

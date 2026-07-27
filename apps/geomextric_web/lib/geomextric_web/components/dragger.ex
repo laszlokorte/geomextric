@@ -41,7 +41,6 @@ defmodule GeomextricWeb.Dragger do
       export default {
         mounted() {
           this.el.addEventListener("pointerdown", (evt) => {
-            return;
             evt.currentTarget.setPointerCapture(evt.pointerId);
             evt.preventDefault();
             evt.stopPropagation();

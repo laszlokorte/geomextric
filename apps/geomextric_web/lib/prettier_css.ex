@@ -9,8 +9,6 @@ if Mix.env() == :dev do
     @impl true
     def render_tag({"style", attrs, content}, _opts)
         when not is_map_key(attrs, "runtime") do
-      dbg("xxx")
-
       tmp_file =
         Path.join(
           System.tmp_dir!(),
