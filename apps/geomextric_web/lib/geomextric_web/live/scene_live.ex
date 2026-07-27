@@ -35,9 +35,9 @@ defmodule GeomextricWeb.SceneLive do
      |> assign(:grid, true)
      |> assign(:axis, true)
      |> assign(:camera, %{
-       yaw: 0.0,
-       pitch: 0.3,
-       radius: 10.0
+       yaw: :math.pi() / 2 - 0.2,
+       pitch: 1.5 / 2,
+       radius: 8.8
      })
      |> assign(:focus, {0, 0, 0})}
   end
