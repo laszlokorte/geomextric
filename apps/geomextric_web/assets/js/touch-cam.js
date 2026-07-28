@@ -1,12 +1,14 @@
 export function bindEvents({ zoomBy, rotateBy, panBy, eventToWorld, commit }) {
   return (node) => {
+    let lastWheelPos = null;
     function onWheel(evt) {
       if (evt.deltaMode === WheelEvent.DOM_DELTA_PIXEL) {
         if (evt.ctrlKey || mouseGrab || evt.defaultPrevented) {
           evt.preventDefault();
           evt.stopPropagation();
 
-          const worldPos = eventToWorld(evt);
+          const worldPos = eventToWorld(evt, lastWheelPos);
+          lastWheelPos = worldPos;
 
           if (evt.shiftKey) {
             rotateBy({
@@ -31,13 +33,15 @@ export function bindEvents({ zoomBy, rotateBy, panBy, eventToWorld, commit }) {
           !mouseGrab &&
           !evt.defaultPrevented
         ) {
+          lastWheelPos = null;
           return;
         }
 
         evt.preventDefault();
         evt.stopPropagation();
 
-        const worldPos = eventToWorld(evt);
+        const worldPos = eventToWorld(evt, lastWheelPos);
+        lastWheelPos = worldPos;
 
         if (evt.altKey) {
           rotateBy({
@@ -63,6 +67,7 @@ export function bindEvents({ zoomBy, rotateBy, panBy, eventToWorld, commit }) {
     let gestureBasePivotWorld = null;
     let prevTouchCount;
     function onGestureChange(evt) {
+      lastWheelPos = null;
       const dw =
         (Math.atan2(
           Math.sin(((evt.rotation - gestureBaseRot) / 180) * Math.PI),
@@ -148,6 +153,7 @@ export function bindEvents({ zoomBy, rotateBy, panBy, eventToWorld, commit }) {
     }
 
     function onPointerMove(evt) {
+      lastWheelPos = null;
       if (mouseGrab && mouseGrab.pointerId === evt.pointerId) {
         const dx = mouseGrab.x - evt.clientX;
         const dy = mouseGrab.y - evt.clientY;

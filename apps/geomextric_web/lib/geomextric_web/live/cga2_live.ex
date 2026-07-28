@@ -249,12 +249,6 @@ defmodule GeomextricWeb.CGA2Live do
         transform-origin: 50% 50%;
       }
 
-      [data-inf-line] {
-        scale: var(--cam-ray-scale);
-        transform-box: fill-box;
-        transform-origin: 50% 50%;
-      }
-
       .auto-color {
         fill: var(--auto-fill, attr("fill"));
         stroke: var(--auto-stroke, attr("stroke"));
@@ -374,12 +368,9 @@ defmodule GeomextricWeb.CGA2Live do
         display: block;
       }
 
-      .menu-bar {
-        position: absolute;
-        top: 0em;
-        left: 0em;
-        right: 0em;
-        z-index: 1000;
+      :scope .menu-bar {
+        position: static;
+        grid-area: bar;
       }
       input[type="checkbox"] {
         display: none;
@@ -409,379 +400,377 @@ defmodule GeomextricWeb.CGA2Live do
       label:has(input[type="checkbox"]:checked) svg {
         opacity: 1;
       }
+      :scope .page {
+        display: grid;
+        grid-template-rows: [bar-start] auto [bar-end main-start] 1fr [main-end];
+        grid-template-columns: [bar-start main-start] 1fr [bar-end main-end];
+        position: absolute;
+        inset: 0;
+      }
+
+      :scope .main {
+        position: relative;
+        grid-area: main;
+      }
     </style>
-    <nav class="toolbar">
-      <form phx-change="change_view">
-        <div>
-          <input
-            name="intersections"
-            type="hidden"
-            value="off"
-          />
-          <label>
+    <div class="page">
+      <nav class="toolbar">
+        <form phx-change="change_view">
+          <div>
             <input
-              phx-throttle="16"
               name="intersections"
-              type="checkbox"
-              checked={@intersections}
-            /> Intersections
-          </label>
-        </div>
-        <div>
-          <input
-            name="transforms"
-            type="hidden"
-            value="off"
-          />
-          <label>
+              type="hidden"
+              value="off"
+            />
+            <label>
+              <input
+                phx-throttle="16"
+                name="intersections"
+                type="checkbox"
+                checked={@intersections}
+              /> Intersections
+            </label>
+          </div>
+          <div>
             <input
-              phx-throttle="16"
               name="transforms"
-              type="checkbox"
-              checked={@transforms}
-            /> Transforms
-          </label>
-        </div>
-      </form>
-    </nav>
+              type="hidden"
+              value="off"
+            />
+            <label>
+              <input
+                phx-throttle="16"
+                name="transforms"
+                type="checkbox"
+                checked={@transforms}
+              /> Transforms
+            </label>
+          </div>
+        </form>
+      </nav>
 
-    <div class="menu-bar">
-      <.menu items={[
-        %{
-          label: "File",
-          items: [
-            %{
-              label: "Close",
-              send: "close"
-            },
-            %{
-              label: "Save"
-            },
-            %{label: "Clear", send: "clear", shortcut: [key: "x", ctrl: true]},
-            %{
-              label: "Recent",
-              items:
-                for(
-                  n <- 1..5,
-                  do: %{
-                    label: "File #{n}",
-                    send: "recent",
-                    value: n,
-                    shortcut: [key: "#{n}", ctrl: true]
-                  }
-                )
-            }
-          ]
-        },
-        %{
-          label: "Selection",
-          items: [
-            %{
-              label: "Select All",
-              shortcut: [key: "a", ctrl: true],
-              send: "select",
-              value: :all
-            },
-            %{label: "Unselect", shortcut: [key: "Escape"], send: "select", value: ""}
-          ]
-        },
-        %{
-          label: "View",
-          items: [
-            %{
-              label: if(@grid, do: "Hide Grid", else: "Show Grid"),
-              shortcut: [key: "g", alt: true],
-              send: "set_grid",
-              value: if(@grid, do: "false", else: "true")
-            },
-            %{
-              label: if(@axis, do: "Hide Axis", else: "Show Axis"),
-              shortcut: [key: "a", alt: true],
-              send: "set_axis",
-              value: if(@axis, do: "false", else: "true")
-            },
-            %{
-              label: if(@transforms, do: "Hide Transforms", else: "Show Transforms"),
-              shortcut: [key: "t", alt: true],
-              send: "set_transforms",
-              value: if(@transforms, do: "false", else: "true")
-            },
-            %{
-              label: if(@intersections, do: "Hide Intersections", else: "Show Intersections"),
-              shortcut: [key: "i", alt: true],
-              send: "set_intersections",
-              value: if(@intersections, do: "false", else: "true")
-            },
-            %{
-              label: if(@bounds, do: "Hide Bounds", else: "Show Bounds"),
-              shortcut: [key: "b", alt: true],
-              send: "set_bounds",
-              value: if(@bounds, do: "false", else: "true")
-            }
-          ]
-        },
-        %{
-          label: "Help",
-          items: [
-            %{
-              label: "www.laszlokorte.de",
-              shortcut: [key: "h", ctrl: true],
-              link: "https://www.laszlokorte.de"
-            }
-          ]
-        }
-      ]}>
-        <:head>
-          CGA2
-        </:head>
-        <div class="segment">
-          <div class="connection-status connected">Connected 🟢</div>
-          <div class="connection-status disconnected">Reconnecting... 🔴</div>
-        </div>
-      </.menu>
-    </div>
-    <div style={"--auto-stroke: #{@pen}; --auto-fill: #{@pen}"}>
-      <.canvas tools={false} grid={@grid} bounds={@bounds} box={@box}>
-        <g :if={@axis} shape-rendering="geometricPrecision">
-          <line
-            x1={@box.x + @box.width * 0.01}
-            y1="0"
-            x2={@box.x + @box.width * 0.98}
-            y2="0"
-            stroke-width="6"
-            shape-rendering="geometricPrecision"
-            vector-effect="non-scaling-stroke"
-            stroke="#fff"
-          />
-          <line
-            y1={@box.y + @box.height * 0.01}
-            x1="0"
-            y2={@box.y + @box.height * 0.98}
-            x2="0"
-            stroke-width="6"
-            shape-rendering="geometricPrecision"
-            vector-effect="non-scaling-stroke"
-            stroke="#fff"
-          />
-          <line
-            x1={@box.x + @box.width * 0.01}
-            y1="0"
-            x2={@box.x + @box.width * 0.98}
-            y2="0"
-            stroke-width="2"
-            shape-rendering="geometricPrecision"
-            vector-effect="non-scaling-stroke"
-            stroke="#333"
-          />
-          <line
-            y1={@box.y + @box.height * 0.01}
-            x1="0"
-            y2={@box.y + @box.height * 0.98}
-            x2="0"
-            stroke-width="2"
-            shape-rendering="geometricPrecision"
-            vector-effect="non-scaling-stroke"
-            stroke="#333"
-          />
+      <div class="menu-bar">
+        <.menu items={[
+          %{
+            label: "File",
+            items: [
+              %{
+                label: "Close",
+                send: "close"
+              },
+              %{
+                label: "Save"
+              },
+              %{label: "Clear", send: "clear", shortcut: [key: "x", ctrl: true]},
+              %{
+                label: "Recent",
+                items:
+                  for(
+                    n <- 1..5,
+                    do: %{
+                      label: "File #{n}",
+                      send: "recent",
+                      value: n,
+                      shortcut: [key: "#{n}", ctrl: true]
+                    }
+                  )
+              }
+            ]
+          },
+          %{
+            label: "Selection",
+            items: [
+              %{
+                label: "Select All",
+                shortcut: [key: "a", ctrl: true],
+                send: "select",
+                value: :all
+              },
+              %{label: "Unselect", shortcut: [key: "Escape"], send: "select", value: ""}
+            ]
+          },
+          %{
+            label: "View",
+            items: [
+              %{
+                label: if(@grid, do: "Hide Grid", else: "Show Grid"),
+                shortcut: [key: "g", alt: true],
+                send: "set_grid",
+                value: if(@grid, do: "false", else: "true")
+              },
+              %{
+                label: if(@axis, do: "Hide Axis", else: "Show Axis"),
+                shortcut: [key: "a", alt: true],
+                send: "set_axis",
+                value: if(@axis, do: "false", else: "true")
+              },
+              %{
+                label: if(@transforms, do: "Hide Transforms", else: "Show Transforms"),
+                shortcut: [key: "t", alt: true],
+                send: "set_transforms",
+                value: if(@transforms, do: "false", else: "true")
+              },
+              %{
+                label: if(@intersections, do: "Hide Intersections", else: "Show Intersections"),
+                shortcut: [key: "i", alt: true],
+                send: "set_intersections",
+                value: if(@intersections, do: "false", else: "true")
+              },
+              %{
+                label: if(@bounds, do: "Hide Bounds", else: "Show Bounds"),
+                shortcut: [key: "b", alt: true],
+                send: "set_bounds",
+                value: if(@bounds, do: "false", else: "true")
+              }
+            ]
+          },
+          %{
+            label: "Help",
+            items: [
+              %{
+                label: "www.laszlokorte.de",
+                shortcut: [key: "h", ctrl: true],
+                link: "https://www.laszlokorte.de"
+              }
+            ]
+          }
+        ]}>
+          <:head>
+            CGA2
+          </:head>
+          <div class="segment">
+            <div class="connection-status connected">Connected 🟢</div>
+            <div class="connection-status disconnected">Reconnecting... 🔴</div>
+          </div>
+        </.menu>
+      </div>
+      <div class="main" style={"--auto-stroke: #{@pen}; --auto-fill: #{@pen}"}>
+        <.canvas tools={false} grid={@grid} bounds={@bounds} box={@box}>
+          <g :if={@axis} shape-rendering="geometricPrecision">
+            <line
+              data-inf-line={not @bounds}
+              x1={@box.x + @box.width * 0.01}
+              y1="0"
+              x2={@box.x + @box.width * 0.98}
+              y2="0"
+              stroke-width="6"
+              shape-rendering="geometricPrecision"
+              vector-effect="non-scaling-stroke"
+              stroke="#fff"
+            />
+            <line
+              data-inf-line={not @bounds}
+              y1={@box.y + @box.height * 0.01}
+              x1="0"
+              y2={@box.y + @box.height * 0.98}
+              x2="0"
+              stroke-width="6"
+              shape-rendering="geometricPrecision"
+              vector-effect="non-scaling-stroke"
+              stroke="#fff"
+            />
+            <line
+              data-inf-line={not @bounds}
+              x1={@box.x + @box.width * 0.01}
+              y1="0"
+              x2={@box.x + @box.width * 0.99}
+              y2="0"
+              stroke-width="2"
+              shape-rendering="geometricPrecision"
+              vector-effect="non-scaling-stroke"
+              stroke="#333"
+              marker-end="url(#axis-head)"
+            />
+            <line
+              data-inf-line={not @bounds}
+              y2={@box.y + @box.height * 0.01}
+              x1="0"
+              y1={@box.y + @box.height * 0.99}
+              x2="0"
+              stroke-width="2"
+              shape-rendering="geometricPrecision"
+              vector-effect="non-scaling-stroke"
+              stroke="#333"
+              marker-end="url(#axis-head)"
+            />
 
-          <path
-            d={"M  #{@box.x + @box.width * 0.98} 0 l -16 -10 l 5 10 l -5 10 z"}
-            data-non-scaling
-            stroke="white"
-            stroke-width="4"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            style=" transform-origin: 100% 50%; "
-            fill="white"
-          />
+            <circle class="origin" cx={0} cy={0} r={2} fill="#666" data-non-scaling />
+          </g>
 
-          <path
-            d={"M 0 #{@box.y + @box.height * 0.01} l -10 16 l 10 -5 l 10 5 z"}
-            data-non-scaling
-            stroke="white"
-            stroke-width="4"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            style=" transform-origin: 50% 0%; "
-            fill="white"
-          />
-
-          <path
-            d={"M  #{@box.x + @box.width * 0.98} 0 l -16 -10 l 5 10 l -5 10 z"}
-            data-non-scaling
-            style=" transform-origin: 100% 50%; "
-            fill="#777"
-          />
-
-          <path
-            d={"M 0 #{@box.y + @box.height * 0.01} l -10 16 l 10 -5 l 10 5 z"}
-            style=" transform-origin: 50% 0%; "
-            data-non-scaling
-            fill="#777"
-          />
-
-          <circle class="origin" cx={0} cy={0} r={2} fill="#666" data-non-scaling />
-        </g>
-
-        <g id="elements">
-          <%= for {label, color, s} <-@elements do %>
-            <%= CGA2.classify(s) |> case do %>
-              <% {:line, {a, b, c}} when abs(b) > abs(a) -> %>
-                <%= with x1 <- @box.x,
+          <g id="elements">
+            <%= for {label, color, s} <-@elements do %>
+              <%= CGA2.classify(s) |> case do %>
+                <% {:line, {a, b, c}} when abs(b) > abs(a) -> %>
+                  <%= with x1 <- @box.x,
                   x2 <- @box.x + @box.width,
                   y1 <- -(a * x1 + c) / b,
                   y2 <- -(a * x2 + c) / b
                 do %>
-                  <line
-                    x1={-x1}
-                    y1={y1}
-                    x2={-x2}
-                    y2={y2}
-                    data-inf-line
-                    vector-effect="non-scaling-stroke"
-                    stroke-width="2"
-                    stroke={color}
-                  />
-                <% end %>
-              <% {:line, {a, b, c}} -> %>
-                <%= with y1 <- -@box.y,
+                    <line
+                      x1={-x1}
+                      y1={y1}
+                      x2={-x2}
+                      y2={y2}
+                      data-inf-line
+                      vector-effect="non-scaling-stroke"
+                      stroke-width="2"
+                      stroke={color}
+                    />
+                  <% end %>
+                <% {:line, {a, b, c}} -> %>
+                  <%= with y1 <- -@box.y,
                   y2 <- -(@box.y + @box.height),
                   x1 <- -(b * y1 + c) / a,
                   x2 <- -(b * y2 + c) / a
                 do %>
-                  <line
-                    x1={-x1}
-                    y1={y1}
-                    x2={-x2}
-                    y2={y2}
-                    stroke-width="2"
-                    data-inf-line
-                    vector-effect="non-scaling-stroke"
+                    <line
+                      x1={-x1}
+                      y1={y1}
+                      x2={-x2}
+                      y2={y2}
+                      stroke-width="2"
+                      data-inf-line
+                      vector-effect="non-scaling-stroke"
+                      stroke={color}
+                    />
+                  <% end %>
+                <% {:circle, {{cx, cy}, r}} -> %>
+                  <circle
+                    cx={cx}
+                    cy={-cy}
+                    r={r}
+                    fill="none"
                     stroke={color}
+                    vector-effect="non-scaling-stroke"
+                    stroke-width="3"
                   />
-                <% end %>
-              <% {:circle, {{cx, cy}, r}} -> %>
-                <circle
-                  cx={cx}
-                  cy={-cy}
-                  r={r}
-                  fill="none"
-                  stroke={color}
-                  vector-effect="non-scaling-stroke"
-                  stroke-width="3"
-                />
-                <text pointer-events="none" x={cx + r * 0.9} y={-cy}>{label}</text>
-              <% {:point, {cx, cy}} -> %>
-                <circle
-                  cx={cx}
-                  cy={-cy}
-                  r="5"
-                  fill={color}
-                  data-non-scaling-full
-                  stroke="none"
-                  stroke-width="4"
-                />
-                <text pointer-events="none" x={cx + 10} y={-cy}>{label}</text>
-              <% {:point_pair, :real, {{cx1, cy1}, {cx2, cy2}}} -> %>
-                <circle
-                  cx={cx1}
-                  cy={-cy1}
-                  r="6"
-                  fill={elem(color, 0)}
-                  stroke={elem(color, 1)}
-                  data-non-scaling-full
-                  stroke-width="5"
-                />
-                <circle
-                  cx={cx2}
-                  cy={-cy2}
-                  r="6"
-                  fill={elem(color, 0)}
-                  stroke={elem(color, 1)}
-                  data-non-scaling-full
-                  stroke-width="5"
-                />
-
-                <text pointer-events="none" x={cx1 + 5} y={-cy1}>{label}/1</text>
-                <text pointer-events="none" x={cx2 + 5} y={-cy2}>{label}/2</text>
-              <% {:point_pair, :imag, {{cx1, cy1}, {cx2, cy2}}} -> %>
-                <g>
+                  <text pointer-events="none" x={cx + r * 0.9} y={-cy}>{label}</text>
+                <% {:point, {cx, cy}} -> %>
+                  <circle
+                    cx={cx}
+                    cy={-cy}
+                    r="5"
+                    fill={color}
+                    data-non-scaling-full
+                    stroke="none"
+                    stroke-width="4"
+                  />
+                  <text pointer-events="none" x={cx + 10} y={-cy}>{label}</text>
+                <% {:point_pair, :real, {{cx1, cy1}, {cx2, cy2}}} -> %>
                   <circle
                     cx={cx1}
                     cy={-cy1}
-                    r="5"
-                    stroke={elem(color, 0)}
-                    data-non-scaling-full
-                    fill="none"
-                    stroke-dasharray="5 5"
-                    stroke-width="5"
-                  />
-                  <circle
-                    cx={cx1}
-                    cy={-cy1}
-                    r="5"
+                    r="6"
+                    fill={elem(color, 0)}
                     stroke={elem(color, 1)}
                     data-non-scaling-full
-                    fill="none"
-                    stroke-dasharray="5 5"
-                    stroke-dashoffset="5"
                     stroke-width="5"
                   />
-                </g>
-                <g>
                   <circle
                     cx={cx2}
                     cy={-cy2}
-                    r="5"
-                    fill="none"
-                    stroke-dasharray="5 5"
-                    stroke={elem(color, 0)}
-                    stroke-width="5"
-                    data-non-scaling-full
-                  />
-
-                  <circle
-                    cx={cx2}
-                    cy={-cy2}
-                    r="5"
-                    fill="none"
-                    stroke-dasharray="5 5"
-                    stroke-dashoffset="5"
+                    r="6"
+                    fill={elem(color, 0)}
                     stroke={elem(color, 1)}
-                    stroke-width="5"
                     data-non-scaling-full
+                    stroke-width="5"
                   />
 
                   <text pointer-events="none" x={cx1 + 5} y={-cy1}>{label}/1</text>
                   <text pointer-events="none" x={cx2 + 5} y={-cy2}>{label}/2</text>
-                </g>
+                <% {:point_pair, :imag, {{cx1, cy1}, {cx2, cy2}}} -> %>
+                  <g>
+                    <circle
+                      cx={cx1}
+                      cy={-cy1}
+                      r="5"
+                      stroke={elem(color, 0)}
+                      data-non-scaling-full
+                      fill="none"
+                      stroke-dasharray="5 5"
+                      stroke-width="5"
+                    />
+                    <circle
+                      cx={cx1}
+                      cy={-cy1}
+                      r="5"
+                      stroke={elem(color, 1)}
+                      data-non-scaling-full
+                      fill="none"
+                      stroke-dasharray="5 5"
+                      stroke-dashoffset="5"
+                      stroke-width="5"
+                    />
+                  </g>
+                  <g>
+                    <circle
+                      cx={cx2}
+                      cy={-cy2}
+                      r="5"
+                      fill="none"
+                      stroke-dasharray="5 5"
+                      stroke={elem(color, 0)}
+                      stroke-width="5"
+                      data-non-scaling-full
+                    />
+
+                    <circle
+                      cx={cx2}
+                      cy={-cy2}
+                      r="5"
+                      fill="none"
+                      stroke-dasharray="5 5"
+                      stroke-dashoffset="5"
+                      stroke={elem(color, 1)}
+                      stroke-width="5"
+                      data-non-scaling-full
+                    />
+
+                    <text pointer-events="none" x={cx1 + 5} y={-cy1}>{label}/1</text>
+                    <text pointer-events="none" x={cx2 + 5} y={-cy2}>{label}/2</text>
+                  </g>
+                <% _ -> %>
+              <% end %>
+            <% end %>
+          </g>
+          <%= for {id, s} <-@points do %>
+            <%= CGA2.classify(s) |> case do %>
+              <% {:point, {cx, cy}} -> %>
+                <circle
+                  cx={cx}
+                  cy={-cy}
+                  r={20}
+                  fill-opacity="0.2"
+                  stroke-opacity="0.5"
+                  fill="teal"
+                  stroke="teal"
+                  vector-effect="non-scaling-stroke"
+                  stroke-width="1"
+                  data-non-scaling
+                  id={id}
+                  phx-hook=".PointDragger"
+                />
               <% _ -> %>
             <% end %>
           <% end %>
-        </g>
-        <%= for {id, s} <-@points do %>
-          <%= CGA2.classify(s) |> case do %>
-            <% {:point, {cx, cy}} -> %>
-              <circle
-                cx={cx}
-                cy={-cy}
-                r={20}
-                fill-opacity="0.2"
-                stroke-opacity="0.5"
-                fill="teal"
-                stroke="teal"
-                vector-effect="non-scaling-stroke"
-                stroke-width="1"
-                data-non-scaling
-                id={id}
-                phx-hook=".PointDragger"
-              />
-            <% _ -> %>
-          <% end %>
-        <% end %>
-        <g id="layers"></g>
-        <g id="layers-selection" multi-drag-root></g>
-      </.canvas>
+          <g id="layers"></g>
+          <g id="layers-selection" multi-drag-root></g>
+          <defs>
+            <marker
+              id="axis-head"
+              viewBox="0 0 10 10"
+              refX="9"
+              refY="5"
+              markerWidth="10"
+              markerHeight="10"
+              fill="context-stroke"
+              orient="auto-start-reverse"
+            >
+              <path d="M 10 5 l -10 5 l 3 -5 l -3 -5 z" />
+            </marker>
+          </defs>
+        </.canvas>
+      </div>
     </div>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".PointDragger">
       export default {

@@ -197,17 +197,103 @@ defmodule GeomextricWeb.Canvas do
 
         return (gap + minLineLength) / minLineLength;
       }
+      function rotatePoint(x, y, angle, cx, cy) {
+        const r = (angle * Math.PI) / 180;
+        const cos = Math.cos(r);
+        const sin = Math.sin(r);
+
+        x -= cx;
+        y -= cy;
+
+        return {
+          x: x * cos - y * sin + cx,
+          y: x * sin + y * cos + cy,
+        };
+      }
+
+      function lineIntersection(p, d, a, b) {
+        const ex = b.x - a.x;
+        const ey = b.y - a.y;
+
+        const det = d.x * ey - d.y * ex;
+        if (Math.abs(det) < 1e-10) return null;
+
+        const t = ((a.x - p.x) * ey - (a.y - p.y) * ex) / det;
+        const u = ((a.x - p.x) * d.y - (a.y - p.y) * d.x) / det;
+
+        if (u >= 0 && u <= 1) {
+          return {
+            x: p.x + t * d.x,
+            y: p.y + t * d.y,
+          };
+        }
+
+        return null;
+      }
+
+      function extendLineToViewBox(line, viewBox, cam) {
+        const [vx, vy, vw, vh] = viewBox.split(/\s+/).map(Number);
+
+        const corners = [
+          { x: vx, y: vy },
+          { x: vx + vw, y: vy },
+          { x: vx + vw, y: vy + vh },
+          { x: vx, y: vy + vh },
+        ].map((p) => rotatePoint(p.x, p.y, -cam.angle, cam.x, cam.y));
+
+        const x1 = +line.getAttribute("x1");
+        const y1 = +line.getAttribute("y1");
+        const x2 = +line.getAttribute("x2");
+        const y2 = +line.getAttribute("y2");
+
+        const p = { x: x1, y: y1 };
+        const d = { x: x2 - x1, y: y2 - y1 };
+
+        const hits = [];
+
+        for (let i = 0; i < 4; i++) {
+          const hit = lineIntersection(p, d, corners[i], corners[(i + 1) % 4]);
+
+          if (hit) hits.push(hit);
+        }
+
+        if (hits.length === 2) {
+          const dir = {
+            x: x2 - x1,
+            y: y2 - y1,
+          };
+
+          // keep original line direction
+          const delta = {
+            x: hits[1].x - hits[0].x,
+            y: hits[1].y - hits[0].y,
+          };
+
+          // dot product tells if hit order matches original direction
+          if (dir.x * delta.x + dir.y * delta.y < 0) {
+            [hits[0], hits[1]] = [hits[1], hits[0]];
+          }
+
+          line.setAttribute("x1", hits[0].x);
+          line.setAttribute("y1", hits[0].y);
+          line.setAttribute("x2", hits[1].x);
+          line.setAttribute("y2", hits[1].y);
+        }
+      }
       let resumeScroll = null;
       function updateViewBox(e, w, r, cam, scroller) {
         if (r) {
           r.setAttribute("transform", `rotate(${cam.angle} ${cam.x} ${cam.y})`);
         }
-        e.setAttribute(
-          "viewBox",
-          `${cam.x - (cam.screen.width / 2) * Math.exp(-cam.zoom)} ${cam.y - (cam.screen.height / 2) * Math.exp(-cam.zoom)}
-                                                                                                                ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
-                                                                                                                `,
-        );
+        const newViewBox = `${cam.x - (cam.screen.width / 2) * Math.exp(-cam.zoom)} ${cam.y - (cam.screen.height / 2) * Math.exp(-cam.zoom)}
+                                                                                                                          ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
+                                                                                                                          `;
+
+        e.setAttribute("viewBox", newViewBox);
+
+        w.querySelectorAll("[data-inf-line]").forEach((l) => {
+          extendLineToViewBox(l, newViewBox, cam);
+        });
 
         w.setAttribute("data-zoomed", cam.zoom < 0 ? "out" : "in");
         w.style.setProperty("--cam-scale", Math.exp(-cam.zoom));
@@ -349,17 +435,27 @@ defmodule GeomextricWeb.Canvas do
             }
           };
           this.scroller.addEventListener("scroll", onScroll, { passive: false });
-          const evtToSvg = (evt) => {
+          const evtToSvg = (evt, stablePos) => {
             point.x = evt.clientX;
             point.y = evt.clientY;
             const svgGlobal = point.matrixTransform(
               this.world.getScreenCTM().inverse(),
             );
 
-            return {
+            const p = {
               x: svgGlobal.x,
               y: svgGlobal.y,
             };
+
+            if (
+              stablePos &&
+              Math.hypot(p.x - stablePos.x, p.y - stablePos.y) <
+                50 * Math.exp(-cam.zoom)
+            ) {
+              return stablePos;
+            } else {
+              return p;
+            }
           };
 
           const wr = (this.world.viewBox.baseVal.width / window.innerWidth) * 1;
@@ -369,7 +465,7 @@ defmodule GeomextricWeb.Canvas do
           cam.y = this.el.viewBox.baseVal.height / 2 + this.el.viewBox.baseVal.y;
 
           const resize = () => {
-            cam.screen = { width: window.innerWidth, height: window.innerHeight };
+            cam.screen = { width: this.el.clientWidth, height: this.el.clientHeight };
 
             updateViewBox(this.el, this.world, this.rotor, cam, this.scroller);
           };
@@ -723,7 +819,6 @@ defmodule GeomextricWeb.Canvas do
           this.el.removeEventListener("pointerdown", this.listeners.pointerdown);
           this.el.removeEventListener("pointerup", this.listeners.pointerup);
           this.el.removeEventListener("pointermove", this.listeners.pointermove);
-          this.el.removeEventListener("wheel", this.listeners.wheel);
           this.el.removeEventListener("click", this.listeners.dblclick);
           this.el.removeEventListener("drop", this.listeners.drop);
 
