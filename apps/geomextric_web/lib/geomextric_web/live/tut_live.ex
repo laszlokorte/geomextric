@@ -224,7 +224,7 @@ defmodule GeomextricWeb.TutLive do
     assigns = assign(assigns, :camera, look_at(eye, target, pole))
 
     ~H"""
-    <style rel="stylesheet" :type={GeomextricWeb.ColocatedCSS}>
+    <style rel="stylesheet" :type={GeomextricWeb.ColocatedScopedCSS}>
       .vectors .line3d {
         marker-end: url("#vector-head");
         stroke-width: 2;

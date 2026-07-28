@@ -241,7 +241,7 @@ defmodule GeomextricWeb.PlaygroundLive do
     assigns = assign(assigns, :camera, look_at(eye, target, pole))
 
     ~H"""
-    <style rel="stylesheet" :type={GeomextricWeb.ColocatedCSS}>
+    <style rel="stylesheet" :type={GeomextricWeb.ColocatedScopedCSS}>
       .scene {
         background: #fff;
         inset: 0;

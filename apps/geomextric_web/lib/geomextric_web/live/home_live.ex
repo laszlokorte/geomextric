@@ -7,7 +7,7 @@ defmodule GeomextricWeb.HomeLive do
 
   def render(assigns) do
     ~H"""
-    <style rel="stylesheet" :type={GeomextricWeb.ColocatedCSS}>
+    <style :type={GeomextricWeb.ColocatedCSS}>
       .full {
         display: grid;
         position: absolute;
@@ -44,34 +44,29 @@ defmodule GeomextricWeb.HomeLive do
         opacity: 0.8;
         transition: opacity 50ms linear;
       }
+
       .enter-link:hover,
       .enter-link:focus {
         opacity: 1;
-      }
-      .left {
-        background: royalblue;
-      }
-      .right {
-        background: tomato;
       }
     </style>
     <div class="full">
       <h1>LiveView Canvas Experiment</h1>
       <div class="split">
-        <.link navigate={~p"/canvas"} class="left enter-link">
+        <.link navigate={~p"/canvas"} class="enter-link" style="background-color: royalblue;">
           2D
         </.link>
-        <.link navigate={~p"/scene"} class="right enter-link">
+        <.link navigate={~p"/scene"} class="enter-link" style="background-color: tomato;">
           3D
         </.link>
 
-        <.link navigate={~p"/playground"} class="right enter-link" style="background-color: #be398d;">
+        <.link navigate={~p"/playground"} class="enter-link" style="background-color: #be398d;">
           Play
         </.link>
-        <.link navigate={~p"/tut"} class="right enter-link" style="background-color: #d49137;">
+        <.link navigate={~p"/tut"} class="enter-link" style="background-color: #d49137;">
           Split
         </.link>
-        <.link navigate={~p"/cga"} class="right enter-link" style="background-color: #4fb06d;">
+        <.link navigate={~p"/cga"} class="enter-link" style="background-color: #4fb06d;">
           CGA
         </.link>
       </div>

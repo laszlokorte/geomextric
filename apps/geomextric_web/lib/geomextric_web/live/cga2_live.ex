@@ -205,7 +205,7 @@ defmodule GeomextricWeb.CGA2Live do
       )
 
     ~H"""
-    <style rel="stylesheet" :type={GeomextricWeb.ColocatedCSS}>
+    <style rel="stylesheet" :type={GeomextricWeb.ColocatedScopedCSS}>
       body {
         font-family: monospace, monospace;
         font-size: 1em;
@@ -400,7 +400,7 @@ defmodule GeomextricWeb.CGA2Live do
       label:has(input[type="checkbox"]:checked) svg {
         opacity: 1;
       }
-      :scope .page {
+      :scope.page {
         display: grid;
         grid-template-rows: [bar-start] auto [bar-end main-start] 1fr [main-end];
         grid-template-columns: [bar-start main-start] 1fr [bar-end main-end];
