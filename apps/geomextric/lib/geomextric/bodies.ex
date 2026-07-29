@@ -305,7 +305,7 @@ defmodule Geomextric.Bodies do
     initial_q = PGA3.dual(PGA3.new(scalar: 1))
 
     Enum.zip_reduce(ps, qs, {initial_m, initial_q}, fn p, q, {m, prev_q} ->
-      p = prev_q |> PGA3.join(PGA3.transform(m, p)) |> PGA3.normalize()
+      p = prev_q |> PGA3.join(PGA3.transform(p, m)) |> PGA3.normalize()
       new_q = prev_q |> PGA3.join(q) |> PGA3.normalize() |> PGA3.blade_inverse()
       new_m = new_q |> PGA3.gp(p) |> PGA3.add(one) |> PGA3.gp(m)
 
@@ -347,7 +347,7 @@ defmodule Geomextric.Bodies do
         half = pow(motor, i / steps)
 
         for p <- from do
-          PGA3.transform(half, p)
+          PGA3.transform(p, half)
         end
       end
 

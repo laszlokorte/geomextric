@@ -286,8 +286,8 @@ defmodule GeomextricWeb.Canvas do
           r.setAttribute("transform", `rotate(${cam.angle} ${cam.x} ${cam.y})`);
         }
         const newViewBox = `${cam.x - (cam.screen.width / 2) * Math.exp(-cam.zoom)} ${cam.y - (cam.screen.height / 2) * Math.exp(-cam.zoom)}
-                                                                                                                            ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
-                                                                                                                            `;
+                                                                                                                              ${cam.screen.width * Math.exp(-cam.zoom)} ${cam.screen.height * Math.exp(-cam.zoom)}
+                                                                                                                              `;
 
         e.setAttribute("viewBox", newViewBox);
 

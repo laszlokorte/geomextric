@@ -149,7 +149,7 @@ defmodule GeomextricWeb.Geometry do
       |> PGA3.add(PGA3.new(scalar: a / 100))
       |> PGA3.normalize()
 
-    PGA3.transform(t, o)
+    PGA3.transform(o, t)
   end
 
   def scale_point(p, s) do
@@ -166,7 +166,7 @@ defmodule GeomextricWeb.Geometry do
       nil
     else
       camera_point =
-        PGA3.transform(cam, p)
+        PGA3.transform(p, cam)
 
       {x, y, z} = PGA3.point_coordinates(camera_point)
 

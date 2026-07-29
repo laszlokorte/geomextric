@@ -158,6 +158,19 @@ defmodule GeomextricWeb.CGA2Live do
       CGA2.circle(assigns.points |> Map.get("p10"), 250)
       |> CGA2.normalize()
 
+    pair =
+      CGA2.wedge(
+        assigns.points |> Map.get("p10"),
+        assigns.points |> Map.get("p9")
+      )
+      |> CGA2.normalize()
+
+    pair2 =
+      CGA2.wedge(
+        CGA2.point(0, 3),
+        CGA2.point(5, 0)
+      )
+
     assigns =
       assigns
       |> assign(
@@ -177,7 +190,9 @@ defmodule GeomextricWeb.CGA2Live do
             {"P7", :purple, assigns.points |> Map.get("p7")},
             {"P8", :purple, assigns.points |> Map.get("p8")},
             {"P9", :purple, assigns.points |> Map.get("p9")},
-            {"P10", :purple, assigns.points |> Map.get("p10")}
+            {"P10", :purple, assigns.points |> Map.get("p10")},
+            {"pair", {:cyan, :magenta}, pair},
+            {"pair", {:cyan, :magenta}, pair2}
           ],
           if(assigns.intersections,
             do: [
@@ -193,8 +208,8 @@ defmodule GeomextricWeb.CGA2Live do
               assigns.samples
               |> Enum.flat_map(
                 &[
-                  {"", "#FF6347aa", CGA2.transform(ln1, &1) |> CGA2.cleanup(1.0e-6)},
-                  {"", "#FF69B4aa", CGA2.transform(cc, &1) |> CGA2.cleanup(1.0e-6)},
+                  {"", "#FF6347aa", CGA2.transform(&1, ln1) |> CGA2.cleanup(1.0e-6)},
+                  {"", "#FF69B4aa", CGA2.transform(&1, cc) |> CGA2.cleanup(1.0e-6)},
                   {"", "#aaa5", &1}
                 ]
               ),
