@@ -167,8 +167,8 @@ defmodule GeomextricWeb.CGA2Live do
 
     pair2 =
       CGA2.wedge(
-        CGA2.point(0, 3),
-        CGA2.point(5, 0)
+        CGA2.point(0, 300),
+        CGA2.point(500, 0)
       )
 
     assigns =
