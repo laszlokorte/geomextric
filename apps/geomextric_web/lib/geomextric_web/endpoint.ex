@@ -24,7 +24,7 @@ defmodule GeomextricWeb.Endpoint do
     at: "/",
     from: :geomextric_web,
     gzip: not code_reloading?,
-    only: GeomextricWeb.static_paths(),
+    only: ["hologram" | GeomextricWeb.static_paths()],
     raise_on_missing_only: code_reloading?
 
   # Code reloading can be explicitly enabled under the
@@ -50,5 +50,6 @@ defmodule GeomextricWeb.Endpoint do
   plug Plug.MethodOverride
   plug Plug.Head
   plug Plug.Session, @session_options
+  plug Hologram.Router
   plug GeomextricWeb.Router
 end

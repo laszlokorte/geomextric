@@ -245,7 +245,7 @@ defmodule GeomextricWeb.Geometry do
         m01 * (m10 * m22 - m12 * m20) +
         m02 * (m10 * m21 - m11 * m20)
 
-    if determinant == 0 do
+    if determinant == 0.0 do
       nil
     else
       invdet = 1 / determinant
@@ -279,17 +279,32 @@ defmodule GeomextricWeb.Geometry do
 
       root = :math.sqrt((a - c) * (a - c) + 4 * b * b)
 
+      a_den = denominator * (root - (a + c))
+      b_den = denominator * (-root - (a + c))
+
       radius_a =
-        :math.sqrt(
-          common /
-            (denominator * (root - (a + c)))
-        )
+        if a_den != 0 do
+          :math.sqrt(
+            abs(
+              common /
+                a_den
+            )
+          )
+        else
+          0.0
+        end
 
       radius_b =
-        :math.sqrt(
-          common /
-            (denominator * (-root - (a + c)))
-        )
+        if b_den != 0.0 do
+          :math.sqrt(
+            abs(
+              common /
+                b_den
+            )
+          )
+        else
+          0.0
+        end
 
       angle =
         cond do
