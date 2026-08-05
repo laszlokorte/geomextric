@@ -1,5 +1,6 @@
 defmodule Blog.PostPage do
   use Hologram.Page
+  alias Blog.Components.Box
 
   route("/posts/:id")
 
@@ -28,9 +29,25 @@ defmodule Blog.PostPage do
       <div class="likes">
         Likes: {@post.likes}
         <button $click="like_post">Like</button>
+        <button $click="like_local">Like</button>
       </div>
+      <Box cid="123" post={@post}/>
+      <svg viewBox="-100 -100 200 200">
+      <circle $pointer_down="start_drag" $pointer_move.prevent_default="move_drag" cx={0} cy={0} r={20}/>
+      </svg>
     </article>
     """
+  end
+
+  def action(:move_drag, params, component) do
+    # Update likes locally first for instant feedback
+    component
+  end
+
+  def action(:start_drag, params, component) do
+    IO.inspect(params)
+    # Update likes locally first for instant feedback
+    component
   end
 
   def action(:like_post, _params, component) do
@@ -40,9 +57,23 @@ defmodule Blog.PostPage do
     |> put_command(:save_like, post_id: component.state.post.id)
   end
 
+  def action(:like_local, _params, component) do
+    # Update likes locally first for instant feedback
+    component
+    |> put_state([:post, :likes], component.state.post.likes + 1)
+  end
+
+  def action(:confirm_like, _params, component) do
+    # Update likes locally first for instant feedback
+    component
+    |> put_state([:post, :likes], component.state.post.likes + 2)
+  end
+
   def command(:save_like, params, server) do
     # In real app, save to database
     IO.puts("Liked post #{params.post_id}")
+
     server
+    |> put_action(:confirm_like)
   end
 end

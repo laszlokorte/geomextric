@@ -58,7 +58,7 @@ defmodule GeomextricWeb.MixProject do
       {:gettext, "~> 1.0"},
       {:geomextric, in_umbrella: true},
       {:jason, "~> 1.2"},
-      {:hologram, "~> 0.10.0"},
+      {:hologram, "~> 0.11.0"},
       {:bandit, "~> 1.12.4"}
     ]
   end

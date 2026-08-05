@@ -8,7 +8,6 @@ defmodule Geomextric.Umbrella.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases(),
-      compilers: [:hologram] ++ Mix.compilers(),
       listeners: [Phoenix.CodeReloader]
     ]
   end
@@ -34,8 +33,7 @@ defmodule Geomextric.Umbrella.MixProject do
   defp deps do
     [
       # Required to run "mix format" on ~H/.heex files from the umbrella root
-      {:phoenix_live_view, ">= 0.0.0"},
-      {:hologram, "~> 0.10.0"}
+      {:phoenix_live_view, ">= 0.0.0"}
     ]
   end
 
