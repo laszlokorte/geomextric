@@ -16,6 +16,7 @@ defmodule GeomextricWeb.TutLive do
      |> assign(:yy, 1)
      |> assign(:zz, 2)
      |> assign(:xx, 3)
+     |> assign(:i, 1)
      |> assign(:camera, %{
        yaw: 0.0,
        pitch: 0.3,
@@ -67,6 +68,18 @@ defmodule GeomextricWeb.TutLive do
      |> assign(:show_ellipse, e == "1")
      |> assign(:yy, yy)
      |> assign(:zz, zz)}
+  end
+
+  def handle_event(
+        "change_trivector",
+        %{"i" => i},
+        socket
+      ) do
+    i = parse_number(i)
+
+    {:noreply,
+     socket
+     |> assign(:i, i)}
   end
 
   def handle_event(
@@ -227,7 +240,7 @@ defmodule GeomextricWeb.TutLive do
     <style rel="stylesheet" :type={GeomextricWeb.ColocatedScopedCSS}>
       .vectors .line3d {
         marker-end: url("#vector-head");
-        stroke-width: 2;
+        stroke-width: 3;
       }
 
       .scenes {
@@ -559,12 +572,27 @@ defmodule GeomextricWeb.TutLive do
                 /> Show as ellipse</label>
               </fieldset>
             </form>
+            <form phx-change="change_trivector">
+              <fieldset>
+                <legend>Trivector</legend>
+                <label><input
+                  phx-throttle="16"
+                  step="0.1"
+                  name="i"
+                  style="accent-color:black"
+                  type="range"
+                  min="-5"
+                  max="5"
+                  value={@i}
+                /></label>
+              </fieldset>
+            </form>
           </div>
         </div>
       </div>
       <div class="scenes">
         <svg
-          class="scene-sub"
+          class="scene-sub "
           viewBox="-100 -100 200 200"
           width="100"
           height="50"
@@ -584,7 +612,7 @@ defmodule GeomextricWeb.TutLive do
             camera={@camera}
             geo={Geomextric.Bodies.gen_grid(true, false)}
           />
-          <g class="vectors">
+          <g class="vectors with-arrow">
             <.geometry
               labels={false}
               id="vector"
@@ -607,7 +635,7 @@ defmodule GeomextricWeb.TutLive do
               labels={false}
               id="vector-z"
               camera={@camera}
-              geo={Geomextric.Bodies.gen_vector(0, 0, @z, color: "blue", name: "v_z")}
+              geo={Geomextric.Bodies.gen_vector(0, 0, @z, color: "#00c", name: "v_z")}
             />
           </g>
           <.geometry
@@ -841,6 +869,69 @@ defmodule GeomextricWeb.TutLive do
                 offset: %{x: -1, y: 1, z: 0}
               )
             }
+          />
+        </svg>
+        <svg
+          class="scene-sub"
+          viewBox="-100 -100 200 200"
+          width="100"
+          height="50"
+          phx-hook=".Orb"
+          id="scene-3"
+          preserveAspectRatio="xMidYMid slice"
+        >
+          <.geometry
+            labels={false}
+            id="axis-3"
+            camera={@camera}
+            geo={Geomextric.Bodies.gen_axis()}
+          />
+          <.geometry
+            labels={false}
+            id="coord-grid-3"
+            camera={@camera}
+            geo={Geomextric.Bodies.gen_grid(true, false)}
+          />
+          <g class="vectors">
+            <.geometry
+              labels={false}
+              id="vector-x-3"
+              camera={@camera}
+              geo={
+                Geomextric.Bodies.gen_trivector(@i,
+                  name: "V"
+                )
+              }
+            />
+          </g>
+          <.geometry
+            labels={true}
+            edges={false}
+            faces={false}
+            id="vector-x-3-labels"
+            camera={@camera}
+            geo={
+              Geomextric.Bodies.gen_trivector(@i,
+                name: "bv_xyz",
+                offset: %{x: 0, y: 0, z: 0}
+              )
+            }
+          />
+          <.geometry
+            labels={true}
+            edges={false}
+            faces={false}
+            id="axis-3-label"
+            camera={@camera}
+            geo={Geomextric.Bodies.gen_axis()}
+          />
+          <.geometry
+            labels={true}
+            edges={false}
+            faces={false}
+            id="coord-grid-3-labels"
+            camera={@camera}
+            geo={Geomextric.Bodies.gen_grid(true, false)}
           />
         </svg>
       </div>

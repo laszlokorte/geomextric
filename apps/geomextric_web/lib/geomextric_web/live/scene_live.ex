@@ -286,9 +286,13 @@ defmodule GeomextricWeb.SceneLive do
         stroke-linecap: round;
       }
 
+      .with-arrow line,
       line[stroke="black"] {
         marker-end: url("#vector-head");
-        stroke-width: 1;
+      }
+      .vectors line[stroke*="c"][stroke*="0"],
+      .vectors line[stroke="black"] {
+        stroke-width: 2;
       }
 
       .text-label {

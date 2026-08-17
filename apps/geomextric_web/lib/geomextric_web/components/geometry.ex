@@ -12,6 +12,7 @@ defmodule GeomextricWeb.Geometry do
   attr :labels, :boolean, default: true
   attr :faces, :boolean, default: true
   attr :edges, :boolean, default: true
+  attr :vertices, :boolean, default: true
   attr :quad_ellipse, :boolean, default: false
   attr :motor, :map, default: PGA3.new(scalar: 1)
 
@@ -66,7 +67,7 @@ defmodule GeomextricWeb.Geometry do
           <% else _ -> %>
         <% end %>
       <% end %>
-      <%= for {color, p} <- @geo.points do %>
+      <%= for {color, p} <- @geo.points, @vertices do %>
         <%= with {screen_x, screen_y, z} <- project(@camera, rot(@rotation, scale_point(p, @scale)) |> PGA3.transform(@motor)) do %>
           <circle
             fill={color}
@@ -77,7 +78,7 @@ defmodule GeomextricWeb.Geometry do
           <% else _ -> %>
         <% end %>
       <% end %>
-      <%= for {color, p, l} <- @geo.labels, @labels do %>
+      <%= for {color, p, l} when is_binary(l) <- @geo.labels, @labels do %>
         <%= with {screen_x, screen_y, z} <- project(@camera, rot(@rotation, scale_point(p, @scale)) |> PGA3.transform(@motor))  do %>
           <text
             class="text-label"

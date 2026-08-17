@@ -160,13 +160,95 @@ defmodule Geomextric.Bodies do
            PGA3.point(v.x, v.y, v.z)
          end}
       ],
-      labels: [
-        {Keyword.get(attrs, :text, "black"),
-         Enum.map(face, fn p -> PGA3.point(p.x, p.y, p.z) end) |> Enum.reduce(&PGA3.add/2),
-         Keyword.get(attrs, :name)}
-      ]
+      labels:
+        Keyword.get(attrs, :name)
+        |> case do
+          n when is_binary(n) ->
+            [
+              {Keyword.get(attrs, :text, "black"),
+               Enum.map(face, fn p -> PGA3.point(p.x, p.y, p.z) end) |> Enum.reduce(&PGA3.add/2),
+               n}
+            ]
+
+          _ ->
+            []
+        end
     }
   end
+
+  def gen_trivector(volume, attrs \\ []) do
+    sign = sign(volume)
+
+    len = abs(volume) ** 0.333 / 2.0
+
+    area = abs(volume)
+
+    %{
+      points: [],
+      edges: [],
+      faces: [],
+      labels: [
+        {"black", PGA3.point(-len, len * sign, len), Keyword.get(attrs, :name)}
+      ]
+    }
+    |> merge_geo(
+      gen_bivector(area, 0, 0,
+        fill: "#c005",
+        stroke: "#c00",
+        text: "#c00",
+        offset: %{x: 0, y: 1 * sign, z: 1}
+      )
+    )
+    |> merge_geo(
+      gen_bivector(0, area, 0,
+        fill: "#0c05",
+        stroke: "#0c0",
+        text: "#0c0",
+        offset: %{x: -1, y: 0, z: 1}
+      )
+    )
+    |> merge_geo(
+      gen_bivector(0, 0, area,
+        fill: "#00c5",
+        stroke: "#00c",
+        text: "#00c",
+        offset: %{x: -1, y: 1 * sign, z: 0}
+      )
+    )
+    |> merge_geo(
+      gen_bivector(area, 0, 0,
+        fill: "#c005",
+        stroke: "#c00",
+        text: "#c00",
+        offset: %{x: -2, y: 1 * sign, z: 1}
+      )
+    )
+    |> merge_geo(
+      gen_bivector(0, area, 0,
+        fill: "#0c05",
+        stroke: "#0c0",
+        text: "#0c0",
+        offset: %{x: -1, y: 2 * sign, z: 1}
+      )
+    )
+    |> merge_geo(
+      gen_bivector(0, 0, area,
+        fill: "#00c5",
+        stroke: "#00c",
+        text: "#00c",
+        offset: %{x: -1, y: 1 * sign, z: 2}
+      )
+    )
+  end
+
+  defp merge_geo(g1, g2) do
+    Map.merge(g1, g2, fn _k, v1, v2 ->
+      v1 ++ v2
+    end)
+  end
+
+  defp sign(x) when x >= 0, do: 1
+  defp sign(x) when x < 0, do: -1
 
   def gen_axis do
     %{
@@ -334,7 +416,7 @@ defmodule Geomextric.Bodies do
     }
   end
 
-  def make_trace(from, to, steps \\ 20) do
+  def make_trace(from, to, start \\ 0, last \\ 30, steps \\ 20) do
     motor =
       align(
         from,
@@ -342,7 +424,7 @@ defmodule Geomextric.Bodies do
       )
 
     intermediates =
-      for i <- 0..steps do
+      for i <- start..last do
         half = pow(motor, i / steps)
 
         for p <- from do
@@ -498,6 +580,46 @@ defmodule Geomextric.Bodies do
 
     profile
     |> lathe(segments, axis)
+    |> wrap()
+    |> mesh()
+  end
+
+  def cone(r \\ 1, h \\ 1, segments \\ 64) do
+    axis =
+      PGA3.line(
+        PGA3.point(0, 0, 0),
+        PGA3.point(0, 0, 1)
+      )
+
+    profile = [
+      PGA3.point(0, 0, 0),
+      PGA3.point(r, 0, 0),
+      PGA3.point(0, 0, h)
+    ]
+
+    profile
+    |> lathe(segments, axis)
+    |> wrap()
+    |> mesh()
+  end
+
+  def sphere(r \\ 1, segments \\ 32, rings \\ 16) do
+    y_axis =
+      PGA3.line(
+        PGA3.point(0, 0, 0),
+        PGA3.point(0, 1, 0)
+      )
+
+    z_axis =
+      PGA3.line(
+        PGA3.point(0, 0, 0),
+        PGA3.point(0, 0, 1)
+      )
+
+    [PGA3.point(r, 0, 0)]
+    |> lathe(rings, y_axis, 2 * :math.pi())
+    |> List.flatten()
+    |> lathe(segments, z_axis)
     |> wrap()
     |> mesh()
   end

@@ -1,4 +1,4 @@
-defmodule GeomextricWeb.PlaygroundLive do
+defmodule GeomextricWeb.RotoryLive do
   alias Geomextric.Bodies
   alias Galixir.Algebras.PGA3
   use GeomextricWeb, :live_view
@@ -12,28 +12,34 @@ defmodule GeomextricWeb.PlaygroundLive do
      |> assign(:yy, 0)
      |> assign(:zz, 0)
      |> assign(:xx, 0)
-     |> assign(:trace_start, 0)
      |> assign(:objects, %{
-       "cube" => %{
-         geo: Geomextric.Bodies.gen_cube(),
-         motor: PGA3.translator(-4, 4, 1),
-         editable: false,
-         scale: 1,
-         rotation: 0
-       },
-       "pyramid" => %{
-         editable: true,
-         scale: 1,
-         rotation: 0,
-         geo: Bodies.gen_pyramid()
-       },
        "torus" => %{
          editable: true,
          scale: 1,
-         motor: PGA3.translator(4, 4, 0),
+         motor: PGA3.translator(2, 2, 0),
          rotation: 0,
-         vertices: false,
-         geo: Bodies.torus()
+         geo: Bodies.torus(0.8, 0.3, 4, 4)
+       },
+       "cone" => %{
+         editable: true,
+         scale: 1,
+         motor: PGA3.translator(-2, 2, 0),
+         rotation: 0,
+         geo: Bodies.cone(1, 2 ** 0.5, 8)
+       },
+       "sphere" => %{
+         editable: true,
+         scale: 1,
+         motor: PGA3.translator(-2, -2, 0),
+         rotation: 0,
+         geo: Bodies.sphere(0.8, 6, 8)
+       },
+       "cube" => %{
+         editable: true,
+         scale: 1,
+         motor: PGA3.translator(2, -2, 0),
+         rotation: 0,
+         geo: Bodies.cylinder(1, 2 ** 0.5, 4)
        },
        "grid" => %{
          scale: 1,
@@ -84,18 +90,16 @@ defmodule GeomextricWeb.PlaygroundLive do
 
   def handle_event(
         "change_pos",
-        %{"x" => x, "y" => y, "z" => z, "trace_start" => trace_start},
+        %{"x" => x, "y" => y, "z" => z},
         socket
       ) do
     x = parse_number(x)
     y = parse_number(y)
     z = parse_number(z)
-    s = parse_number(trace_start)
 
     {:noreply,
      socket
      |> assign(:xx, x)
-     |> assign(:trace_start, trunc(s))
      |> assign(:yy, y)
      |> assign(:zz, z)}
   end
@@ -535,47 +539,6 @@ defmodule GeomextricWeb.PlaygroundLive do
                 </fieldset>
               </form>
             <% end %>
-            <form phx-change="change_pos">
-              <fieldset>
-                <legend>Trace</legend>
-                <label><input
-                  phx-throttle="16"
-                  step="0.1"
-                  name="x"
-                  type="range"
-                  min="-5"
-                  max="5"
-                  value={@xx}
-                /></label>
-                <label><input
-                  phx-throttle="16"
-                  step="0.1"
-                  name="y"
-                  type="range"
-                  min="-5"
-                  max="5"
-                  value={@yy}
-                /></label>
-                <label><input
-                  phx-throttle="16"
-                  step="0.1"
-                  name="z"
-                  type="range"
-                  min="-5"
-                  max="5"
-                  value={@zz}
-                /></label>
-                <label><input
-                  phx-throttle="16"
-                  step="1"
-                  name="trace_start"
-                  type="range"
-                  min="0"
-                  max="30"
-                  value={@trace_start}
-                /></label>
-              </fieldset>
-            </form>
           </div>
         </div>
       </div>
@@ -591,40 +554,15 @@ defmodule GeomextricWeb.PlaygroundLive do
         <%= for {objid, %{geo: geo, rotation: rotation, scale: scale} = o} <- @objects do %>
           <.geometry
             camera={@camera}
+            faces={false}
+            vertices={false}
             id={objid}
             geo={geo}
             rotation={rotation}
             motor={Map.get(o, :motor, PGA3.new(scalar: 1))}
-            vertices={Map.get(o, :vertices, true)}
             scale={scale}
           />
         <% end %>
-        <.geometry
-          id="trace2"
-          camera={@camera}
-          geo={
-            Geomextric.Bodies.make_trace(
-              [
-                PGA3.point(@xx, @yy + 1, @zz),
-                PGA3.point(@xx, @yy, @zz),
-                PGA3.point(@xx + 1, @yy, @zz + 1)
-              ],
-              [
-                PGA3.point(-3, 2, 1),
-                PGA3.point(-3, 2 + 1, 1 + 0.5),
-                PGA3.point(-3 + 1, 2 + 1, 1 + 0.5)
-              ],
-              0,
-              @trace_start,
-              30
-            )
-          }
-        />
-        <.geometry
-          id="fourier"
-          camera={@camera}
-          geo={Geomextric.Bodies.make_exp(1, 5, 0, offset: %{x: 0, y: 5, z: 1})}
-        />
         <defs>
           <marker
             id="vector-head"
