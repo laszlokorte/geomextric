@@ -189,7 +189,7 @@ defmodule Geomextric.Bodies do
     %{
       points:
         for x <- [-1, 1], y <- [-1, 1], z <- [-1, 1] do
-          {"tomato", PGA3.point(x + 4, y - 4, z + 1)}
+          {"tomato", PGA3.point(x, y, z)}
         end,
       edges:
         for x <- [-1, 1],
@@ -199,8 +199,7 @@ defmodule Geomextric.Bodies do
             x + dx <= 1,
             y + dy <= 1,
             z + dz <= 1 do
-          {"teal",
-           {PGA3.point(x + 4, y - 4, z + 1), PGA3.point(x + dx + 4, y + dy - 4, z + dz + 1)}}
+          {"teal", {PGA3.point(x, y, z), PGA3.point(x + dx, y + dy, z + dz)}}
         end,
       labels: [],
       faces:
@@ -213,9 +212,9 @@ defmodule Geomextric.Bodies do
           {"#5554",
            for {a, b} <- [{-1, -1}, {1, -1}, {1, 1}, {-1, 1}] do
              PGA3.point(
-               s * nx + a * ux + b * vx + 4,
-               s * ny + a * uy + b * vy - 4,
-               s * nz + a * uz + b * vz + 1
+               s * nx + a * ux + b * vx,
+               s * ny + a * uy + b * vy,
+               s * nz + a * uz + b * vz
              )
            end}
         end
@@ -403,5 +402,110 @@ defmodule Geomextric.Bodies do
     |> log()
     |> PGA3.scale(t)
     |> exp()
+  end
+
+  def sweep(profile, segments, transform) do
+    for i <- 0..segments do
+      t = i / segments
+      motor = transform.(t)
+
+      Enum.map(profile, &PGA3.transform(&1, motor))
+    end
+  end
+
+  def lathe(profile, segments, axis, angle \\ 2 * :math.pi()) do
+    sweep(profile, segments, fn t ->
+      PGA3.rotor(axis, t * angle)
+    end)
+  end
+
+  def wrap(rows) do
+    rows
+    |> Enum.chunk_every(2, 1, :discard)
+    |> Enum.flat_map(fn [a, b] ->
+      0..(length(a) - 2)
+      |> Enum.flat_map(fn j ->
+        p00 = Enum.at(a, j)
+        p01 = Enum.at(a, j + 1)
+        p10 = Enum.at(b, j)
+        p11 = Enum.at(b, j + 1)
+
+        [
+          [p00, p01, p10],
+          [p01, p11, p10]
+        ]
+      end)
+    end)
+  end
+
+  def mesh(faces, color \\ "#eff") do
+    points =
+      faces
+      |> List.flatten()
+      |> Enum.uniq()
+      |> Enum.map(&{"tomato", &1})
+
+    edges =
+      faces
+      |> Enum.flat_map(&face_edges/1)
+      |> Enum.uniq()
+      |> Enum.map(&{"royalblue", &1})
+
+    %{
+      points: points,
+      edges: edges,
+      faces: Enum.map(faces, &{color, &1}),
+      labels: []
+    }
+  end
+
+  defp face_edges(face) do
+    face
+    |> Enum.zip(Enum.drop(face, 1) ++ [hd(face)])
+  end
+
+  def cylinder(r \\ 1, h \\ 1, segments \\ 16) do
+    profile = [
+      PGA3.point(0, 0, 0),
+      PGA3.point(r, 0, 0),
+      PGA3.point(r, 0, h),
+      PGA3.point(0, 0, h)
+    ]
+
+    profile
+    |> lathe(segments, z_axis())
+    |> wrap()
+    |> mesh()
+  end
+
+  def torus(r \\ 1.0, tube \\ 0.3, segments \\ 8, rings \\ 4) do
+    axis =
+      PGA3.line(
+        PGA3.point(0, 0, 0),
+        PGA3.point(0, 0, 1)
+      )
+
+    profile =
+      for i <- 0..rings do
+        θ = 2 * :math.pi() * i / rings
+
+        PGA3.point(
+          r + tube * :math.cos(θ),
+          0,
+          tube * :math.sin(θ)
+        )
+      end
+
+    profile
+    |> lathe(segments, axis)
+    |> wrap()
+    |> mesh()
+  end
+
+  def z_axis do
+    PGA3.line(
+      PGA3.point(0, 0, 0),
+      PGA3.point(0, 0, 1)
+    )
   end
 end

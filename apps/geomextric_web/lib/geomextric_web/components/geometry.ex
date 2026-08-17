@@ -13,18 +13,19 @@ defmodule GeomextricWeb.Geometry do
   attr :faces, :boolean, default: true
   attr :edges, :boolean, default: true
   attr :quad_ellipse, :boolean, default: false
+  attr :motor, :map, default: PGA3.new(scalar: 1)
 
   def geometry(assigns) do
     ~H"""
     <g id={"obj-#{@id}"}>
       <%= for {color, ps}<- @geo.faces, @faces, path =
                     (for p <- ps  do
-                      with({screen_x, screen_y, _z} <- project(@camera, rot(@rotation, scale_point(p, @scale))), do:
+                      with({screen_x, screen_y, _z} <- project(@camera, rot(@rotation, scale_point(p, @scale)) |> PGA3.transform(@motor)), do:
                       "#{screen_x} #{screen_y}", else: (_e ->  ""))
                     end
                     |> Enum.join(" ")) do %>
         <%= if @quad_ellipse do %>
-          <%= case ps |> Enum.map(&project(@camera, rot(@rotation, scale_point(&1, @scale))))   do %>
+          <%= case ps |> Enum.map(&project(@camera, rot(@rotation, scale_point(&1, @scale)) |> PGA3.transform(@motor)))   do %>
             <% [{ax, ay, _}, {bx, by, _}, {cx, cy, _}, {dx,dy, _}] -> %>
               <% ellipse = quad_to_ellipse({ax, ay}, {bx, by}, {cx, cy}, {dx, dy}) %>
               <ellipse
@@ -53,7 +54,7 @@ defmodule GeomextricWeb.Geometry do
       <% end %>
 
       <%= for {color, {p1, p2}} <- @geo.edges, @edges  do %>
-        <%= with {{x1, y1, _z1}, {x2,y2,_z2}} <- {project(@camera, rot(@rotation, scale_point(p1, @scale))), project(@camera, rot(@rotation, scale_point(p2, @scale)))} do %>
+        <%= with {{x1, y1, _z1}, {x2,y2,_z2}} <- {project(@camera, rot(@rotation, scale_point(p1, @scale)) |> PGA3.transform(@motor)), project(@camera, rot(@rotation, scale_point(p2, @scale)) |> PGA3.transform(@motor))} do %>
           <line
             class="line3d"
             stroke={color}
@@ -66,7 +67,7 @@ defmodule GeomextricWeb.Geometry do
         <% end %>
       <% end %>
       <%= for {color, p} <- @geo.points do %>
-        <%= with {screen_x, screen_y, z} <- project(@camera, rot(@rotation, scale_point(p, @scale))) do %>
+        <%= with {screen_x, screen_y, z} <- project(@camera, rot(@rotation, scale_point(p, @scale)) |> PGA3.transform(@motor)) do %>
           <circle
             fill={color}
             r={10 / abs(z)}
@@ -77,7 +78,7 @@ defmodule GeomextricWeb.Geometry do
         <% end %>
       <% end %>
       <%= for {color, p, l} <- @geo.labels, @labels do %>
-        <%= with {screen_x, screen_y, z} <- project(@camera, rot(@rotation, scale_point(p, @scale)))  do %>
+        <%= with {screen_x, screen_y, z} <- project(@camera, rot(@rotation, scale_point(p, @scale)) |> PGA3.transform(@motor))  do %>
           <text
             class="text-label"
             font-size={24 / z}

@@ -12,8 +12,6 @@ defmodule Blog.Components.Box do
       likes: 0
     }
 
-    IO.inspect(params)
-
     component
     |> put_state(:post, post)
   end

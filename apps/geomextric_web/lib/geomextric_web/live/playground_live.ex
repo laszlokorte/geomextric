@@ -15,6 +15,7 @@ defmodule GeomextricWeb.PlaygroundLive do
      |> assign(:objects, %{
        "cube" => %{
          geo: Geomextric.Bodies.gen_cube(),
+         motor: PGA3.translator(-4, 4, 1),
          editable: false,
          scale: 1,
          rotation: 0
@@ -24,6 +25,13 @@ defmodule GeomextricWeb.PlaygroundLive do
          scale: 1,
          rotation: 0,
          geo: Bodies.gen_pyramid()
+       },
+       "cylinder" => %{
+         editable: true,
+         scale: 1,
+         motor: PGA3.translator(4, 4, 0),
+         rotation: 0,
+         geo: Bodies.torus()
        },
        "grid" => %{
          scale: 1,
@@ -567,8 +575,15 @@ defmodule GeomextricWeb.PlaygroundLive do
         id="scene"
         preserveAspectRatio="xMidYMid slice"
       >
-        <%= for {objid, %{geo: geo, rotation: rotation, scale: scale}} <- @objects do %>
-          <.geometry camera={@camera} id={objid} geo={geo} rotation={rotation} scale={scale} />
+        <%= for {objid, %{geo: geo, rotation: rotation, scale: scale} = o} <- @objects do %>
+          <.geometry
+            camera={@camera}
+            id={objid}
+            geo={geo}
+            rotation={rotation}
+            motor={Map.get(o, :motor, PGA3.new(scalar: 1))}
+            scale={scale}
+          />
         <% end %>
         <.geometry
           id="trace2"

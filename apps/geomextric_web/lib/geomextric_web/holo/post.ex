@@ -39,13 +39,12 @@ defmodule Blog.PostPage do
     """
   end
 
-  def action(:move_drag, params, component) do
+  def action(:move_drag, _params, component) do
     # Update likes locally first for instant feedback
     component
   end
 
-  def action(:start_drag, params, component) do
-    IO.inspect(params)
+  def action(:start_drag, _params, component) do
     # Update likes locally first for instant feedback
     component
   end
