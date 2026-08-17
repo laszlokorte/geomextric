@@ -24,6 +24,7 @@ defmodule GeomextricWeb.Router do
       live "/tut", TutLive, :index
       live "/playground", PlaygroundLive, :index
       live "/rotory", RotoryLive, :index
+      live "/sdf", SDFLive, :index
     end
   end
 
