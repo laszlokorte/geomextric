@@ -1,4 +1,4 @@
-defmodule SDFCompiler do
+defmodule SDF2DCompiler do
   def compile(rects, bounding) do
     {parts, uniforms} =
       rects
@@ -11,11 +11,11 @@ defmodule SDFCompiler do
           },
           %{
             pos: {{bounding.x, 0}, {bounding.x + bounding.width, 0}},
-            attrs: %{color: "#000000", thickness: -2.5}
+            attrs: %{color: "#000000", thickness: -1.5, source_tip: false, target_tip: true}
           },
           %{
             pos: {{0, bounding.y}, {0, bounding.y + bounding.height}},
-            attrs: %{color: "#000000", thickness: -2.5}
+            attrs: %{color: "#000000", thickness: -1.5, source_tip: true, target_tip: false}
           }
           | &1
         ]
@@ -30,12 +30,11 @@ defmodule SDFCompiler do
             {
               float d = sdf_rect(
                 pos,
-                u_#{id}_x + u_#{id}_rad / 2.0,
-                u_#{id}_y + u_#{id}_rad / 2.0,
-                u_#{id}_w - u_#{id}_rad,
-                u_#{id}_h - u_#{id}_rad
-              )-
-              u_#{id}_rad * 0.5;
+                u_#{id}_x + u_#{id}_rad,
+                u_#{id}_y + u_#{id}_rad,
+                u_#{id}_w - u_#{id}_rad*2.0,
+                u_#{id}_h - u_#{id}_rad*2.0
+              )- u_#{id}_rad;
 
               if (d < 0.0) {
                 color = vec3(
@@ -100,7 +99,9 @@ defmodule SDFCompiler do
 
           {code, uniforms}
 
-        {%{pos: {{x1, y1}, {x2, y2}}} = line, i}, uniforms ->
+        {%{pos: {{x1, y1}, {x2, y2}}, attrs: %{source_tip: source_tip, target_tip: target_tip}} =
+             line, i},
+        uniforms ->
           id = "dot_#{i}"
 
           thickness = line.attrs.thickness
@@ -108,11 +109,28 @@ defmodule SDFCompiler do
 
           code = """
             {
+            float st = u_#{id}_st;
+            float tt = u_#{id}_tt;
+            vec2 a = vec2(u_#{id}_x1, u_#{id}_y1);
+            vec2 b = vec2(u_#{id}_x2, u_#{id}_y2);
+            float thick = #{if(thickness < 0, do: "u_#{id}_thickness * 0.5 * camera.z", else: "u_#{id}_thickness * 0.5")};
               float d = sdf_segment(
                 pos,
-               vec2(u_#{id}_x1, u_#{id}_y1),
-                vec2(u_#{id}_x2, u_#{id}_y2)
-              ) - #{if(thickness < 0, do: "u_#{id}_thickness * 0.5 * focus.z", else: "u_#{id}_thickness * 0.5")};
+               a,
+                b
+              ) - thick;
+            float tip_thick = #{if(thickness < 0, do: "2.0 * thick", else: "thick")};
+
+              vec2 dir = normalize(b - a);
+
+              d = min(
+                  d,
+                  sdf_arrowhead(pos, a, dir, tip_thick *6.0*st, tip_thick  * 4.0)
+              );
+              d = min(
+                  d,
+                  sdf_arrowhead(pos, b, -dir, tip_thick *6.0*tt, tip_thick  * 4.0)
+              );
 
               if (d < 0.0) {
                 color = vec3(
@@ -134,6 +152,8 @@ defmodule SDFCompiler do
                 {"u_#{id}_r", r},
                 {"u_#{id}_g", g},
                 {"u_#{id}_b", b},
+                {"u_#{id}_st", if(source_tip, do: 1.0, else: 0.0)},
+                {"u_#{id}_tt", if(target_tip, do: 1.0, else: 0.0)},
                 {"u_#{id}_thickness", abs(thickness)}
               ]
 
@@ -146,30 +166,10 @@ defmodule SDFCompiler do
     shader = """
     precision highp float;
 
-    float sdf_rect(
-      vec2 p,
-      float x,
-      float y,
-      float w,
-      float h
-    ) {
-      vec2 c = vec2(x + w * 0.5, y + h * 0.5);
-      vec2 b = vec2(w, h) * 0.5;
 
-      vec2 q = abs(p - c) - b;
 
-      return length(max(q, 0.0)) +
-             min(max(q.x, q.y), 0.0);
-    }
-
-    float sdf_segment( in vec2 p, in vec2 a, in vec2 b) {
-        vec2 pa = p-a, ba = b-a;
-        float h = clamp( dot(pa,ba)/dot(ba,ba), 0.0, 1.0 );
-        return length( pa - ba*h );
-    }
-
-    vec3 scene(vec2 pos, vec2 abspos) {
-      vec3 color = vec3(abspos, 0.5);
+    vec3 scene(vec2 pos, vec3 background) {
+      vec3 color = background;
 
       #{Enum.join(parts, "\n")}
 

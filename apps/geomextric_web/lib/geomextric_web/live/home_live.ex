@@ -74,8 +74,12 @@ defmodule GeomextricWeb.HomeLive do
           Rotory
         </.link>
 
-        <.link navigate={~p"/sdf"} class="enter-link" style="background-color: #8CF0E6;">
-          SDF
+        <.link navigate={~p"/sdf2d"} class="enter-link" style="background-color: #8CF0E6;">
+          SDF 2D
+        </.link>
+
+        <.link navigate={~p"/sdf3d"} class="enter-link" style="background-color: #FFDEAD;">
+          SDF 3D
         </.link>
       </div>
     </div>
