@@ -1,6 +1,6 @@
 defmodule SDF3DCompiler do
   def compile(shapes, bounding) do
-    {parts, uniforms} =
+    {parts, {kinds, uniforms}} =
       shapes
       |> Enum.reverse()
       |> then(fn shapes ->
@@ -25,198 +25,213 @@ defmodule SDF3DCompiler do
         ]
       end)
       |> Enum.with_index()
-      |> Enum.map_reduce([], fn
-        {%{pos: {x, y, w, h}, attrs: attrs}, i}, uniforms ->
-          id = "rect_#{i}"
-
-          {r, g, b} = hex_to_rgb(attrs.color)
-
-          radius = Map.get(attrs, :radius, 0.0)
-          height = Map.get(attrs, :height, 50.0)
-
-          code = """
-          {
-              vec3 q = p - vec3(
-                  u_#{id}_x + u_#{id}_w * 0.5,
-                  u_#{id}_y + u_#{id}_h * 0.5,
-                  u_#{id}_height * 0.5
-              );
-
-              float d = sdf_rounded_box(
-                  q,
-                  vec3(
-                      u_#{id}_w * 0.5,
-                      u_#{id}_h * 0.5,
-                      u_#{id}_height * 0.5
-                  ),
-                  u_#{id}_radius
-              );
-
-              if (d < result.d) {
-                  result.d = d;
-                  result.color = vec3(
-                      u_#{id}_r,
-                      u_#{id}_g,
-                      u_#{id}_b
-                  );
-              }
-          }
-          """
-
-          uniforms =
-            uniforms ++
-              [
-                {"u_#{id}_x", x},
-                {"u_#{id}_y", y},
-                {"u_#{id}_w", w},
-                {"u_#{id}_h", h},
-                {"u_#{id}_radius", radius},
-                {"u_#{id}_height", height},
-                {"u_#{id}_r", r},
-                {"u_#{id}_g", g},
-                {"u_#{id}_b", b}
-              ]
-
-          {code, uniforms}
-
-        {%{pos: {x, y}, attrs: attrs}, i}, uniforms
-        when is_number(x) ->
-          id = "dot_#{i}"
-
-          radius = Map.get(attrs, :radius, 1.0)
-          height = Map.get(attrs, :height, radius * 2.0)
-
-          {r, g, b} = hex_to_rgb(attrs.color)
-
-          code = """
-          {
-              vec3 q = p - vec3(
-                  u_#{id}_x,
-                  u_#{id}_y,
-                  u_#{id}_height * 0.5
-              );
-
-              float d = sdf_cylinder(
-                  q,
-                  u_#{id}_radius,
-                  u_#{id}_height * 0.5
-              );
-
-              if (d < result.d) {
-                  result.d = d;
-                  result.color = vec3(
-                      u_#{id}_r,
-                      u_#{id}_g,
-                      u_#{id}_b
-                  );
-              }
-          }
-          """
-
-          uniforms =
-            uniforms ++
-              [
-                {"u_#{id}_x", x},
-                {"u_#{id}_y", y},
-                {"u_#{id}_radius", radius},
-                {"u_#{id}_height", height},
-                {"u_#{id}_r", r},
-                {"u_#{id}_g", g},
-                {"u_#{id}_b", b}
-              ]
-
-          {code, uniforms}
-
+      |> Enum.map_reduce(
         {%{
-           pos: {{x1, y1}, {x2, y2}},
-           attrs: attrs
-         }, i},
-        uniforms ->
-          id = "line_#{i}"
+           rect: 0,
+           dot: 0,
+           line: 0
+         }, []},
+        fn
+          {%{pos: {x, y, w, h}, attrs: attrs}, i}, {kinds, uniforms} ->
+            kind = "rect"
+            i = Map.get(kinds, :rect, 0)
 
-          thickness = abs(Map.get(attrs, :thickness, 1.0))
-          height = Map.get(attrs, :height, thickness)
-          source_tip = Map.get(attrs, :source_tip, thickness)
-          target_tip = Map.get(attrs, :target_tip, thickness)
+            {r, g, b} = hex_to_rgb(attrs.color)
 
-          {r, g, b} = hex_to_rgb(attrs.color)
+            radius = Map.get(attrs, :radius, 0.0)
+            height = Map.get(attrs, :height, 50.0)
 
-          code = """
-          {
-              vec2 a = vec2(
-                  u_#{id}_x1,
-                  u_#{id}_y1
-              );
+            code = """
+            {
+                vec3 q = p - vec3(
+                    u_#{kind}_x[#{i}] + u_#{kind}_w[#{i}] * 0.5,
+                    u_#{kind}_y[#{i}] + u_#{kind}_h[#{i}] * 0.5,
+                    u_#{kind}_height[#{i}] * 0.5
+                );
 
-              vec2 b = vec2(
-                  u_#{id}_x2,
-                  u_#{id}_y2
-              );
+                float d = sdf_rounded_box(
+                    q,
+                    vec3(
+                        u_#{kind}_w[#{i}] * 0.5,
+                        u_#{kind}_h[#{i}] * 0.5,
+                        u_#{kind}_height[#{i}] * 0.5
+                    ),
+                    u_#{kind}_radius[#{i}]
+                );
 
-              float d = sdf_segment_cylinder(
-                  p,
-                  a,
-                  b,
-                  u_#{id}_radius,
-                  u_#{id}_height * 0.5
-              );
-              vec2 dir2 = normalize(b - a);
+                if (d < result.d) {
+                    result.d = d;
+                    result.color = vec3(
+                        u_#{kind}_r[#{i}],
+                        u_#{kind}_g[#{i}],
+                        u_#{kind}_b[#{i}]
+                    );
+                }
+            }
+            """
 
-                 vec3 axis = vec3(
-                     dir2,
-                     0.0
-                 );
-                 float arrow_d = min(
-                 sdf_cone(
-                      p,
-                      vec3(a + -dir2 * 3.0 * u_#{id}_radius* u_#{id}_st, 0.0),
-                      vec3(-dir2, 0.0),
-                      u_#{id}_radius * 6.0* u_#{id}_st,
-                      u_#{id}_radius * 3.0* u_#{id}_st
-                  ),
-                  sdf_cone(
-                      p,
-                      vec3(b + dir2 * 3.0 * u_#{id}_radius* u_#{id}_tt, 0.0),
-                      vec3(dir2, 0.0),
-                      u_#{id}_radius * 6.0* u_#{id}_tt,
-                      u_#{id}_radius * 3.0* u_#{id}_tt
-                  )
-                 );
+            uniforms =
+              uniforms ++
+                [
+                  {"u_#{kind}_x", i, x},
+                  {"u_#{kind}_y", i, y},
+                  {"u_#{kind}_w", i, w},
+                  {"u_#{kind}_h", i, h},
+                  {"u_#{kind}_radius", i, radius},
+                  {"u_#{kind}_height", i, height},
+                  {"u_#{kind}_r", i, r},
+                  {"u_#{kind}_g", i, g},
+                  {"u_#{kind}_b", i, b}
+                ]
 
-                 d = min(d, arrow_d);
+            {code, {Map.update(kinds, :rect, 0, &(&1 + 1)), uniforms}}
 
-              if (d < result.d) {
-                  result.d = d;
-                  result.color = vec3(
-                      u_#{id}_r,
-                      u_#{id}_g,
-                      u_#{id}_b
-                  );
-              }
-          }
-          """
+          {%{pos: {x, y}, attrs: attrs}, i}, {kinds, uniforms}
+          when is_number(x) ->
+            kind = "dot"
 
-          uniforms =
-            uniforms ++
-              [
-                {"u_#{id}_x1", x1},
-                {"u_#{id}_y1", y1},
-                {"u_#{id}_x2", x2},
-                {"u_#{id}_y2", y2},
-                {"u_#{id}_radius", thickness * 0.5},
-                {"u_#{id}_height", height},
-                {"u_#{id}_st", if(source_tip, do: 1.0, else: 0.0)},
-                {"u_#{id}_tt", if(target_tip, do: 1.0, else: 0.0)},
-                {"u_#{id}_r", r},
-                {"u_#{id}_g", g},
-                {"u_#{id}_b", b}
-              ]
+            i = Map.get(kinds, :dot, 0)
 
-          {code, uniforms}
+            radius = Map.get(attrs, :radius, 1.0)
+            height = Map.get(attrs, :height, radius * 2.0)
 
-        _, uniforms ->
-          {nil, uniforms}
-      end)
+            {r, g, b} = hex_to_rgb(attrs.color)
+
+            code = """
+            {
+                vec3 q = p - vec3(
+                    u_#{kind}_x[#{i}],
+                    u_#{kind}_y[#{i}],
+                    u_#{kind}_height[#{i}] * 0.5
+                );
+
+                float d = sdf_cylinder(
+                    q,
+                    u_#{kind}_radius[#{i}],
+                    u_#{kind}_height[#{i}] * 0.5
+                );
+
+                if (d < result.d) {
+                    result.d = d;
+                    result.color = vec3(
+                        u_#{kind}_r[#{i}],
+                        u_#{kind}_g[#{i}],
+                        u_#{kind}_b[#{i}]
+                    );
+                }
+            }
+            """
+
+            uniforms =
+              uniforms ++
+                [
+                  {"u_#{kind}_r", i, r},
+                  {"u_#{kind}_g", i, g},
+                  {"u_#{kind}_b", i, b},
+                  {"u_#{kind}_x", i, x},
+                  {"u_#{kind}_y", i, y},
+                  {"u_#{kind}_radius", i, radius},
+                  {"u_#{kind}_height", i, height},
+                  {"u_#{kind}_r", i, r},
+                  {"u_#{kind}_g", i, g},
+                  {"u_#{kind}_b", i, b}
+                ]
+
+            {code, {Map.update(kinds, :dot, 0, &(&1 + 1)), uniforms}}
+
+          {%{
+             pos: {{x1, y1}, {x2, y2}},
+             attrs: attrs
+           }, i},
+          {kinds, uniforms} ->
+            kind = "line"
+
+            i = Map.get(kinds, :line, 0)
+
+            thickness = abs(Map.get(attrs, :thickness, 1.0))
+            height = Map.get(attrs, :height, thickness)
+            source_tip = Map.get(attrs, :source_tip, thickness)
+            target_tip = Map.get(attrs, :target_tip, thickness)
+
+            {r, g, b} = hex_to_rgb(attrs.color)
+
+            code = """
+            {
+                vec2 a = vec2(
+                    u_#{kind}_x1[#{i}],
+                    u_#{kind}_y1[#{i}]
+                );
+
+                vec2 b = vec2(
+                    u_#{kind}_x2[#{i}],
+                    u_#{kind}_y2[#{i}]
+                );
+
+                float d = sdf_segment_cylinder(
+                    p,
+                    a,
+                    b,
+                    u_#{kind}_radius[#{i}],
+                    u_#{kind}_height[#{i}] * 0.5
+                );
+                vec2 dir2 = normalize(b - a);
+
+                   vec3 axis = vec3(
+                       dir2,
+                       0.0
+                   );
+                   float arrow_d = min(
+                   sdf_cone(
+                        p,
+                        vec3(a + -dir2 * 3.0 * u_#{kind}_radius[#{i}]* u_#{kind}_st[#{i}], 0.0),
+                        vec3(-dir2, 0.0),
+                        u_#{kind}_radius[#{i}] * 6.0* u_#{kind}_st[#{i}],
+                        u_#{kind}_radius[#{i}] * 3.0* u_#{kind}_st[#{i}]
+                    ),
+                    sdf_cone(
+                        p,
+                        vec3(b + dir2 * 3.0 * u_#{kind}_radius[#{i}]* u_#{kind}_tt[#{i}], 0.0),
+                        vec3(dir2, 0.0),
+                        u_#{kind}_radius[#{i}] * 6.0* u_#{kind}_tt[#{i}],
+                        u_#{kind}_radius[#{i}] * 3.0* u_#{kind}_tt[#{i}]
+                    )
+                   );
+
+                   d = min(d, arrow_d);
+
+                if (d < result.d) {
+                    result.d = d;
+                    result.color = vec3(
+                        u_#{kind}_r[#{i}],
+                        u_#{kind}_g[#{i}],
+                        u_#{kind}_b[#{i}]
+                    );
+                }
+            }
+            """
+
+            uniforms =
+              uniforms ++
+                [
+                  {"u_#{kind}_x1", i, x1},
+                  {"u_#{kind}_y1", i, y1},
+                  {"u_#{kind}_x2", i, x2},
+                  {"u_#{kind}_y2", i, y2},
+                  {"u_#{kind}_radius", i, thickness * 0.5},
+                  {"u_#{kind}_height", i, height},
+                  {"u_#{kind}_st", i, if(source_tip, do: 1.0, else: 0.0)},
+                  {"u_#{kind}_tt", i, if(target_tip, do: 1.0, else: 0.0)},
+                  {"u_#{kind}_r", i, r},
+                  {"u_#{kind}_g", i, g},
+                  {"u_#{kind}_b", i, b}
+                ]
+
+            {code, {Map.update(kinds, :line, 0, &(&1 + 1)), uniforms}}
+
+          _, {kinds, uniforms} ->
+            {nil, {kinds, uniforms}}
+        end
+      )
 
     shader = """
 

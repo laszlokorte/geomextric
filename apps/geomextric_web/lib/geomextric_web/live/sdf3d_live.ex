@@ -158,13 +158,18 @@ defmodule GeomextricWeb.SDF3DLive do
           <div
             data-shader
             uniform-alpha={Float.round(@alpha, 3)}
-            {uniforms |> Enum.map(fn {k,v} -> { "uniform-#{k}", v } end)}
+            {uniforms |> Enum.map(fn {k,i,v} -> { "uniform-#{k}[#{i}]", v } end)}
           >
             <div
-              :for={{{u, _}, i} <- uniforms |> Enum.with_index()}
+              :for={
+                {{u, c}, i} <-
+                  uniforms
+                  |> Enum.group_by(fn {k, _, v} -> k end, fn {_, i, _} -> i end)
+                  |> Enum.with_index()
+              }
               id={"uniform-#{i}"}
             >
-              uniform float {u};
+              uniform float {u}[{Enum.max(c) + 1}];
             </div>
             <div
               :for={{l, i} <- code |> String.split("pragma split") |> Enum.with_index()}
@@ -503,7 +508,17 @@ defmodule GeomextricWeb.SDF3DLive do
             uniforms.push([name, parseFloat(attr.value)]);
           }
         }
-        return Object.fromEntries(uniforms);
+        const grouped = Object.groupBy(uniforms, ([name]) =>
+          name.replace(/\[\d+\]$/, "")
+        );
+
+        const result = Object.fromEntries(
+          Object.entries(grouped).map(([name, entries]) => [
+            name,
+            entries.map(([, value]) => value),
+          ])
+        );
+        return result;
       }
 
       export default {
@@ -679,9 +694,9 @@ defmodule GeomextricWeb.SDF3DLive do
 
           const text = this.el.textContent;
           if (text !== this.previousText) {
-            oldDraw.destroy();
             this.draw = makeDraw(this.regl, this.el, this.reglCanvas);
 
+            oldDraw.destroy();
             this.previousText = text;
           }
 
