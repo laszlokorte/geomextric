@@ -84,7 +84,7 @@ defmodule GeomextricWeb.Dragger do
           t.clonedEl = t.el.cloneNode(true);
           t.clonedEl.setAttribute("pointer-events", "none");
           t.clonedEl.setAttribute("opacity", "0.3");
-          t.clonedEl.setAttribute("id", "cloned" + t.id);
+          t.clonedEl.setAttribute("id", "cloned" + t.el.id);
           t.clonedEl.removeAttribute("phx-hook");
           t.el.parentNode.appendChild(t.clonedEl);
         }

@@ -132,10 +132,15 @@ defmodule GeomextricWeb.SDF2DLive do
           }
         ]}>
           <:head>
-            <.link navigate={~p"/canvas"}>
-              2D
+            <.link navigate={~p"/sdf3d"}>
+              3D
             </.link>
           </:head>
+
+          <div class="segment">
+            <div class="connection-status connected">Connected 🟢</div>
+            <div class="connection-status disconnected">Reconnecting... 🔴</div>
+          </div>
         </.menu>
       </div>
       <div
@@ -176,101 +181,101 @@ defmodule GeomextricWeb.SDF2DLive do
         console.log("recompile shader");
         return regl({
           vert: `
-                          precision mediump float;
+                              precision mediump float;
 
-                          attribute vec2 position;
-                          varying vec2 pos;
+                              attribute vec2 position;
+                              varying vec2 pos;
 
-                          void main() {
-                            pos = (position + 1.0) / 2.0;
-                            gl_Position = vec4(position, 0.0, 1.0);
-                          }
-                        `,
+                              void main() {
+                                pos = (position + 1.0) / 2.0;
+                                gl_Position = vec4(position, 0.0, 1.0);
+                              }
+                            `,
 
           frag: `
-                          precision mediump float;
-                          varying vec2 pos;
-                          uniform vec2 cursor;
-                          uniform vec2 screen;
-                          uniform vec4 camera;
+                              precision mediump float;
+                              varying vec2 pos;
+                              uniform vec2 cursor;
+                              uniform vec2 screen;
+                              uniform vec4 camera;
 
-                          vec2 rotate(vec2 p, float angle) {
-                            return mat2(cos(angle), -sin(angle), sin(angle),  cos(angle)) * p;
-                          }
-                          float sdf_rect(
-                                vec2 p,
-                                float x,
-                                float y,
-                                float w,
-                                float h
-                              ) {
-                                vec2 c = vec2(x + w * 0.5, y + h * 0.5);
-                                vec2 b = vec2(w, h) * 0.5;
+                              vec2 rotate(vec2 p, float angle) {
+                                return mat2(cos(angle), -sin(angle), sin(angle),  cos(angle)) * p;
+                              }
+                              float sdf_rect(
+                                    vec2 p,
+                                    float x,
+                                    float y,
+                                    float w,
+                                    float h
+                                  ) {
+                                    vec2 c = vec2(x + w * 0.5, y + h * 0.5);
+                                    vec2 b = vec2(w, h) * 0.5;
 
-                                vec2 q = abs(p - c) - b;
+                                    vec2 q = abs(p - c) - b;
 
-                                return length(max(q, 0.0)) +
-                                       min(max(q.x, q.y), 0.0);
+                                    return length(max(q, 0.0)) +
+                                           min(max(q.x, q.y), 0.0);
+                                  }
+
+                                  float sdf_segment( in vec2 p, in vec2 a, in vec2 b) {
+                                      vec2 pa = p-a, ba = b-a;
+                                      float h = clamp( dot(pa,ba)/dot(ba,ba), 0.0, 1.0 );
+                                      return length( pa - ba*h );
+                                  }
+                                  float sdf_arrowhead(
+                                      vec2 p,
+                                      vec2 tip,
+                                      vec2 dir,
+                                      float len,
+                                      float width
+                                  ) {
+                                      vec2 q = p - tip;
+
+                                      // x points backwards from the tip
+                                      float x = -dot(q, dir);
+                                      float y = abs(dot(q, vec2(-dir.y, dir.x)));
+
+                                      // Triangle: tip at x = 0, base at x = len
+                                      float k = width / len;
+
+                                      float h = clamp((x + y * k) / (1.0 + k * k), 0.0, len);
+                                      float d = length(vec2(x - h, y - h * k));
+
+                                      // Inside triangle
+                                      float inside = step(y, width * (1.0 - x / len))
+                                                   * step(0.0, x)
+                                                   * step(x, len);
+
+                                      return mix(d, -d, inside);
+                                  }
+
+                              ${el.textContent}
+
+                              vec3 antialias(vec2 p, vec3 background) {
+                                vec2 px = vec2(1.0) * camera.z;
+
+                                vec3 color = vec3(0.0);
+
+                                color += scene(p + px * vec2(-0.375, -0.375), background);
+                               // color += scene(p + px * vec2( 0.375, -0.375), background);
+                               // color += scene(p + px * vec2(-0.375,  0.375), background);
+                               // color += scene(p + px * vec2( 0.375,  0.375), background);
+
+                               // color *= 0.25;
+
+                                return color;
                               }
 
-                              float sdf_segment( in vec2 p, in vec2 a, in vec2 b) {
-                                  vec2 pa = p-a, ba = b-a;
-                                  float h = clamp( dot(pa,ba)/dot(ba,ba), 0.0, 1.0 );
-                                  return length( pa - ba*h );
+                              void main() {
+                                float c = length((pos)*screen - vec2(cursor.x, screen.y - cursor.y)) > 6.0 ? 1.0: 0.0;
+                                gl_FragColor = vec4(
+                                  antialias(
+                                    rotate(vec2(pos.x-0.5, 0.5 -pos.y)*camera.z*screen, camera.w) + camera.xy,
+                                    vec3(pos, 0.5)
+                                  ), c);
                               }
-                              float sdf_arrowhead(
-                                  vec2 p,
-                                  vec2 tip,
-                                  vec2 dir,
-                                  float len,
-                                  float width
-                              ) {
-                                  vec2 q = p - tip;
-
-                                  // x points backwards from the tip
-                                  float x = -dot(q, dir);
-                                  float y = abs(dot(q, vec2(-dir.y, dir.x)));
-
-                                  // Triangle: tip at x = 0, base at x = len
-                                  float k = width / len;
-
-                                  float h = clamp((x + y * k) / (1.0 + k * k), 0.0, len);
-                                  float d = length(vec2(x - h, y - h * k));
-
-                                  // Inside triangle
-                                  float inside = step(y, width * (1.0 - x / len))
-                                               * step(0.0, x)
-                                               * step(x, len);
-
-                                  return mix(d, -d, inside);
-                              }
-
-                          ${el.textContent}
-
-                          vec3 antialias(vec2 p, vec3 background) {
-                            vec2 px = vec2(1.0) * camera.z;
-
-                            vec3 color = vec3(0.0);
-
-                            color += scene(p + px * vec2(-0.375, -0.375), background);
-                           // color += scene(p + px * vec2( 0.375, -0.375), background);
-                           // color += scene(p + px * vec2(-0.375,  0.375), background);
-                           // color += scene(p + px * vec2( 0.375,  0.375), background);
-
-                           // color *= 0.25;
-
-                            return color;
-                          }
-
-                          void main() {
-                            float c = length((pos)*screen - vec2(cursor.x, screen.y - cursor.y)) > 6.0 ? 1.0: 0.0;
-                            gl_FragColor = vec4(
-                              antialias(
-                                rotate(vec2(pos.x-0.5, 0.5 -pos.y)*camera.z*screen, camera.w) + camera.xy,
-                                vec3(pos, 0.5)
-                              ), c);
-                          }
-                        `,
+                            `,
           uniforms: {
             cursor: regl.prop("cursor"),
             camera: regl.prop("camera"),
@@ -367,24 +372,24 @@ defmodule GeomextricWeb.SDF2DLive do
             "pointermove",
             (this.onpointermove = (evt) => {
               if (evt.currentTarget.hasPointerCapture(evt.pointerId)) {
-                const world = evtToWorld(evt)
+                const world = evtToWorld(evt);
                 cam.x -= world.x - cam.base.x;
                 cam.y -= world.y - cam.base.y;
               }
             }),
           );
           function rotate({ x, y }, { x: px, y: py }, angle) {
-               const dx = x - px;
-               const dy = y - py;
+            const dx = x - px;
+            const dy = y - py;
 
-               const c = Math.cos(angle);
-               const s = Math.sin(angle);
+            const c = Math.cos(angle);
+            const s = Math.sin(angle);
 
-               return {
-                 x: px + dx * c - dy * s,
-                 y: py + dx * s + dy * c,
-               };
-             }
+            return {
+              x: px + dx * c - dy * s,
+              y: py + dx * s + dy * c,
+            };
+          }
           const zoomBy = ({ dz, px, py }) => {
             const oldZoom = Math.exp(cam.zoom);
             cam.zoom = cam.zoom + dz;
@@ -394,21 +399,17 @@ defmodule GeomextricWeb.SDF2DLive do
             cam.y = py - (py - cam.y) * factor;
           };
           const rotateBy = ({ dw, px, py }) => {
-                        cam.angle += dw / 3;
-                        const { x: nx, y: ny } = rotate(
-                          cam,
-                          { x: px, y: py },
-                          - dw / 3,
-                        );
-                        cam.x = nx;
-                        cam.y = ny;
-                      }
+            cam.angle += dw / 3;
+            const { x: nx, y: ny } = rotate(cam, { x: px, y: py }, -dw / 3);
+            cam.x = nx;
+            cam.y = ny;
+          };
           const evtToWorld = (evt) => {
             const x = evt.clientX - window.innerWidth / 2;
             const y = evt.clientY - window.innerHeight / 2;
 
-            const cos = Math.cos(cam.angle)
-            const sin = Math.sin(cam.angle)
+            const cos = Math.cos(cam.angle);
+            const sin = Math.sin(cam.angle);
 
             const worldX = cam.x + (x * cos - y * -sin) * Math.exp(-cam.zoom);
             const worldY = cam.y + (y * cos - x * sin) * Math.exp(-cam.zoom);
@@ -416,14 +417,16 @@ defmodule GeomextricWeb.SDF2DLive do
             return {
               x: worldX,
               y: worldY,
-            }
-          }
+            };
+          };
 
           this.el.addEventListener(
             "pointerdown",
             (this.onpointerdown = (evt) => {
-              evt.currentTarget.setPointerCapture(evt.pointerId);
-              cam.base = evtToWorld(evt)
+              if (evt.isPrimary && (evt.pointerType != "mouse" || evt.button == 0)) {
+                evt.currentTarget.setPointerCapture(evt.pointerId);
+                cam.base = evtToWorld(evt);
+              }
             }),
           );
 
@@ -431,8 +434,8 @@ defmodule GeomextricWeb.SDF2DLive do
             "wheel",
             (this.onwheel = (evt) => {
               evt.preventDefault();
-              const world = evtToWorld(evt)
-              if(evt.altKey) {
+              const world = evtToWorld(evt);
+              if (evt.altKey) {
                 rotateBy({ dw: -evt.deltaY, px: world.x, py: world.y });
               } else {
                 zoomBy({ dz: -evt.deltaY / 1000, px: world.x, py: world.y });

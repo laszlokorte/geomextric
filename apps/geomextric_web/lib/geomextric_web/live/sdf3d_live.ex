@@ -136,6 +136,11 @@ defmodule GeomextricWeb.SDF3DLive do
               2D
             </.link>
           </:head>
+
+          <div class="segment">
+            <div class="connection-status connected">Connected 🟢</div>
+            <div class="connection-status disconnected">Reconnecting... 🔴</div>
+          </div>
         </.menu>
       </div>
       <div
@@ -149,7 +154,7 @@ defmodule GeomextricWeb.SDF3DLive do
         data-bounds-w={@box.width}
         data-bounds-h={@box.height}
       >
-        <%= with {code, uniforms} <- SDF2DCompiler.compile(@layers, @box) do %>
+        <%= with {code, uniforms} <- SDF3DCompiler.compile(@layers, @box) do %>
           <span
             data-shader
             uniform-alpha={Float.round(@alpha, 3)}
@@ -176,142 +181,289 @@ defmodule GeomextricWeb.SDF3DLive do
         console.log("recompile shader");
         return regl({
           vert: `
-                          precision mediump float;
+                              precision mediump float;
 
-                          attribute vec2 position;
-                          varying vec2 pos;
+                              attribute vec2 position;
+                              varying vec2 pos;
 
-                          void main() {
-                            pos = (position + 1.0) / 2.0;
-                            gl_Position = vec4(position, 0.0, 1.0);
-                          }
-                        `,
+                              void main() {
+                                pos = (position + 1.0) / 2.0;
+                                gl_Position = vec4(position, 0.0, 1.0);
+                              }
+                            `,
 
           frag: `
-                          precision mediump float;
-                          varying vec2 pos;
-                          uniform vec2 cursor;
-                          uniform vec2 screen;
-                          uniform vec4 camera;
+              precision highp float;
+                   uniform vec2 screen;
 
-                          uniform vec2 resolution;
+                   uniform vec3 camera_pos;
+                   uniform vec3 camera_target;
+                   struct SDFResult {
+                                    float d;
+                                    vec3 color;
+                                };
 
-                          float sdSphere(vec3 p, float r) {
-                              return length(p) - r;
-                          }
+                   float sdf_box(vec3 p, vec3 b) {
+                       vec3 q = abs(p) - b;
 
-                          float sdPlane(vec3 p) {
-                              return p.y;
-                          }
+                       return length(max(q, 0.0)) +
+                              min(max(q.x, max(q.y, q.z)), 0.0);
+                   }
 
-                          float scene(vec3 p) {
-                              float sphere = sdSphere(p - vec3(0.0, 1.0, 0.0), 1.0);
-                              float plane  = sdPlane(p);
+                   float sdf_rounded_box(
+                       vec3 p,
+                       vec3 b,
+                       float r
+                   ) {
+                       vec3 q = abs(p) - b + r;
 
-                              return min(sphere, plane);
-                          }
+                       return length(max(q, 0.0))
+                            + min(max(q.x, max(q.y, q.z)), 0.0)
+                            - r;
+                   }
 
-                          vec3 calcNormal(vec3 p) {
-                              vec2 e = vec2(0.001, 0.0);
+                   float sdf_cylinder(
+                       vec3 p,
+                       float radius,
+                       float half_height
+                   ) {
+                       vec2 d = abs(vec2(
+                           length(p.xy),
+                           p.z
+                       )) - vec2(
+                           radius,
+                           half_height
+                       );
 
-                              return normalize(vec3(
-                                  scene(p + e.xyy) - scene(p - e.xyy),
-                                  scene(p + e.yxy) - scene(p - e.yxy),
-                                  scene(p + e.yyx) - scene(p - e.yyx)
-                              ));
-                          }
+                       return min(max(d.x, d.y), 0.0)
+                            + length(max(d, 0.0));
+                   }
 
-                          float raymarch(vec3 ro, vec3 rd) {
-                              float t = 0.0;
+                   float sdf_cone(
+                       vec3 p,
+                       vec3 apex,
+                       vec3 axis,
+                       float height,
+                       float radius
+                   ) {
+                       vec3 q = p - apex;
 
-                              for (int i = 0; i < 500; i++) {
-                                  vec3 p = ro + rd * t;
-                                  float d = scene(p);
+                       float z = dot(q, axis);
+                       float r = length(q - axis * z);
 
-                                  if (d < 0.001)
-                                      return t;
+                       // Cone exists for -height <= z <= 0.
+                       float k = radius / height;
 
-                                  t += d;
+                       // Distance to the conical surface in the axial/radial plane.
+                       vec2 c = vec2(
+                           r,
+                           z
+                       );
 
-                                  if (t > 100.0)
-                                      break;
-                              }
+                       vec2 tip = vec2(0.0, 0.0);
+                       vec2 base = vec2(radius, -height);
 
-                              return -1.0;
-                          }
+                       vec2 ba = base - tip;
+                       vec2 pa = c - tip;
 
-                          float shadow(vec3 p, vec3 lightPos) {
-                              vec3 rd = normalize(lightPos - p);
-                              float maxT = length(lightPos - p);
+                       float h = clamp(
+                           dot(pa, ba) / dot(ba, ba),
+                           0.0,
+                           1.0
+                       );
 
-                              float t = 0.01;
+                       float side = length(pa - ba * h);
 
-                              for (int i = 0; i < 100; i++) {
-                                  vec3 q = p + rd * t;
-                                  float d = scene(q);
+                       // Sign: inside the cone.
+                       float cone_r = r + k * z;
 
-                                  if (d < 0.001)
-                                      return 0.0;
+                       if (z <= 0.0 && z >= -height && cone_r < 0.0) {
+                           side = -side;
+                       }
 
-                                  t += d;
+                       // Base cap.
+                       float cap = abs(r - radius);
+                       if (z < -height) {
+                           side = max(side, -z - height);
+                       }
 
-                                  if (t >= maxT)
-                                      break;
-                              }
+                       return side;
+                   }
 
-                              return 1.0;
-                          }
+                   float sdf_segment_cylinder(
+                       vec3 p,
+                       vec2 a,
+                       vec2 b,
+                       float radius,
+                       float half_height
+                   ) {
+                       vec2 ab = b - a;
 
-                          void main() {
-                              vec2 uv = (gl_FragCoord.xy * 2.0 - resolution) / resolution.y;
+                       float len = length(ab);
 
-                              // Camera
-                              vec3 ro = vec3(0.0, 2.5, 5.0);
-                              vec3 target = vec3(camera.x/screen.x*5.0/ camera.z , -camera.y/screen.y*5.0/ camera.z , 0.0);
+                       vec2 dir = ab / len;
+                       vec2 normal = vec2(
+                           -dir.y,
+                           dir.x
+                       );
 
-                              vec3 forward = normalize(target - ro);
-                              vec3 right = normalize(cross(forward, vec3(0.0, 1.0, 0.0)));
-                              vec3 up = cross(right, forward);
+                       vec2 rel = p.xy - a;
 
-                              vec3 rd = normalize(
-                                  forward * camera.z +
-                                  uv.x * right +
-                                  uv.y * up
-                              );
+                       float along = dot(
+                           rel,
+                           dir
+                       );
 
-                              float t = raymarch(ro, rd);
+                       float side = dot(
+                           rel,
+                           normal
+                       );
 
-                              if (t < 0.0) {
-                                  gl_FragColor = vec4(0.45, 0.77, 1.0, 1.0);
-                                  return;
-                              }
+                       float radial =
+                           length(vec2(
+                               side,
+                               p.z
+                           )) - radius;
 
-                              vec3 p = ro + rd * t;
-                              vec3 n = calcNormal(p);
+                       float axial = max(
+                           -along,
+                           along - len
+                       );
 
-                              vec3 lightPos = vec3(3.0, 5.0, 4.0);
-                              vec3 l = normalize(lightPos - p);
+                       return max(
+                           radial,
+                           axial
+                       );
+                   }
 
-                              float diffuse = max(dot(n, l), 0.0);
-                              float sh = shadow(p + n * 0.002, lightPos) + 0.3;
+                 vec3 get_ray(vec2 uv) {
+                     vec3 forward = normalize(
+                       camera_target - camera_pos
+                     );
 
-                              vec3 color = vec3(0.5, 0.15, 0.95);
+                     vec3 up_hint = vec3(0.0, 1.0, 0.0);
 
-                              // Ground gets a different material
-                              if (abs(p.y) < 0.002)
-                                  color = vec3(0.35);
+                     vec3 right = normalize(
+                         cross(forward, up_hint)
+                     );
 
-                              vec3 ambient = vec3(0.12);
-                              vec3 lighting = ambient + color * diffuse * sh;
+                     vec3 up = normalize(
+                         cross(right, forward)
+                     );
 
-                              gl_FragColor = vec4(lighting, 1.0);
-                          }
-                        `,
+                     float aspect =
+                         screen.x / screen.y;
+
+                     return normalize(
+                         forward +
+                         right * uv.x * aspect +
+                         up * -uv.y
+                     );
+                 }
+
+                 ${shader.textContent}
+
+                   vec3 estimate_normal(vec3 p) {
+                     const float e = 0.001;
+
+                     return normalize(vec3(
+                         scene(p + vec3(e, 0.0, 0.0)).d -
+                         scene(p - vec3(e, 0.0, 0.0)).d,
+
+                         scene(p + vec3(0.0, e, 0.0)).d -
+                         scene(p - vec3(0.0, e, 0.0)).d,
+
+                         scene(p + vec3(0.0, 0.0, e)).d -
+                         scene(p - vec3(0.0, 0.0, e)).d
+                     ));
+                 }
+                 bool raymarch(
+                     vec3 ro,
+                     vec3 rd,
+                     out vec3 hit
+                 ) {
+                     float t = 0.0;
+
+                     for (int i = 0; i < 128; i++) {
+                         vec3 p = ro + rd * t;
+
+                         SDFResult result = scene(p);
+
+                         if (result.d < 0.001) {
+                             hit = p;
+                             return true;
+                         }
+
+                         t += result.d;
+
+                         if (t > 100000.0) {
+                             break;
+                         }
+                     }
+
+                     return false;
+                 }
+
+                        void main() {
+                     vec2 uv =
+                         gl_FragCoord.xy /
+                         screen;
+
+                     uv = uv * 2.0 - 1.0;
+
+                     vec3 ro = camera_pos;
+                     vec3 rd = get_ray(uv);
+
+                     vec3 hit;
+
+                     vec3 background = vec3(
+                         uv / 2.0 + 0.5,
+                         0.32
+                     );
+
+                     if (!raymarch(ro, rd, hit)) {
+                         gl_FragColor = vec4(
+                             background,
+                             1.0
+                         );
+
+                         return;
+                     }
+
+                     SDFResult result = scene(hit);
+
+                     vec3 normal = estimate_normal(hit);
+
+                     vec3 light_dir = normalize(
+                         vec3(-0.4, -0.5, 1.0)
+                     );
+
+                     float diffuse = max(
+                         dot(normal, light_dir),
+                         0.0
+                     );
+
+                     float ambient = 0.25;
+
+                     vec3 color =
+                         result.color *
+                         (ambient + diffuse * 0.75);
+
+                     gl_FragColor = vec4(
+                         color,
+                         1.0
+                     );
+                 }
+                            `,
           uniforms: {
             cursor: regl.prop("cursor"),
             camera: regl.prop("camera"),
+
+            camera_pos: regl.prop("camera_pos"),
+            camera_target: regl.prop("camera_target"),
             screen: ({ viewport }) => [viewport.width, viewport.height],
-            resolution: ({ viewport }) => [viewport.width, viewport.height],
+
+            ...Object.fromEntries(uniforms.map((u) => [u, regl.prop(u)])),
           },
 
           attributes: {
@@ -403,48 +555,44 @@ defmodule GeomextricWeb.SDF3DLive do
             "pointermove",
             (this.onpointermove = (evt) => {
               if (evt.currentTarget.hasPointerCapture(evt.pointerId)) {
-                const world = evtToWorld(evt)
+                const world = evtToWorld(evt);
                 cam.x -= world.x - cam.base.x;
                 cam.y -= world.y - cam.base.y;
               }
             }),
           );
           function rotate({ x, y }, { x: px, y: py }, angle) {
-               const dx = x - px;
-               const dy = y - py;
+            const dx = x - px;
+            const dy = y - py;
 
-               const c = Math.cos(angle);
-               const s = Math.sin(angle);
+            const c = Math.cos(angle);
+            const s = Math.sin(angle);
 
-               return {
-                 x: px + dx * c - dy * s,
-                 y: py + dx * s + dy * c,
-               };
-             }
+            return {
+              x: px + dx * c - dy * s,
+              y: py + dx * s + dy * c,
+            };
+          }
           const zoomBy = ({ dz, px, py }) => {
             const oldZoom = Math.exp(cam.zoom);
-            cam.zoom = Math.min(2, Math.max(-2, cam.zoom + dz));
+            cam.zoom = Math.min(1, Math.max(-2, cam.zoom + dz));
             const newZoom = Math.exp(cam.zoom);
             const factor = oldZoom / newZoom;
             cam.x = px - (px - cam.x) * factor;
             cam.y = py - (py - cam.y) * factor;
           };
           const rotateBy = ({ dw, px, py }) => {
-                        cam.angle += dw / 3;
-                        const { x: nx, y: ny } = rotate(
-                          cam,
-                          { x: px, y: py },
-                          - dw / 3,
-                        );
-                        cam.x = nx;
-                        cam.y = ny;
-                      }
+            cam.angle += dw / 3;
+            const { x: nx, y: ny } = rotate(cam, { x: px, y: py }, -dw / 3);
+            cam.x = nx;
+            cam.y = ny;
+          };
           const evtToWorld = (evt) => {
             const x = evt.clientX - window.innerWidth / 2;
             const y = evt.clientY - window.innerHeight / 2;
 
-            const cos = Math.cos(cam.angle)
-            const sin = Math.sin(cam.angle)
+            const cos = Math.cos(cam.angle);
+            const sin = Math.sin(cam.angle);
 
             const worldX = cam.x + (x * cos - y * -sin) * Math.exp(-cam.zoom);
             const worldY = cam.y + (y * cos - x * sin) * Math.exp(-cam.zoom);
@@ -452,14 +600,16 @@ defmodule GeomextricWeb.SDF3DLive do
             return {
               x: worldX,
               y: worldY,
-            }
-          }
+            };
+          };
 
           this.el.addEventListener(
             "pointerdown",
             (this.onpointerdown = (evt) => {
-              evt.currentTarget.setPointerCapture(evt.pointerId);
-              cam.base = evtToWorld(evt)
+              if (evt.isPrimary && (evt.pointerType != "mouse" || evt.button == 0)) {
+                evt.currentTarget.setPointerCapture(evt.pointerId);
+                cam.base = evtToWorld(evt);
+              }
             }),
           );
 
@@ -467,11 +617,11 @@ defmodule GeomextricWeb.SDF3DLive do
             "wheel",
             (this.onwheel = (evt) => {
               evt.preventDefault();
-              const world = evtToWorld(evt)
-              if(evt.altKey) {
-              //  rotateBy({ dw: -evt.deltaY, px: world.x, py: world.y });
+              const world = evtToWorld(evt);
+              if (evt.altKey) {
+                //  rotateBy({ dw: -evt.deltaY, px: world.x, py: world.y });
               } else {
-                zoomBy({ dz: -evt.deltaY / 1000, px: cam.x, py: cam.y });
+                zoomBy({ dz: -evt.deltaY / 1000, px: world.x, py: world.y });
               }
             }),
             { passive: false },
@@ -503,7 +653,8 @@ defmodule GeomextricWeb.SDF3DLive do
                 this.draw({
                   ...this.uniforms,
                   cursor: [cursor.x, cursor.y],
-                  camera: [cam.x, cam.y, Math.exp(-cam.zoom), cam.angle],
+                  camera_pos: [cam.x, cam.y, 500 * Math.exp(-cam.zoom)],
+                  camera_target: [cam.x * 0.7, cam.y * 0.7, 0],
                 });
               });
             } catch (e) {
@@ -520,7 +671,7 @@ defmodule GeomextricWeb.SDF3DLive do
           if (text !== this.previousText) {
             this.draw = makeDraw(this.regl, this.el, this.reglCanvas);
 
-            this.previousText = this.el.textContent;
+            this.previousText = text;
 
             oldDraw.destroy();
           }
