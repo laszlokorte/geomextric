@@ -226,7 +226,7 @@ defmodule SDF3DCompiler do
         result.d = 1e20;
         result.color = vec3(1.0);
 
-        #{Enum.join(parts, "\n")}
+        #{Enum.join(parts, "\n\n#pragma split\n")}
 
         return result;
     }
