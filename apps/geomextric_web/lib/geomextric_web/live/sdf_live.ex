@@ -1,6 +1,7 @@
 defmodule GeomextricWeb.SDFLive do
   use GeomextricWeb, :live_view
 
+  import GeomextricWeb.Menu
   @topic "canvas"
 
   def mount(%{}, _, socket) do
@@ -46,13 +47,6 @@ defmodule GeomextricWeb.SDFLive do
          %{id: ^id} -> false
          _ -> true
        end)
-     )
-     |> update(
-       :selection,
-       &Enum.filter(&1, fn
-         ^id -> false
-         _ -> true
-       end)
      )}
   end
 
@@ -73,6 +67,12 @@ defmodule GeomextricWeb.SDFLive do
      |> assign(:box, Geomextric.Canvas.get_box(Geomextric.Canvas))}
   end
 
+  def handle_event("close", %{}, socket) do
+    {:noreply,
+     socket
+     |> push_navigate(to: ~p"/")}
+  end
+
   def render(assigns) do
     ~H"""
     <style :type={GeomextricWeb.ColocatedScopedCSS}>
@@ -84,7 +84,7 @@ defmodule GeomextricWeb.SDFLive do
         height: 100%;
       }
 
-      :scope {
+      :scope .scene {
         position: absolute;
         background: royalblue;
         top: 0;
@@ -106,21 +106,60 @@ defmodule GeomextricWeb.SDFLive do
       :scope .full {
         margin: 0;
       }
-      :scope [data-shader] {
+      :scope .scene [data-shader] {
         display: none;
       }
+      :scope.page {
+        display: grid;
+        grid-template-rows: [bar-start] auto [bar-end main-start] 1fr [main-end];
+        grid-template-columns: [bar-start main-start] 1fr [bar-end main-end];
+        position: absolute;
+        inset: 0;
+      }
     </style>
-    <div width="100" height="100" id="canvas" phx-hook=".Canvas">
-      <%= with {code, uniforms} <- SDFCompiler.compile(@layers) do %>
-        <span
-          data-shader
-          uniform-alpha={Float.round(@alpha, 3)}
-          {uniforms |> Enum.map(fn {k,v} -> { "uniform-#{k}", v } end)}
-        >{"
+
+    <div class="page">
+      <div class="menu-bar">
+        <.menu items={[
+          %{
+            label: "File",
+            items: [
+              %{
+                label: "close",
+                send: "close"
+              }
+            ]
+          }
+        ]}>
+          <:head>
+            <.link navigate={~p"/scene"}>
+              3D
+            </.link>
+          </:head>
+        </.menu>
+      </div>
+      <div
+        class="scene"
+        width="100"
+        height="100"
+        id="canvas"
+        phx-hook=".Canvas"
+        data-bounds-x={@box.x}
+        data-bounds-y={@box.y}
+        data-bounds-w={@box.width}
+        data-bounds-h={@box.height}
+      >
+        <%= with {code, uniforms} <- SDFCompiler.compile(@layers, @box) do %>
+          <span
+            data-shader
+            uniform-alpha={Float.round(@alpha, 3)}
+            {uniforms |> Enum.map(fn {k,v} -> { "uniform-#{k}", v } end)}
+          >{"
           #{uniforms |> Enum.map(&elem(&1, 0)) |> Enum.map(&"uniform float #{&1};") |> Enum.join("\n")}
           #{code}
            "}</span>
-      <% end %>
+        <% end %>
+      </div>
     </div>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".Canvas">
       import createRegl from "@/vendor/regl.js";
@@ -137,32 +176,38 @@ defmodule GeomextricWeb.SDFLive do
         console.log("recompile shader");
         return regl({
           vert: `
-                        precision mediump float;
+                          precision mediump float;
 
-                        attribute vec2 position;
-                        varying vec2 pos;
+                          attribute vec2 position;
+                          varying vec2 pos;
 
-                        void main() {
-                          pos = (position + 1.0) / 2.0;
-                          gl_Position = vec4(position, 0.0, 1.0);
-                        }
-                      `,
+                          void main() {
+                            pos = (position + 1.0) / 2.0;
+                            gl_Position = vec4(position, 0.0, 1.0);
+                          }
+                        `,
 
           frag: `
-                        precision mediump float;
-                        varying vec2 pos;
-                        uniform vec2 cursor;
-                        uniform vec2 screen;
+                          precision mediump float;
+                          varying vec2 pos;
+                          uniform vec2 cursor;
+                          uniform vec2 screen;
+                          uniform vec3 focus;
 
-                        ${el.textContent}
+                          ${el.textContent}
 
-                        void main() {
-                          float c = length((pos)*screen - vec2(cursor.x, screen.y - cursor.y)) > 6.0 ? 1.0: 0.0;
-                          gl_FragColor = vec4(scene(vec2(pos.x-0.5, 0.5 -pos.y)*screen), c);
-                        }
-                      `,
+                          void main() {
+                            float c = length((pos)*screen - vec2(cursor.x, screen.y - cursor.y)) > 6.0 ? 1.0: 0.0;
+                            gl_FragColor = vec4(
+                              scene(
+                                vec2(pos.x-0.5, 0.5 -pos.y)*focus.z*screen + focus.xy,
+                                pos
+                              ), c);
+                          }
+                        `,
           uniforms: {
             cursor: regl.prop("cursor"),
+            focus: regl.prop("focus"),
             screen: ({ viewport }) => [viewport.width, viewport.height],
             ...Object.fromEntries(uniforms.map((u) => [u, regl.prop(u)])),
           },
@@ -229,12 +274,69 @@ defmodule GeomextricWeb.SDFLive do
             },
           });
 
-          const cursor = { x: -1000, y: -1000 };
-          window.addEventListener("pointermove", (evt) => {
-            cursor.x = evt.clientX;
-            cursor.y = evt.clientY;
-          });
+          const boundsX = parseFloat(this.el.dataset.boundsX);
+          const boundsY = parseFloat(this.el.dataset.boundsY);
+          const boundsW = parseFloat(this.el.dataset.boundsW);
+          const boundsH = parseFloat(this.el.dataset.boundsH);
 
+          const cursor = { x: -1000, y: -1000 };
+          const cam = {
+            x: boundsX + boundsW / 2 || 0,
+            y: boundsY + boundsH / 2 || 0,
+            zoom:
+              Math.log(Math.min(this.el.clientWidth, this.el.clientHeight)) -
+                Math.log(Math.max(boundsW, boundsH)) -
+                0.1 || 0,
+          };
+
+          window.addEventListener(
+            "pointermove",
+            (this.onpointermoveWindow = (evt) => {
+              cursor.x = evt.clientX;
+              cursor.y = evt.clientY;
+            }),
+          );
+          this.el.addEventListener(
+            "pointermove",
+            (this.onpointermove = (evt) => {
+              if (evt.currentTarget.hasPointerCapture(evt.pointerId)) {
+                cam.x -= (evt.clientX - cam.bx) * Math.exp(-cam.zoom);
+                cam.y -= (evt.clientY - cam.by) * Math.exp(-cam.zoom);
+                cam.bx = evt.clientX;
+                cam.by = evt.clientY;
+              }
+            }),
+          );
+          const zoomBy = ({ dz, px, py }) => {
+            const oldZoom = Math.exp(cam.zoom);
+            cam.zoom = cam.zoom + dz;
+            const newZoom = Math.exp(cam.zoom);
+            const factor = oldZoom / newZoom;
+            cam.x = px - (px - cam.x) * factor;
+            cam.y = py - (py - cam.y) * factor;
+          };
+          this.el.addEventListener(
+            "pointerdown",
+            (this.onpointerdown = (evt) => {
+              evt.currentTarget.setPointerCapture(evt.pointerId);
+              cam.bx = evt.clientX;
+              cam.by = evt.clientY;
+            }),
+          );
+
+          window.addEventListener(
+            "wheel",
+            (this.onwheel = (evt) => {
+              evt.preventDefault();
+              const x = evt.clientX - window.innerWidth / 2;
+              const y = evt.clientY - window.innerHeight / 2;
+
+              const worldX = cam.x + x * Math.exp(-cam.zoom);
+              const worldY = cam.y + y * Math.exp(-cam.zoom);
+              zoomBy({ dz: -evt.deltaY / 1000, px: worldX, py: worldY });
+            }),
+            { passive: false },
+          );
           this.tick = regl.frame(() => {
             const width = Math.round(
               this.reglCanvas.clientWidth * window.devicePixelRatio,
@@ -262,6 +364,7 @@ defmodule GeomextricWeb.SDFLive do
                 this.draw({
                   ...this.uniforms,
                   cursor: [cursor.x, cursor.y],
+                  focus: [cam.x, cam.y, Math.exp(-cam.zoom)],
                 });
               });
             } catch (e) {
@@ -296,6 +399,11 @@ defmodule GeomextricWeb.SDFLive do
             this.el.removeChild(this.reglCanvas);
             this.regl.destroy();
           }
+
+          window.removeEventListener("pointermove", this.onpointermoveWindow);
+          this.el.removeEventListener("pointermove", this.onpointermove);
+          this.el.removeEventListener("pointerdown", this.onpointerdown);
+          window.removeEventListener("wheel", this.onwheel);
         },
       };
     </script>

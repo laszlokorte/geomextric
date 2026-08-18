@@ -251,9 +251,8 @@ defmodule GeomextricWeb.TutLive do
         grid-area: 1 / 1 / -1 / -1;
         touch-action: none;
         display: grid;
-        grid-auto-columns: 1fr;
+        grid-template-columns: repeat(auto-fit, minmax(15em, 1fr));
         align-items: stretch;
-        grid-auto-flow: column;
         gap: 0.25ex;
         padding: 0.5ex;
         background: #aaa;
@@ -293,7 +292,8 @@ defmodule GeomextricWeb.TutLive do
         border-radius: 1ex;
         position: fixed;
         height: auto;
-        top: 2em;
+        top: initial;
+        bottom: 2em;
         left: 0;
         right: 1em;
         margin: 1ex;
@@ -912,7 +912,7 @@ defmodule GeomextricWeb.TutLive do
             camera={@camera}
             geo={
               Geomextric.Bodies.gen_trivector(@i,
-                name: "bv_xyz",
+                name: "tv_xyz",
                 offset: %{x: 0, y: 0, z: 0}
               )
             }

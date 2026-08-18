@@ -73,6 +73,10 @@ defmodule GeomextricWeb.HomeLive do
         <.link navigate={~p"/rotory"} class="enter-link" style="background-color: #F0E68C;">
           Rotory
         </.link>
+
+        <.link navigate={~p"/sdf"} class="enter-link" style="background-color: #8CF0E6;">
+          SDF
+        </.link>
       </div>
     </div>
     """
