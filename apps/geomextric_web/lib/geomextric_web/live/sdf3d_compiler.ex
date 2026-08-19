@@ -1,6 +1,6 @@
 defmodule SDF3DCompiler do
   def compile(shapes, bounding) do
-    {parts, {kinds, uniforms}} =
+    {parts, {_, uniforms}} =
       shapes
       |> Enum.reverse()
       |> then(fn shapes ->
@@ -32,7 +32,7 @@ defmodule SDF3DCompiler do
            line: 0
          }, []},
         fn
-          {%{pos: {x, y, w, h}, attrs: attrs}, i}, {kinds, uniforms} ->
+          {%{pos: {x, y, w, h}, attrs: attrs}, _}, {kinds, uniforms} ->
             kind = "rect"
             i = Map.get(kinds, :rect, 0)
 
@@ -86,7 +86,7 @@ defmodule SDF3DCompiler do
 
             {code, {Map.update(kinds, :rect, 0, &(&1 + 1)), uniforms}}
 
-          {%{pos: {x, y}, attrs: attrs}, i}, {kinds, uniforms}
+          {%{pos: {x, y}, attrs: attrs}, _}, {kinds, uniforms}
           when is_number(x) ->
             kind = "dot"
 
@@ -142,7 +142,7 @@ defmodule SDF3DCompiler do
           {%{
              pos: {{x1, y1}, {x2, y2}},
              attrs: attrs
-           }, i},
+           }, _},
           {kinds, uniforms} ->
             kind = "line"
 

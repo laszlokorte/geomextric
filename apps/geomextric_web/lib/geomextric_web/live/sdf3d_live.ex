@@ -164,7 +164,7 @@ defmodule GeomextricWeb.SDF3DLive do
               :for={
                 {{u, c}, i} <-
                   uniforms
-                  |> Enum.group_by(fn {k, _, v} -> k end, fn {_, i, _} -> i end)
+                  |> Enum.group_by(fn {k, _, _} -> k end, fn {_, i, _} -> i end)
                   |> Enum.with_index()
               }
               id={"uniform-#{i}"}
