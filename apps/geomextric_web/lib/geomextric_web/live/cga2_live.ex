@@ -20,7 +20,9 @@ defmodule GeomextricWeb.CGA2Live do
        "p7" => CGA2.point(-300, 200),
        "p8" => CGA2.point(-600, -400),
        "p9" => CGA2.point(600, -600),
-       "p10" => CGA2.point(-300, -300)
+       "p10" => CGA2.point(-300, -300),
+       "p11" => CGA2.point(0, 300),
+       "p12" => CGA2.point(500, 0)
      })
      |> assign(
        :samples,
@@ -131,8 +133,12 @@ defmodule GeomextricWeb.CGA2Live do
 
   def render(assigns) do
     c1 =
-      CGA2.circle(assigns.points |> Map.get("p0") |> CGA2.cleanup(1.0e-6), 150)
+      CGA2.circle(assigns.points |> Map.get("p0") |> CGA2.cleanup(1.0e-6), 180)
       |> CGA2.normalize()
+
+    # c1_prime =
+    #   CGA2.circle(assigns.points |> Map.get("p0") |> CGA2.cleanup(1.0e-6), -140)
+    #   |> CGA2.normalize()
 
     cc =
       CGA2.wedge(assigns.points |> Map.get("p4"), assigns.points |> Map.get("p5"))
@@ -167,8 +173,8 @@ defmodule GeomextricWeb.CGA2Live do
 
     pair2 =
       CGA2.wedge(
-        CGA2.point(0, 300),
-        CGA2.point(500, 0)
+        assigns.points |> Map.get("p11"),
+        assigns.points |> Map.get("p12")
       )
 
     assigns =
@@ -178,11 +184,19 @@ defmodule GeomextricWeb.CGA2Live do
         [
           [
             {"C1", :royalblue, c1},
+            #   {"C1'", :royalblue, c1_prime},
             {"C3", :hotpink, cc},
             {"C5", :yellowgreen, c4},
             {"Line 1", :tomato, ln1},
             {"Line 2", :teal, ln2},
             {"Line 3", :orchid, ln3},
+            {"Line 1+2", :gray, ln1 |> CGA2.add(ln2)},
+            {"Line 1+2", :gray, ln1 |> CGA2.sub(ln3)},
+            {"Line 1+2", :gray, ln3 |> CGA2.add(ln2)},
+            {"Line+C", :red,
+             CGA2.add(c1 |> CGA2.normalize(), ln2 |> CGA2.normalize()) |> CGA2.normalize()},
+            #  {"Line+C'", :orange,
+            #   CGA2.add(c1_prime |> CGA2.normalize(), ln2 |> CGA2.normalize()) |> CGA2.normalize()},
             {"P0", :purple, assigns.points |> Map.get("p0")},
             {"P4", :purple, assigns.points |> Map.get("p4")},
             {"P5", :purple, assigns.points |> Map.get("p5")},
@@ -210,6 +224,16 @@ defmodule GeomextricWeb.CGA2Live do
                 &[
                   {"", "#FF6347aa", CGA2.transform(&1, ln1) |> CGA2.cleanup(1.0e-6)},
                   {"", "#FF69B4aa", CGA2.transform(&1, cc) |> CGA2.cleanup(1.0e-6)},
+                  {"", "#00ffff",
+                   CGA2.transform(
+                     &1,
+                     CGA2.wedge(
+                       assigns.points |> Map.get("p11"),
+                       assigns.points |> Map.get("p12")
+                     )
+                     |> CGA2.normalize()
+                   )
+                   |> CGA2.cleanup(1.0e-6)},
                   {"", "#aaa5", &1}
                 ]
               ),
@@ -649,12 +673,13 @@ defmodule GeomextricWeb.CGA2Live do
                       stroke={color}
                     />
                   <% end %>
-                <% {:circle, {{cx, cy}, r}} -> %>
+                <% {:circle, {type, {cx, cy}, r}} -> %>
                   <circle
                     cx={cx}
                     cy={-cy}
                     r={r}
                     fill="none"
+                    stroke-dasharray={if(type == :real, do: "none", else: "10  10")}
                     stroke={color}
                     vector-effect="non-scaling-stroke"
                     stroke-width="3"
