@@ -653,10 +653,10 @@ defmodule GeomextricWeb.SDF3DLive do
           );
           this.tick = regl.frame(() => {
             const width = Math.round(
-              this.reglCanvas.clientWidth * window.devicePixelRatio,
+              this.reglCanvas.clientWidth,
             );
             const height = Math.round(
-              this.reglCanvas.clientHeight * window.devicePixelRatio,
+              this.reglCanvas.clientHeight,
             );
 
             if (
