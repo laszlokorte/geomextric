@@ -131,6 +131,107 @@ defmodule GeomextricWeb.CGA2Live do
      end)}
   end
 
+  defp point_pair_center(o) do
+    import CGA2, except: [classify: 1, split: 1]
+    # For a tangent point pair, the point pair degenerates to a single
+    # conformal point multiplied by e_inf. Extract the finite point by
+    # dividing by the remaining projective weight.
+    nix = wedge(o, e_inf())
+    pos = gp(o, inverse(nix))
+    w = scalar_product(pos, sub(e_inf(), one()))
+
+    scale(pos, 1.0 / w)
+  end
+
+  def split(o) do
+    import CGA2, except: [classify: 1, split: 1]
+    nix = wedge(o, e_inf())
+    nix2 = scalar_part(inner(nix, nix))
+
+    if abs(nix2) < epsilon() do
+      :invalid
+    else
+      pos =
+        o
+        |> gp(e_inf())
+        |> gp(o)
+        |> scale(-1.0 / (2 * nix2))
+
+      r2 =
+        scalar_part(inner(o, o)) /
+          scalar_part(inner(nix, nix))
+
+      if abs(r2) < epsilon() do
+        tangent =
+          o
+          |> point_pair_center()
+
+        {:tangent, tangent}
+      else
+        r = abs(r2) ** 0.5
+
+        offset =
+          wedge(e_inf(), e_o())
+          |> inner(nix)
+          |> normalize()
+          |> scale(r)
+
+        kind = if r2 >= 0, do: :real, else: :imag
+
+        {
+          kind,
+          lift_point(sub(pos, offset)),
+          lift_point(add(pos, offset))
+        }
+      end
+    end
+  end
+
+  def classify(x) do
+    import CGA2, except: [classify: 1, split: 1]
+
+    cond do
+      point?(x) ->
+        {:point, point_coordinates(x)}
+
+      line?(x) ->
+        {:line, line_parameters(x)}
+
+      circle?(x) ->
+        circle_parameters(x)
+        |> case do
+          {:circle, c} -> {:circle, c}
+        end
+
+      bivector_candidate?(x) ->
+        {split(x), split(x |> gp(pseudoscalar()))}
+        |> case do
+          {{:tangent, p}, {:tangent, p}} ->
+            {:point_pair, :tangent, point_coordinates(p)}
+
+          {{:imag, _, _}, {:real, p1, p2}} ->
+            {
+              :point_pair,
+              :real,
+              {point_coordinates(p1), point_coordinates(p2)}
+            }
+
+          {{:real, p1, p2}, {:imag, _, _}} ->
+            {
+              :point_pair,
+              :real,
+              {point_coordinates(p1), point_coordinates(p2)}
+            }
+
+          :invalid ->
+            {:unknown, x}
+        end
+
+      true ->
+        {:unknown, x}
+    end
+  end
+
   def render(assigns) do
     c1 =
       CGA2.circle(assigns.points |> Map.get("p0") |> CGA2.cleanup(1.0e-6), 180)
@@ -187,16 +288,10 @@ defmodule GeomextricWeb.CGA2Live do
             #   {"C1'", :royalblue, c1_prime},
             {"C3", :hotpink, cc},
             {"C4", :yellowgreen, c4},
-            {"C14", {:cyan, :cyan}, CGA2.meet(c4, c1) |> CGA2.gp(CGA2.pseudoscalar())},
-            {"C14", {:cyan, :cyan}, CGA2.meet(c4, c1)},
             {"Line 1", :tomato, ln1},
             {"Line 2", :teal, ln2},
             {"Line 3", :orchid, ln3},
-            {"Line 1+2", :gray, ln1 |> CGA2.add(ln2)},
-            {"Line 1+2", :gray, ln1 |> CGA2.sub(ln3)},
-            {"Line 1+2", :gray, ln3 |> CGA2.add(ln2)},
-            {"Line+C", :red,
-             CGA2.add(c1 |> CGA2.normalize(), ln2 |> CGA2.normalize()) |> CGA2.normalize()},
+
             #  {"Line+C'", :orange,
             #   CGA2.add(c1_prime |> CGA2.normalize(), ln2 |> CGA2.normalize()) |> CGA2.normalize()},
             {"P0", :purple, assigns.points |> Map.get("p0")},
@@ -212,6 +307,14 @@ defmodule GeomextricWeb.CGA2Live do
           ],
           if(assigns.intersections,
             do: [
+              {"Line 1+2", :gray, ln1 |> CGA2.add(ln2)},
+              {"Line 1+2", :gray, ln1 |> CGA2.sub(ln3)},
+              {"Line 1+2", :gray, ln3 |> CGA2.add(ln2)},
+              {"Line+C", :red,
+               CGA2.add(c1 |> CGA2.normalize(), ln2 |> CGA2.normalize()) |> CGA2.normalize()},
+              {"Line+C", :red,
+               CGA2.add(c1 |> CGA2.scale(-1) |> CGA2.normalize(), ln2 |> CGA2.normalize())
+               |> CGA2.normalize()},
               {"u", {:yellowgreen, :royalblue}, CGA2.meet(c1, c4)},
               {"v", {:royalblue, :hotpink}, CGA2.meet(cc, c1)},
               {"w", {:yellowgreen, :tomato}, CGA2.meet(ln1, c4)},
@@ -640,7 +743,7 @@ defmodule GeomextricWeb.CGA2Live do
 
           <g id="elements">
             <%= for {label, color, s} <-@elements do %>
-              <%= CGA2.classify(s) |> case do %>
+              <%= classify(s) |> case do %>
                 <% {:line, {a, b, c}} when abs(b) > abs(a) -> %>
                   <%= with x1 <- @box.x,
                   x2 <- @box.x + @box.width,
@@ -776,7 +879,7 @@ defmodule GeomextricWeb.CGA2Live do
             <% end %>
           </g>
           <%= for {id, s} <-@points do %>
-            <%= CGA2.classify(s) |> case do %>
+            <%= classify(s) |> case do %>
               <% {:point, {cx, cy}} -> %>
                 <circle
                   cx={cx}
