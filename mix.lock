@@ -8,7 +8,7 @@
   "expo": {:hex, :expo, "1.1.1", "4202e1d2ca6e2b3b63e02f69cfe0a404f77702b041d02b58597c00992b601db5", [:mix], [], "hexpm", "5fb308b9cb359ae200b7e23d37c76978673aa1b06e2b3075d814ce12c5811640"},
   "file_system": {:hex, :file_system, "1.1.1", "31864f4685b0148f25bd3fbef2b1228457c0c89024ad67f7a81a3ffbc0bbad3a", [:mix], [], "hexpm", "7a15ff97dfe526aeefb090a7a9d3d03aa907e100e262a0f8f7746b78f8f87a5d"},
   "fine": {:hex, :fine, "0.1.6", "4bf7151493443c454aac9f2fa2f34f5fefd0346a83fb5586a016c4a135c63247", [:mix], [], "hexpm", "5638eb4495488e885ebec167fa57973e5c35e1a50c344eb7666c90ec1c4e3b12"},
-  "galixir": {:hex, :galixir, "0.29.0", "4dbd2a21ea35275351b85361311628d4a11e11f5a0ccbfc2c6fd5e0b1ddc5769", [:mix], [], "hexpm", "7f3c35cab77c12cc72767d0cdef5160a7471f93d8e3b2918ba136a55a280da50"},
+  "galixir": {:hex, :galixir, "0.30.0", "57e113bc54012a171fb80f633cd83c86258b45945953f0ab61eeec7d005b9b99", [:mix], [], "hexpm", "55a451d86480a082612da9d8c0bf9f56a555d5b63e037928c67f9c7fcf20486e"},
   "gettext": {:hex, :gettext, "1.0.2", "5457e1fd3f4abe47b0e13ff85086aabae760497a3497909b8473e0acee57673b", [:mix], [{:expo, "~> 0.5.1 or ~> 1.0", [hex: :expo, repo: "hexpm", optional: false]}], "hexpm", "eab805501886802071ad290714515c8c4a17196ea76e5afc9d06ca85fb1bfeb3"},
   "gproc": {:hex, :gproc, "1.3.0", "60bc1df3c4e09fc15b74fe3325ecfc590b6d2b8cdcb3104ae1fa0689f6f1260e", [:rebar3], [], "hexpm", "143a8ce6eb59610a351178482b629d2b052c69df84c9c50b9c13ae38354c8c14"},
   "heroicons": {:git, "https://github.com/tailwindlabs/heroicons.git", "0435d4ca364a608cc75e2f8683d374e55abbae26", [tag: "v2.2.0", sparse: "optimized", depth: 1]},

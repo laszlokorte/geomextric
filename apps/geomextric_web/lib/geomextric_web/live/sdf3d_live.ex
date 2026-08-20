@@ -196,280 +196,280 @@ defmodule GeomextricWeb.SDF3DLive do
         console.log("recompile shader");
         const nr = regl({
           vert: `
-                                  precision mediump float;
+                                    precision mediump float;
 
-                                  attribute vec2 position;
-                                  varying vec2 pos;
+                                    attribute vec2 position;
+                                    varying vec2 pos;
 
-                                  void main() {
-                                    pos = (position + 1.0) / 2.0;
-                                    gl_Position = vec4(position, 0.0, 1.0);
-                                  }
-                                `,
+                                    void main() {
+                                      pos = (position + 1.0) / 2.0;
+                                      gl_Position = vec4(position, 0.0, 1.0);
+                                    }
+                                  `,
 
           frag: `
-                  precision highp float;
-                       uniform vec2 screen;
+                    precision highp float;
+                         uniform vec2 screen;
 
-                       uniform vec3 camera_pos;
-                       uniform vec3 camera_target;
-                       struct SDFResult {
-                                        float d;
-                                        vec3 color;
-                                    };
+                         uniform vec3 camera_pos;
+                         uniform vec3 camera_target;
+                         struct SDFResult {
+                                          float d;
+                                          vec3 color;
+                                      };
 
-                       float sdf_box(vec3 p, vec3 b) {
-                           vec3 q = abs(p) - b;
+                         float sdf_box(vec3 p, vec3 b) {
+                             vec3 q = abs(p) - b;
 
-                           return length(max(q, 0.0)) +
-                                  min(max(q.x, max(q.y, q.z)), 0.0);
-                       }
-
-                       float sdf_rounded_box(
-                           vec3 p,
-                           vec3 b,
-                           float r
-                       ) {
-                           vec3 q = abs(p) - b + r;
-
-                           return length(max(q, 0.0))
-                                + min(max(q.x, max(q.y, q.z)), 0.0)
-                                - r;
-                       }
-
-                       float sdf_cylinder(
-                           vec3 p,
-                           float radius,
-                           float half_height
-                       ) {
-                           vec2 d = abs(vec2(
-                               length(p.xy),
-                               p.z
-                           )) - vec2(
-                               radius,
-                               half_height
-                           );
-
-                           return min(max(d.x, d.y), 0.0)
-                                + length(max(d, 0.0));
-                       }
-
-                       float sdf_cone(
-                           vec3 p,
-                           vec3 apex,
-                           vec3 axis,
-                           float height,
-                           float radius
-                       ) {
-                           vec3 q = p - apex;
-
-                           float z = dot(q, axis);
-                           float r = length(q - axis * z);
-
-                           // Cone exists for -height <= z <= 0.
-                           float k = radius / height;
-
-                           // Distance to the conical surface in the axial/radial plane.
-                           vec2 c = vec2(
-                               r,
-                               z
-                           );
-
-                           vec2 tip = vec2(0.0, 0.0);
-                           vec2 base = vec2(radius, -height);
-
-                           vec2 ba = base - tip;
-                           vec2 pa = c - tip;
-
-                           float h = clamp(
-                               dot(pa, ba) / dot(ba, ba),
-                               0.0,
-                               1.0
-                           );
-
-                           float side = length(pa - ba * h);
-
-                           // Sign: inside the cone.
-                           float cone_r = r + k * z;
-
-                           if (z <= 0.0 && z >= -height && cone_r < 0.0) {
-                               side = -side;
-                           }
-
-                           // Base cap.
-                           float cap = abs(r - radius);
-                           if (z < -height) {
-                               side = max(side, -z - height);
-                           }
-
-                           return side;
-                       }
-
-                       float sdf_segment_cylinder(
-                           vec3 p,
-                           vec2 a,
-                           vec2 b,
-                           float radius,
-                           float half_height
-                       ) {
-                           vec2 ab = b - a;
-
-                           float len = length(ab);
-
-                           vec2 dir = ab / len;
-                           vec2 normal = vec2(
-                               -dir.y,
-                               dir.x
-                           );
-
-                           vec2 rel = p.xy - a;
-
-                           float along = dot(
-                               rel,
-                               dir
-                           );
-
-                           float side = dot(
-                               rel,
-                               normal
-                           );
-
-                           float radial =
-                               length(vec2(
-                                   side,
-                                   p.z
-                               )) - radius;
-
-                           float axial = max(
-                               -along,
-                               along - len
-                           );
-
-                           return max(
-                               radial,
-                               axial
-                           );
-                       }
-
-                     vec3 get_ray(vec2 uv) {
-                         vec3 forward = normalize(
-                           camera_target - camera_pos
-                         );
-
-                         vec3 up_hint = vec3(0.0, 1.0, 0.0);
-
-                         vec3 right = normalize(
-                             cross(forward, up_hint)
-                         );
-
-                         vec3 up = normalize(
-                             cross(right, forward)
-                         );
-
-                         float aspect =
-                             screen.x / screen.y;
-
-                         return normalize(
-                             forward +
-                             right * uv.x * aspect +
-                             up * -uv.y
-                         );
-                     }
-
-                     ${shader.textContent}
-
-                       vec3 estimate_normal(vec3 p) {
-                         const float e = 0.001;
-
-                         return normalize(vec3(
-                             scene(p + vec3(e, 0.0, 0.0)).d -
-                             scene(p - vec3(e, 0.0, 0.0)).d,
-
-                             scene(p + vec3(0.0, e, 0.0)).d -
-                             scene(p - vec3(0.0, e, 0.0)).d,
-
-                             scene(p + vec3(0.0, 0.0, e)).d -
-                             scene(p - vec3(0.0, 0.0, e)).d
-                         ));
-                     }
-                     bool raymarch(
-                         vec3 ro,
-                         vec3 rd,
-                         out vec3 hit
-                     ) {
-                         float t = 0.0;
-
-                         for (int i = 0; i < 128; i++) {
-                             vec3 p = ro + rd * t;
-
-                             SDFResult result = scene(p);
-
-                             if (result.d < 0.001) {
-                                 hit = p;
-                                 return true;
-                             }
-
-                             t += result.d;
-
-                             if (t > 100000.0) {
-                                 break;
-                             }
+                             return length(max(q, 0.0)) +
+                                    min(max(q.x, max(q.y, q.z)), 0.0);
                          }
 
-                         return false;
-                     }
+                         float sdf_rounded_box(
+                             vec3 p,
+                             vec3 b,
+                             float r
+                         ) {
+                             vec3 q = abs(p) - b + r;
 
-                            void main() {
-                         vec2 uv =
-                             gl_FragCoord.xy /
-                             screen;
+                             return length(max(q, 0.0))
+                                  + min(max(q.x, max(q.y, q.z)), 0.0)
+                                  - r;
+                         }
 
-                         uv = uv * 2.0 - 1.0;
+                         float sdf_cylinder(
+                             vec3 p,
+                             float radius,
+                             float half_height
+                         ) {
+                             vec2 d = abs(vec2(
+                                 length(p.xy),
+                                 p.z
+                             )) - vec2(
+                                 radius,
+                                 half_height
+                             );
 
-                         vec3 ro = camera_pos;
-                         vec3 rd = get_ray(uv);
+                             return min(max(d.x, d.y), 0.0)
+                                  + length(max(d, 0.0));
+                         }
 
-                         vec3 hit;
+                         float sdf_cone(
+                             vec3 p,
+                             vec3 apex,
+                             vec3 axis,
+                             float height,
+                             float radius
+                         ) {
+                             vec3 q = p - apex;
 
-                         vec3 background = vec3(
-                             uv / 2.0 + 0.5,
-                             0.32
-                         );
+                             float z = dot(q, axis);
+                             float r = length(q - axis * z);
 
-                         if (!raymarch(ro, rd, hit)) {
-                             gl_FragColor = vec4(
-                                 background,
+                             // Cone exists for -height <= z <= 0.
+                             float k = radius / height;
+
+                             // Distance to the conical surface in the axial/radial plane.
+                             vec2 c = vec2(
+                                 r,
+                                 z
+                             );
+
+                             vec2 tip = vec2(0.0, 0.0);
+                             vec2 base = vec2(radius, -height);
+
+                             vec2 ba = base - tip;
+                             vec2 pa = c - tip;
+
+                             float h = clamp(
+                                 dot(pa, ba) / dot(ba, ba),
+                                 0.0,
                                  1.0
                              );
 
-                             return;
+                             float side = length(pa - ba * h);
+
+                             // Sign: inside the cone.
+                             float cone_r = r + k * z;
+
+                             if (z <= 0.0 && z >= -height && cone_r < 0.0) {
+                                 side = -side;
+                             }
+
+                             // Base cap.
+                             float cap = abs(r - radius);
+                             if (z < -height) {
+                                 side = max(side, -z - height);
+                             }
+
+                             return side;
                          }
 
-                         SDFResult result = scene(hit);
+                         float sdf_segment_cylinder(
+                             vec3 p,
+                             vec2 a,
+                             vec2 b,
+                             float radius,
+                             float half_height
+                         ) {
+                             vec2 ab = b - a;
 
-                         vec3 normal = estimate_normal(hit);
+                             float len = length(ab);
 
-                         vec3 light_dir = normalize(
-                             vec3(-0.4, -0.5, 1.0)
-                         );
+                             vec2 dir = ab / len;
+                             vec2 normal = vec2(
+                                 -dir.y,
+                                 dir.x
+                             );
 
-                         float diffuse = max(
-                             dot(normal, light_dir),
-                             0.0
-                         );
+                             vec2 rel = p.xy - a;
 
-                         float ambient = 0.25;
+                             float along = dot(
+                                 rel,
+                                 dir
+                             );
 
-                         vec3 color =
-                             result.color *
-                             (ambient + diffuse * 0.75);
+                             float side = dot(
+                                 rel,
+                                 normal
+                             );
 
-                         gl_FragColor = vec4(
-                             color,
-                             1.0
-                         );
-                     }
-                                `,
+                             float radial =
+                                 length(vec2(
+                                     side,
+                                     p.z
+                                 )) - radius;
+
+                             float axial = max(
+                                 -along,
+                                 along - len
+                             );
+
+                             return max(
+                                 radial,
+                                 axial
+                             );
+                         }
+
+                       vec3 get_ray(vec2 uv) {
+                           vec3 forward = normalize(
+                             camera_target - camera_pos
+                           );
+
+                           vec3 up_hint = vec3(0.0, 1.0, 0.0);
+
+                           vec3 right = normalize(
+                               cross(forward, up_hint)
+                           );
+
+                           vec3 up = normalize(
+                               cross(right, forward)
+                           );
+
+                           float aspect =
+                               screen.x / screen.y;
+
+                           return normalize(
+                               forward +
+                               right * uv.x * aspect +
+                               up * -uv.y
+                           );
+                       }
+
+                       ${shader.textContent}
+
+                         vec3 estimate_normal(vec3 p) {
+                           const float e = 0.001;
+
+                           return normalize(vec3(
+                               scene(p + vec3(e, 0.0, 0.0)).d -
+                               scene(p - vec3(e, 0.0, 0.0)).d,
+
+                               scene(p + vec3(0.0, e, 0.0)).d -
+                               scene(p - vec3(0.0, e, 0.0)).d,
+
+                               scene(p + vec3(0.0, 0.0, e)).d -
+                               scene(p - vec3(0.0, 0.0, e)).d
+                           ));
+                       }
+                       bool raymarch(
+                           vec3 ro,
+                           vec3 rd,
+                           out vec3 hit
+                       ) {
+                           float t = 0.0;
+
+                           for (int i = 0; i < 128; i++) {
+                               vec3 p = ro + rd * t;
+
+                               SDFResult result = scene(p);
+
+                               if (result.d < 0.001) {
+                                   hit = p;
+                                   return true;
+                               }
+
+                               t += result.d;
+
+                               if (t > 100000.0) {
+                                   break;
+                               }
+                           }
+
+                           return false;
+                       }
+
+                              void main() {
+                           vec2 uv =
+                               gl_FragCoord.xy /
+                               screen;
+
+                           uv = uv * 2.0 - 1.0;
+
+                           vec3 ro = camera_pos;
+                           vec3 rd = get_ray(uv);
+
+                           vec3 hit;
+
+                           vec3 background = vec3(
+                               uv / 2.0 + 0.5,
+                               0.32
+                           );
+
+                           if (!raymarch(ro, rd, hit)) {
+                               gl_FragColor = vec4(
+                                   background,
+                                   1.0
+                               );
+
+                               return;
+                           }
+
+                           SDFResult result = scene(hit);
+
+                           vec3 normal = estimate_normal(hit);
+
+                           vec3 light_dir = normalize(
+                               vec3(-0.4, -0.5, 1.0)
+                           );
+
+                           float diffuse = max(
+                               dot(normal, light_dir),
+                               0.0
+                           );
+
+                           float ambient = 0.25;
+
+                           vec3 color =
+                               result.color *
+                               (ambient + diffuse * 0.75);
+
+                           gl_FragColor = vec4(
+                               color,
+                               1.0
+                           );
+                       }
+                                  `,
           uniforms: {
             cursor: regl.prop("cursor"),
             camera: regl.prop("camera"),

@@ -35,6 +35,7 @@ defmodule GeomextricWeb.CGA2Live do
      |> assign(:bounds, true)
      |> assign(:transforms, false)
      |> assign(:intersections, false)
+     |> assign(:bisections, false)
      |> assign(:extra_pen, "#0077ff")
      |> assign(:box, %{
        x: -1200,
@@ -97,6 +98,14 @@ defmodule GeomextricWeb.CGA2Live do
     {:noreply, socket |> assign(:intersections, false)}
   end
 
+  def handle_event("set_bisections", %{"value" => "true"}, socket) do
+    {:noreply, socket |> assign(:bisections, true)}
+  end
+
+  def handle_event("set_bisections", %{"value" => "false"}, socket) do
+    {:noreply, socket |> assign(:bisections, false)}
+  end
+
   def handle_event("set_bounds", %{"value" => "true"}, socket) do
     {:noreply, socket |> assign(:bounds, true)}
   end
@@ -105,11 +114,16 @@ defmodule GeomextricWeb.CGA2Live do
     {:noreply, socket |> assign(:bounds, false)}
   end
 
-  def handle_event("change_view", %{"intersections" => int, "transforms" => trans}, socket) do
+  def handle_event(
+        "change_view",
+        %{"intersections" => int, "transforms" => trans, "bisections" => bis},
+        socket
+      ) do
     {:noreply,
      socket
      |> assign(:intersections, int == "on")
-     |> assign(:transforms, trans == "on")}
+     |> assign(:transforms, trans == "on")
+     |> assign(:bisections, bis == "on")}
   end
 
   def handle_event("select", _, socket) do
@@ -131,107 +145,6 @@ defmodule GeomextricWeb.CGA2Live do
      end)}
   end
 
-  defp point_pair_center(o) do
-    import CGA2, except: [classify: 1, split: 1]
-    # For a tangent point pair, the point pair degenerates to a single
-    # conformal point multiplied by e_inf. Extract the finite point by
-    # dividing by the remaining projective weight.
-    nix = wedge(o, e_inf())
-    pos = gp(o, inverse(nix))
-    w = scalar_product(pos, sub(e_inf(), one()))
-
-    scale(pos, 1.0 / w)
-  end
-
-  def split(o) do
-    import CGA2, except: [classify: 1, split: 1]
-    nix = wedge(o, e_inf())
-    nix2 = scalar_part(inner(nix, nix))
-
-    if abs(nix2) < epsilon() do
-      :invalid
-    else
-      pos =
-        o
-        |> gp(e_inf())
-        |> gp(o)
-        |> scale(-1.0 / (2 * nix2))
-
-      r2 =
-        scalar_part(inner(o, o)) /
-          scalar_part(inner(nix, nix))
-
-      if abs(r2) < epsilon() do
-        tangent =
-          o
-          |> point_pair_center()
-
-        {:tangent, tangent}
-      else
-        r = abs(r2) ** 0.5
-
-        offset =
-          wedge(e_inf(), e_o())
-          |> inner(nix)
-          |> normalize()
-          |> scale(r)
-
-        kind = if r2 >= 0, do: :real, else: :imag
-
-        {
-          kind,
-          lift_point(sub(pos, offset)),
-          lift_point(add(pos, offset))
-        }
-      end
-    end
-  end
-
-  def classify(x) do
-    import CGA2, except: [classify: 1, split: 1]
-
-    cond do
-      point?(x) ->
-        {:point, point_coordinates(x)}
-
-      line?(x) ->
-        {:line, line_parameters(x)}
-
-      circle?(x) ->
-        circle_parameters(x)
-        |> case do
-          {:circle, c} -> {:circle, c}
-        end
-
-      bivector_candidate?(x) ->
-        {split(x), split(x |> gp(pseudoscalar()))}
-        |> case do
-          {{:tangent, p}, {:tangent, p}} ->
-            {:point_pair, :tangent, point_coordinates(p)}
-
-          {{:imag, _, _}, {:real, p1, p2}} ->
-            {
-              :point_pair,
-              :real,
-              {point_coordinates(p1), point_coordinates(p2)}
-            }
-
-          {{:real, p1, p2}, {:imag, _, _}} ->
-            {
-              :point_pair,
-              :real,
-              {point_coordinates(p1), point_coordinates(p2)}
-            }
-
-          :invalid ->
-            {:unknown, x}
-        end
-
-      true ->
-        {:unknown, x}
-    end
-  end
-
   def render(assigns) do
     c1 =
       CGA2.circle(assigns.points |> Map.get("p0") |> CGA2.cleanup(1.0e-6), 180)
@@ -241,7 +154,7 @@ defmodule GeomextricWeb.CGA2Live do
     #   CGA2.circle(assigns.points |> Map.get("p0") |> CGA2.cleanup(1.0e-6), -140)
     #   |> CGA2.normalize()
 
-    cc =
+    c3 =
       CGA2.wedge(assigns.points |> Map.get("p4"), assigns.points |> Map.get("p5"))
       |> CGA2.wedge(assigns.points |> Map.get("p6"))
       |> CGA2.normalize()
@@ -265,13 +178,6 @@ defmodule GeomextricWeb.CGA2Live do
       CGA2.circle(assigns.points |> Map.get("p10"), 250)
       |> CGA2.normalize()
 
-    pair =
-      CGA2.wedge(
-        assigns.points |> Map.get("p10"),
-        assigns.points |> Map.get("p9")
-      )
-      |> CGA2.normalize()
-
     pair2 =
       CGA2.wedge(
         assigns.points |> Map.get("p11"),
@@ -286,7 +192,7 @@ defmodule GeomextricWeb.CGA2Live do
           [
             {"C1", :royalblue, c1},
             #   {"C1'", :royalblue, c1_prime},
-            {"C3", :hotpink, cc},
+            {"C3", :hotpink, c3},
             {"C4", :yellowgreen, c4},
             {"Line 1", :tomato, ln1},
             {"Line 2", :teal, ln2},
@@ -302,24 +208,33 @@ defmodule GeomextricWeb.CGA2Live do
             {"P8", :purple, assigns.points |> Map.get("p8")},
             {"P9", :purple, assigns.points |> Map.get("p9")},
             {"P10", :purple, assigns.points |> Map.get("p10")},
-            {"pair", {:cyan, :magenta}, pair},
             {"pair", {:cyan, :magenta}, pair2}
           ],
           if(assigns.intersections,
             do: [
-              {"Line 1+2", :gray, ln1 |> CGA2.add(ln2)},
-              {"Line 1+2", :gray, ln1 |> CGA2.sub(ln3)},
-              {"Line 1+2", :gray, ln3 |> CGA2.add(ln2)},
-              {"Line+C", :red,
-               CGA2.add(c1 |> CGA2.normalize(), ln2 |> CGA2.normalize()) |> CGA2.normalize()},
-              {"Line+C", :red,
-               CGA2.add(c1 |> CGA2.scale(-1) |> CGA2.normalize(), ln2 |> CGA2.normalize())
-               |> CGA2.normalize()},
               {"u", {:yellowgreen, :royalblue}, CGA2.meet(c1, c4)},
-              {"v", {:royalblue, :hotpink}, CGA2.meet(cc, c1)},
+              {"v", {:royalblue, :hotpink}, CGA2.meet(c3, c1)},
               {"w", {:yellowgreen, :tomato}, CGA2.meet(ln1, c4)},
               {"p", {:yellowgreen, :teal}, CGA2.meet(ln2, c4)},
               {"q", {:yellowgreen, :orchid}, CGA2.meet(ln3, c4)}
+            ]
+          ),
+          if(assigns.bisections,
+            do: [
+              {"C1 + L2", "#f0fa",
+               CGA2.add(c1 |> CGA2.normalize(), ln2 |> CGA2.normalize()) |> CGA2.normalize()},
+              {"C1 - L2", "#f0fa",
+               CGA2.sub(c1 |> CGA2.normalize(), ln2 |> CGA2.normalize())
+               |> CGA2.normalize()},
+              {"C4 - C3", "#0ffa",
+               CGA2.sub(c4 |> CGA2.normalize(), c3 |> CGA2.normalize())
+               |> CGA2.normalize()},
+              {"C4 + C4", "#0ffa",
+               CGA2.add(c4 |> CGA2.normalize(), c3 |> CGA2.normalize())
+               |> CGA2.normalize()},
+              {"Line 1+2", "#0001", ln1 |> CGA2.add(ln2)},
+              {"Line 1+2", "#0001", ln1 |> CGA2.sub(ln3)},
+              {"Line 1+2", "#0001", ln3 |> CGA2.add(ln2)}
             ]
           ),
           if(assigns.transforms,
@@ -328,7 +243,7 @@ defmodule GeomextricWeb.CGA2Live do
               |> Enum.flat_map(
                 &[
                   {"", "#FF6347aa", CGA2.transform(&1, ln1) |> CGA2.cleanup(1.0e-6)},
-                  {"", "#FF69B4aa", CGA2.transform(&1, cc) |> CGA2.cleanup(1.0e-6)},
+                  {"", "#FF69B4aa", CGA2.transform(&1, c3) |> CGA2.cleanup(1.0e-6)},
                   {"", "#00ffff",
                    CGA2.transform(
                      &1,
@@ -590,6 +505,21 @@ defmodule GeomextricWeb.CGA2Live do
               /> Transforms
             </label>
           </div>
+          <div>
+            <input
+              name="bisections"
+              type="hidden"
+              value="off"
+            />
+            <label>
+              <input
+                phx-throttle="16"
+                name="bisections"
+                type="checkbox"
+                checked={@bisections}
+              /> Bisections
+            </label>
+          </div>
         </form>
       </nav>
 
@@ -601,36 +531,7 @@ defmodule GeomextricWeb.CGA2Live do
               %{
                 label: "Close",
                 send: "close"
-              },
-              %{
-                label: "Save"
-              },
-              %{label: "Clear", send: "clear", shortcut: [key: "x", ctrl: true]},
-              %{
-                label: "Recent",
-                items:
-                  for(
-                    n <- 1..5,
-                    do: %{
-                      label: "File #{n}",
-                      send: "recent",
-                      value: n,
-                      shortcut: [key: "#{n}", ctrl: true]
-                    }
-                  )
               }
-            ]
-          },
-          %{
-            label: "Selection",
-            items: [
-              %{
-                label: "Select All",
-                shortcut: [key: "a", ctrl: true],
-                send: "select",
-                value: :all
-              },
-              %{label: "Unselect", shortcut: [key: "Escape"], send: "select", value: ""}
             ]
           },
           %{
@@ -659,6 +560,12 @@ defmodule GeomextricWeb.CGA2Live do
                 shortcut: [key: "i", alt: true],
                 send: "set_intersections",
                 value: if(@intersections, do: "false", else: "true")
+              },
+              %{
+                label: if(@bisections, do: "Hide Bisections", else: "Show Bisections"),
+                shortcut: [key: "i", alt: true],
+                send: "set_bisections",
+                value: if(@bisections, do: "false", else: "true")
               },
               %{
                 label: if(@bounds, do: "Hide Bounds", else: "Show Bounds"),
@@ -743,7 +650,7 @@ defmodule GeomextricWeb.CGA2Live do
 
           <g id="elements">
             <%= for {label, color, s} <-@elements do %>
-              <%= classify(s) |> case do %>
+              <%= CGA2.classify(s) |> case do %>
                 <% {:line, {a, b, c}} when abs(b) > abs(a) -> %>
                   <%= with x1 <- @box.x,
                   x2 <- @box.x + @box.width,
@@ -760,6 +667,10 @@ defmodule GeomextricWeb.CGA2Live do
                       stroke-width="2"
                       stroke={color}
                     />
+                    <text x={-(x1 + x2) / 2} y={(y1 + y2) / 2}>
+                      {label}
+                      <title>{inspect(s)}</title>
+                    </text>
                   <% end %>
                 <% {:line, {a, b, c}} -> %>
                   <%= with y1 <- -@box.y,
@@ -777,6 +688,11 @@ defmodule GeomextricWeb.CGA2Live do
                       vector-effect="non-scaling-stroke"
                       stroke={color}
                     />
+
+                    <text x={-(x1 + x2) / 2} y={(y1 + y2) / 2}>
+                      {label}
+                      <title>{inspect(s)}</title>
+                    </text>
                   <% end %>
                 <% {:circle, {type, {cx, cy}, r}} -> %>
                   <circle
@@ -789,7 +705,10 @@ defmodule GeomextricWeb.CGA2Live do
                     vector-effect="non-scaling-stroke"
                     stroke-width="3"
                   />
-                  <text pointer-events="none" x={cx + r * 0.9} y={-cy}>{label}</text>
+                  <text x={cx + r * 0.9} y={-cy}>
+                    {label}
+                    <title>{inspect(s)}</title>
+                  </text>
                 <% {:point, {cx, cy}} -> %>
                   <circle
                     cx={cx}
@@ -800,8 +719,12 @@ defmodule GeomextricWeb.CGA2Live do
                     stroke="none"
                     stroke-width="4"
                   />
-                  <text pointer-events="none" x={cx + 10} y={-cy}>{label}</text>
-                <% {:point_pair, :real, {{cx1, cy1}, {cx2, cy2}}} -> %>
+                  <text x={cx + 10} y={-cy}>
+                    {label}
+
+                    <title>{inspect(s)}</title>
+                  </text>
+                <% {:point_pair, {cx1, cy1}, {cx2, cy2}} -> %>
                   <circle
                     cx={cx1}
                     cy={-cy1}
@@ -821,65 +744,20 @@ defmodule GeomextricWeb.CGA2Live do
                     stroke-width="5"
                   />
 
-                  <text pointer-events="none" x={cx1 + 5} y={-cy1}>{label}/1</text>
-                  <text pointer-events="none" x={cx2 + 5} y={-cy2}>{label}/2</text>
-                <% {:point_pair, :imag, {{cx1, cy1}, {cx2, cy2}}} -> %>
-                  <g>
-                    <circle
-                      cx={cx1}
-                      cy={-cy1}
-                      r="5"
-                      stroke={elem(color, 0)}
-                      data-non-scaling-full
-                      fill="none"
-                      stroke-dasharray="5 5"
-                      stroke-width="5"
-                    />
-                    <circle
-                      cx={cx1}
-                      cy={-cy1}
-                      r="5"
-                      stroke={elem(color, 1)}
-                      data-non-scaling-full
-                      fill="none"
-                      stroke-dasharray="5 5"
-                      stroke-dashoffset="5"
-                      stroke-width="5"
-                    />
-                  </g>
-                  <g>
-                    <circle
-                      cx={cx2}
-                      cy={-cy2}
-                      r="5"
-                      fill="none"
-                      stroke-dasharray="5 5"
-                      stroke={elem(color, 0)}
-                      stroke-width="5"
-                      data-non-scaling-full
-                    />
-
-                    <circle
-                      cx={cx2}
-                      cy={-cy2}
-                      r="5"
-                      fill="none"
-                      stroke-dasharray="5 5"
-                      stroke-dashoffset="5"
-                      stroke={elem(color, 1)}
-                      stroke-width="5"
-                      data-non-scaling-full
-                    />
-
-                    <text pointer-events="none" x={cx1 + 5} y={-cy1}>{label}/1</text>
-                    <text pointer-events="none" x={cx2 + 5} y={-cy2}>{label}/2</text>
-                  </g>
+                  <text x={cx1 + 5} y={-cy1}>
+                    {label}/1
+                    <title>{inspect(s)}</title>
+                  </text>
+                  <text x={cx2 + 5} y={-cy2}>
+                    {label}/2
+                    <title>{inspect(s)}</title>
+                  </text>
                 <% _ -> %>
               <% end %>
             <% end %>
           </g>
           <%= for {id, s} <-@points do %>
-            <%= classify(s) |> case do %>
+            <%= CGA2.classify(s) |> case do %>
               <% {:point, {cx, cy}} -> %>
                 <circle
                   cx={cx}
