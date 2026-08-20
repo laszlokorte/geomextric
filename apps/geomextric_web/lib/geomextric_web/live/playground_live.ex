@@ -662,7 +662,10 @@ defmodule GeomextricWeb.PlaygroundLive do
             (h, v) => this.pushEvent("rot", { v: v.toFixed(2), h: h.toFixed(2) }),
             30,
           );
-          const zoom = throttle((r) => this.pushEvent("zoom", { value: r.toFixed(3) }), 30);
+          const zoom = throttle(
+            (r) => this.pushEvent("zoom", { value: r.toFixed(3) }),
+            30,
+          );
           this.el.addEventListener("wheel", (evt) => {
             evt.preventDefault();
             zoom((evt.deltaY / window.screen.height) * 10);

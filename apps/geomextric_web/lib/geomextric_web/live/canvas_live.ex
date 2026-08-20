@@ -34,22 +34,6 @@ defmodule GeomextricWeb.CanvasLive do
      )}
   end
 
-  def handle_event("set_grid", %{"value" => "true"}, socket) do
-    {:noreply, socket |> assign(:grid, true)}
-  end
-
-  def handle_event("set_grid", %{"value" => "false"}, socket) do
-    {:noreply, socket |> assign(:grid, false)}
-  end
-
-  def handle_event("set_axis", %{"value" => "true"}, socket) do
-    {:noreply, socket |> assign(:axis, true)}
-  end
-
-  def handle_event("set_axis", %{"value" => "false"}, socket) do
-    {:noreply, socket |> assign(:axis, false)}
-  end
-
   def handle_event("move", %{"id" => <<id::binary>>, "x" => x, "y" => y}, socket) do
     Geomextric.Canvas.move(Geomextric.Canvas, id, x, y)
     {:noreply, socket}

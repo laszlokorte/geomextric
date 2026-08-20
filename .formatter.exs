@@ -1,6 +1,5 @@
 [
   plugins: [Phoenix.LiveView.HTMLFormatter],
   inputs: ["mix.exs", "config/*.exs"],
-  subdirectories: ["apps/*"],
-  tag_formatters: %{script: PrettierJS, style: PrettierCSS}
+  subdirectories: ["apps/*"]
 ]

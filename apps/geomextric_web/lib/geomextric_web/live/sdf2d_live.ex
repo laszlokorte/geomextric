@@ -181,101 +181,101 @@ defmodule GeomextricWeb.SDF2DLive do
         console.log("recompile shader");
         return regl({
           vert: `
-                                    precision mediump float;
+                                        precision mediump float;
 
-                                    attribute vec2 position;
-                                    varying vec2 pos;
+                                        attribute vec2 position;
+                                        varying vec2 pos;
 
-                                    void main() {
-                                      pos = (position + 1.0) / 2.0;
-                                      gl_Position = vec4(position, 0.0, 1.0);
-                                    }
-                                  `,
+                                        void main() {
+                                          pos = (position + 1.0) / 2.0;
+                                          gl_Position = vec4(position, 0.0, 1.0);
+                                        }
+                                      `,
 
           frag: `
-                                    precision mediump float;
-                                    varying vec2 pos;
-                                    uniform vec2 cursor;
-                                    uniform vec2 screen;
-                                    uniform vec4 camera;
+                                        precision mediump float;
+                                        varying vec2 pos;
+                                        uniform vec2 cursor;
+                                        uniform vec2 screen;
+                                        uniform vec4 camera;
 
-                                    vec2 rotate(vec2 p, float angle) {
-                                      return mat2(cos(angle), -sin(angle), sin(angle),  cos(angle)) * p;
-                                    }
-                                    float sdf_rect(
-                                          vec2 p,
-                                          float x,
-                                          float y,
-                                          float w,
-                                          float h
-                                        ) {
-                                          vec2 c = vec2(x + w * 0.5, y + h * 0.5);
-                                          vec2 b = vec2(w, h) * 0.5;
+                                        vec2 rotate(vec2 p, float angle) {
+                                          return mat2(cos(angle), -sin(angle), sin(angle),  cos(angle)) * p;
+                                        }
+                                        float sdf_rect(
+                                              vec2 p,
+                                              float x,
+                                              float y,
+                                              float w,
+                                              float h
+                                            ) {
+                                              vec2 c = vec2(x + w * 0.5, y + h * 0.5);
+                                              vec2 b = vec2(w, h) * 0.5;
 
-                                          vec2 q = abs(p - c) - b;
+                                              vec2 q = abs(p - c) - b;
 
-                                          return length(max(q, 0.0)) +
-                                                 min(max(q.x, q.y), 0.0);
+                                              return length(max(q, 0.0)) +
+                                                     min(max(q.x, q.y), 0.0);
+                                            }
+
+                                            float sdf_segment( in vec2 p, in vec2 a, in vec2 b) {
+                                                vec2 pa = p-a, ba = b-a;
+                                                float h = clamp( dot(pa,ba)/dot(ba,ba), 0.0, 1.0 );
+                                                return length( pa - ba*h );
+                                            }
+                                            float sdf_arrowhead(
+                                                vec2 p,
+                                                vec2 tip,
+                                                vec2 dir,
+                                                float len,
+                                                float width
+                                            ) {
+                                                vec2 q = p - tip;
+
+                                                // x points backwards from the tip
+                                                float x = -dot(q, dir);
+                                                float y = abs(dot(q, vec2(-dir.y, dir.x)));
+
+                                                // Triangle: tip at x = 0, base at x = len
+                                                float k = width / len;
+
+                                                float h = clamp((x + y * k) / (1.0 + k * k), 0.0, len);
+                                                float d = length(vec2(x - h, y - h * k));
+
+                                                // Inside triangle
+                                                float inside = step(y, width * (1.0 - x / len))
+                                                             * step(0.0, x)
+                                                             * step(x, len);
+
+                                                return mix(d, -d, inside);
+                                            }
+
+                                        ${el.textContent}
+
+                                        vec3 antialias(vec2 p, vec3 background) {
+                                          vec2 px = vec2(1.0) * camera.z;
+
+                                          vec3 color = vec3(0.0);
+
+                                          color += scene(p + px * vec2(-0.375, -0.375), background);
+                                         // color += scene(p + px * vec2( 0.375, -0.375), background);
+                                         // color += scene(p + px * vec2(-0.375,  0.375), background);
+                                         // color += scene(p + px * vec2( 0.375,  0.375), background);
+
+                                         // color *= 0.25;
+
+                                          return color;
                                         }
 
-                                        float sdf_segment( in vec2 p, in vec2 a, in vec2 b) {
-                                            vec2 pa = p-a, ba = b-a;
-                                            float h = clamp( dot(pa,ba)/dot(ba,ba), 0.0, 1.0 );
-                                            return length( pa - ba*h );
+                                        void main() {
+                                          float c = length((pos)*screen - vec2(cursor.x, screen.y - cursor.y)) > 6.0 ? 1.0: 0.0;
+                                          gl_FragColor = vec4(
+                                            antialias(
+                                              rotate(vec2(pos.x-0.5, 0.5 -pos.y)*camera.z*screen, camera.w) + camera.xy,
+                                              vec3(pos, 0.5)
+                                            ), c);
                                         }
-                                        float sdf_arrowhead(
-                                            vec2 p,
-                                            vec2 tip,
-                                            vec2 dir,
-                                            float len,
-                                            float width
-                                        ) {
-                                            vec2 q = p - tip;
-
-                                            // x points backwards from the tip
-                                            float x = -dot(q, dir);
-                                            float y = abs(dot(q, vec2(-dir.y, dir.x)));
-
-                                            // Triangle: tip at x = 0, base at x = len
-                                            float k = width / len;
-
-                                            float h = clamp((x + y * k) / (1.0 + k * k), 0.0, len);
-                                            float d = length(vec2(x - h, y - h * k));
-
-                                            // Inside triangle
-                                            float inside = step(y, width * (1.0 - x / len))
-                                                         * step(0.0, x)
-                                                         * step(x, len);
-
-                                            return mix(d, -d, inside);
-                                        }
-
-                                    ${el.textContent}
-
-                                    vec3 antialias(vec2 p, vec3 background) {
-                                      vec2 px = vec2(1.0) * camera.z;
-
-                                      vec3 color = vec3(0.0);
-
-                                      color += scene(p + px * vec2(-0.375, -0.375), background);
-                                     // color += scene(p + px * vec2( 0.375, -0.375), background);
-                                     // color += scene(p + px * vec2(-0.375,  0.375), background);
-                                     // color += scene(p + px * vec2( 0.375,  0.375), background);
-
-                                     // color *= 0.25;
-
-                                      return color;
-                                    }
-
-                                    void main() {
-                                      float c = length((pos)*screen - vec2(cursor.x, screen.y - cursor.y)) > 6.0 ? 1.0: 0.0;
-                                      gl_FragColor = vec4(
-                                        antialias(
-                                          rotate(vec2(pos.x-0.5, 0.5 -pos.y)*camera.z*screen, camera.w) + camera.xy,
-                                          vec3(pos, 0.5)
-                                        ), c);
-                                    }
-                                  `,
+                                      `,
           uniforms: {
             cursor: regl.prop("cursor"),
             camera: regl.prop("camera"),
