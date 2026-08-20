@@ -2,6 +2,7 @@ defmodule SDF3DCompiler do
   def compile(shapes, bounding) do
     {parts, {_, uniforms}} =
       shapes
+      |> Enum.take(20)
       |> Enum.reverse()
       |> then(fn shapes ->
         [

@@ -130,7 +130,7 @@
     a = {};
     var q = [],
       n = [],
-      u = "undefined" === typeof window ? 1 : window.devicePixelRatio,
+      u = "undefined" === typeof window ? 1 : 1 || window.devicePixelRatio,
       h = !1,
       v = function (a) {},
       m = function () {};

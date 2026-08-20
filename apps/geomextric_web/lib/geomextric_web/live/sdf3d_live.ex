@@ -158,7 +158,7 @@ defmodule GeomextricWeb.SDF3DLive do
           <div
             data-shader
             uniform-alpha={Float.round(@alpha, 3)}
-            {uniforms |> Enum.map(fn {k,i,v} -> { "uniform-#{k}[#{i}]", v } end)}
+            {uniforms |> Enum.map(fn {k,i,v} -> { "uniform-#{k}-#{i}", v } end)}
           >
             <div
               :for={
@@ -186,14 +186,15 @@ defmodule GeomextricWeb.SDF3DLive do
 
       function makeDraw(regl, el, reglCanvas) {
         const shader = el.querySelector("[data-shader]");
-        const uniforms = [];
+        const uniformsall = [];
         for (const attr of shader.attributes) {
           if (attr.name.startsWith("uniform-")) {
-            const name = attr.name.slice("uniform-".length);
-            uniforms.push(name);
+            const name = attr.name.slice("uniform-".length).replace(/\-\d+$/, (m) => `[${m[1]}]`);
+            uniformsall.push(name);
           }
         }
-        console.log("recompile shader");
+        const uniforms = [...new Set(uniformsall)]
+        console.log(uniforms )
         const nr = regl({
           vert: `
                                         precision mediump float;
@@ -509,7 +510,7 @@ defmodule GeomextricWeb.SDF3DLive do
           }
         }
         const grouped = Object.groupBy(uniforms, ([name]) =>
-          name.replace(/\[\d+\]$/, ""),
+          name.replace(/\-\d+$/, ""),
         );
 
         const result = Object.fromEntries(
