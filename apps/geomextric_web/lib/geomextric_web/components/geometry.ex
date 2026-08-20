@@ -4,6 +4,10 @@ defmodule GeomextricWeb.Geometry do
 
   alias Galixir.Algebras.PGA3
 
+  @fr 1
+
+  def fr(n), do: Float.round(n, @fr)
+
   attr :camera, :map, required: true
   attr :rotation, :float, default: 0.0
   attr :scale, :float, default: 1.0
@@ -22,7 +26,7 @@ defmodule GeomextricWeb.Geometry do
       <%= for {color, ps}<- @geo.faces, @faces, path =
                     (for p <- ps  do
                       with({screen_x, screen_y, _z} <- project(@camera, rot(@rotation, scale_point(p, @scale)) |> PGA3.transform(@motor)), do:
-                      "#{screen_x} #{screen_y}", else: (_e ->  ""))
+                      "#{fr(screen_x)} #{fr(screen_y)}", else: (_e ->  ""))
                     end
                     |> Enum.join(" ")) do %>
         <%= if @quad_ellipse do %>
@@ -31,14 +35,14 @@ defmodule GeomextricWeb.Geometry do
               <% ellipse = quad_to_ellipse({ax, ay}, {bx, by}, {cx, cy}, {dx, dy}) %>
               <ellipse
                 :if={ellipse}
-                rx={ellipse.radius_a}
-                ry={ellipse.radius_b}
-                cx={ellipse.center_x}
+                rx={fr(ellipse.radius_a)}
+                ry={fr(ellipse.radius_b)}
+                cx={fr(ellipse.center_x)}
                 fill={color}
                 stroke={Enum.at(@geo.edges, 0) |> elem(0)}
-                transform={"rotate(#{ellipse.angle * 180 / :math.pi()} #{ellipse.center_x} #{ellipse.center_y})"}
+                transform={"rotate(#{fr(ellipse.angle * 180 / :math.pi())} #{fr(ellipse.center_x)} #{fr(ellipse.center_y)})"}
                 r="2"
-                cy={ellipse.center_y}
+                cy={fr(ellipse.center_y)}
               />
             <% _ -> %>
               <polygon
@@ -59,10 +63,10 @@ defmodule GeomextricWeb.Geometry do
           <line
             class="line3d"
             stroke={color}
-            x1={x1}
-            y1={y1}
-            x2={x2}
-            y2={y2}
+            x1={fr(x1)}
+            y1={fr(y1)}
+            x2={fr(x2)}
+            y2={fr(y2)}
           />
           <% else _ -> %>
         <% end %>
@@ -72,8 +76,8 @@ defmodule GeomextricWeb.Geometry do
           <circle
             fill={color}
             r={10 / abs(z)}
-            cx={screen_x}
-            cy={screen_y}
+            cx={fr(screen_x)}
+            cy={fr(screen_y)}
           />
           <% else _ -> %>
         <% end %>
@@ -82,10 +86,10 @@ defmodule GeomextricWeb.Geometry do
         <%= with {screen_x, screen_y, z} <- project(@camera, rot(@rotation, scale_point(p, @scale)) |> PGA3.transform(@motor))  do %>
           <text
             class="text-label"
-            font-size={24 / z}
+            font-size={fr(24 / z)}
             fill={color}
-            x={screen_x}
-            y={screen_y}
+            x={fr(screen_x)}
+            y={fr(screen_y)}
             font-size={6}
             stroke="white"
             stroke-width="1"
@@ -102,10 +106,10 @@ defmodule GeomextricWeb.Geometry do
           </text>
           <text
             class="text-label"
-            font-size={24 / z}
+            font-size={fr(24 / z)}
             fill={color}
-            x={screen_x}
-            y={screen_y}
+            x={fr(screen_x)}
+            y={fr(screen_y)}
             font-size={6}
             text-anchor="middle"
             phx-no-format
