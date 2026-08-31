@@ -383,11 +383,11 @@ defmodule Geomextric.Bodies do
   def align(ps, qs) do
     # https://observablehq.com/@enkimute/glu-lookat-in-3d-pga
     initial_m = one = PGA3.new(scalar: 1)
-    initial_q = PGA3.dual(PGA3.new(scalar: 1))
+    initial_q = PGA3.hodge_dual(PGA3.new(scalar: 1))
 
     Enum.zip_reduce(ps, qs, {initial_m, initial_q}, fn p, q, {m, prev_q} ->
-      p = prev_q |> PGA3.join(PGA3.transform(p, m)) |> PGA3.normalize()
-      new_q = prev_q |> PGA3.join(q) |> PGA3.normalize() |> PGA3.blade_inverse()
+      p = prev_q |> PGA3.join(PGA3.transform(p, m)) |> PGA3.normalize!()
+      new_q = prev_q |> PGA3.join(q) |> PGA3.normalize!() |> PGA3.blade_inverse()
       new_m = new_q |> PGA3.gp(p) |> PGA3.add(one) |> PGA3.gp(m)
 
       {new_m, new_q}
@@ -476,7 +476,7 @@ defmodule Geomextric.Bodies do
       1 - PGA3.coefficient(bv2, :scalar)
 
     PGA3.scale(numerator, 1 / denominator)
-    |> PGA3.normalize()
+    |> PGA3.normalize!()
   end
 
   def pow(motor, t) do

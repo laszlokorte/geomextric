@@ -69,6 +69,9 @@ defmodule GeomextricWeb.HomeLive do
         <.link navigate={~p"/cga"} class="enter-link" style="background-color: #4fb06d;">
           CGA
         </.link>
+        <.link navigate={~p"/cga-inter"} class="enter-link" style="background-color: #4fb06d;">
+          CGA Inter
+        </.link>
 
         <.link navigate={~p"/rotory"} class="enter-link" style="background-color: #F0E68C;">
           Rotory

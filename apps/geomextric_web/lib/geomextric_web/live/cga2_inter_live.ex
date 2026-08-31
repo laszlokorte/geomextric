@@ -1,0 +1,887 @@
+defmodule GeomextricWeb.CGA2InterLive do
+  alias Galixir.Algebras.CGA2
+  use GeomextricWeb, :live_view
+  import GeomextricWeb.CoreComponents
+  import GeomextricWeb.Canvas
+  import GeomextricWeb.Menu
+  @colors ["#ff00ff", "#00ffff", "#00ff00", "#ffaa00"]
+
+  def colors, do: @colors
+
+  @impl true
+  def mount(%{}, _, socket) do
+    Geomextric.CGA2Canvas.subscribe()
+
+    {:ok,
+     socket
+     |> assign(:pen, "#0077ff")
+     |> assign(:elements, [])
+     |> assign(:axis, true)
+     |> assign(:grid, false)
+     |> assign(:bounds, true)
+     |> assign(:transforms, false)
+     |> assign(:intersections, false)
+     |> assign(:bisections, false)
+     |> assign(:prompt, "")
+     |> assign(:extra_pen, "#0077ff")
+     |> assign(:box, %{
+       x: -1200,
+       y: -800,
+       width: 2400,
+       height: 1600
+     })}
+  end
+
+  def parse_number(n) when is_number(n), do: n
+
+  def parse_number(str) do
+    with :error <- Float.parse(str),
+         :error <- Integer.parse(str) do
+      :error
+    else
+      {num, ""} ->
+        num
+
+      _ ->
+        :error
+    end
+  end
+
+  def handle_event("close", %{}, socket) do
+    {:noreply,
+     socket
+     |> push_navigate(to: ~p"/")}
+  end
+
+  def handle_event("set_grid", %{"value" => "true"}, socket) do
+    {:noreply, socket |> assign(:grid, true)}
+  end
+
+  def handle_event("set_grid", %{"value" => "false"}, socket) do
+    {:noreply, socket |> assign(:grid, false)}
+  end
+
+  def handle_event("set_axis", %{"value" => "true"}, socket) do
+    {:noreply, socket |> assign(:axis, true)}
+  end
+
+  def handle_event("set_axis", %{"value" => "false"}, socket) do
+    {:noreply, socket |> assign(:axis, false)}
+  end
+
+  def handle_event("set_transforms", %{"value" => "true"}, socket) do
+    {:noreply, socket |> assign(:transforms, true)}
+  end
+
+  def handle_event("set_transforms", %{"value" => "false"}, socket) do
+    {:noreply, socket |> assign(:transforms, false)}
+  end
+
+  def handle_event("set_intersections", %{"value" => "true"}, socket) do
+    {:noreply, socket |> assign(:intersections, true)}
+  end
+
+  def handle_event("set_intersections", %{"value" => "false"}, socket) do
+    {:noreply, socket |> assign(:intersections, false)}
+  end
+
+  def handle_event("set_bisections", %{"value" => "true"}, socket) do
+    {:noreply, socket |> assign(:bisections, true)}
+  end
+
+  def handle_event("set_bisections", %{"value" => "false"}, socket) do
+    {:noreply, socket |> assign(:bisections, false)}
+  end
+
+  def handle_event("set_bounds", %{"value" => "true"}, socket) do
+    {:noreply, socket |> assign(:bounds, true)}
+  end
+
+  def handle_event("set_bounds", %{"value" => "false"}, socket) do
+    {:noreply, socket |> assign(:bounds, false)}
+  end
+
+  def handle_event(
+        "change_view",
+        %{"intersections" => int, "transforms" => trans, "bisections" => bis},
+        socket
+      ) do
+    {:noreply,
+     socket
+     |> assign(:intersections, int == "on")
+     |> assign(:transforms, trans == "on")
+     |> assign(:bisections, bis == "on")}
+  end
+
+  def handle_event("select", _, socket) do
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("add_prompt", %{"prompt" => prompt}, socket) do
+    try do
+      {:ok, CGA2.parse(prompt)}
+    rescue
+      ArgumentError ->
+        :error
+    end
+    |> case do
+      {:ok, mv} ->
+        Geomextric.CGA2Canvas.add_raw(Geomextric.CGA2Canvas, mv)
+
+      _ ->
+        true
+    end
+
+    {:noreply, socket |> assign(:prompt, "")}
+  end
+
+  @impl true
+  def handle_event("change_prompt", %{"prompt" => prompt}, socket) do
+    {:noreply, socket |> assign(:prompt, prompt)}
+  end
+
+  @impl true
+  def handle_event("add_point", %{"pos" => %{"x" => x, "y" => y}}, socket) do
+    p = CGA2.point(x, y)
+
+    Geomextric.CGA2Canvas.add_raw(Geomextric.CGA2Canvas, p)
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:added, new}, socket) do
+    {:noreply,
+     socket
+     |> update(:elements, &[{"test", "tomato", new} | &1])}
+  end
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <style rel="stylesheet" :type={GeomextricWeb.ColocatedScopedCSS}>
+      body {
+        font-family: monospace, monospace;
+        font-size: 1em;
+      }
+      @keyframes enter {
+        from {
+          transform: scale(0);
+        }
+        to {
+          transform: scale(1);
+        }
+      }
+      .origin {
+        scale: var(--cam-scale);
+        transform-box: fill-box;
+        transform-origin: 50% 50%;
+      }
+
+      svg[data-zoomed="out"] [data-non-zoom-stroke="yes"] {
+        vector-effect: non-scaling-stroke;
+      }
+
+      svg[data-zoomed="out"] [data-non-zoom-stroke="min"] {
+        vector-effect: non-scaling-stroke;
+        stroke-width: 5;
+      }
+      [data-non-scaling] {
+        scale: var(--cam-scale-min);
+        transform-box: fill-box;
+        transform-origin: 50% 50%;
+      }
+      [data-zoomed="out"] [data-non-scaling-max] {
+        scale: var(--cam-scale-max);
+        transform-box: fill-box;
+        transform-origin: 50% 50%;
+        stroke-width: 1;
+      }
+      [data-non-scaling-full] {
+        scale: var(--cam-scale);
+        transform-box: fill-box;
+        transform-origin: 50% 50%;
+      }
+
+      .auto-color {
+        fill: var(--auto-fill, attr("fill"));
+        stroke: var(--auto-stroke, attr("stroke"));
+      }
+      .toolbar {
+        flex-wrap: wrap-reverse;
+        border-radius: 1ex;
+        position: fixed;
+        height: auto;
+        top: 2em;
+        left: 0;
+        right: 1em;
+        margin: 1ex;
+        padding: 1ex;
+        color: #fff;
+        display: flex;
+        gap: 1ex;
+
+        background: #0003;
+        z-index: 1000;
+        flex-direction: row;
+        align-items: center;
+      }
+      form {
+        display: contents;
+      }
+      button {
+        background: #000;
+        color: #fff;
+        padding: 0.5ex 1em;
+        cursor: pointer;
+
+        border-radius: 0.5ex;
+        align-self: stretch;
+      }
+
+      [draggable="true"] {
+        cursor: grab;
+        background: none;
+        padding: 0;
+        border: none;
+      }
+
+      ::-moz-color-swatch {
+        border: none;
+      }
+
+      input[type="color"] {
+        border: none;
+        display: block;
+        width: 100%;
+        height: 100%;
+        appearance: none;
+        -webkit-appearance: none;
+        width: 3ex;
+        height: 3ex;
+        margin: 0;
+        padding: 0;
+      }
+      .color-border {
+        display: grid;
+        border-radius: 100vw;
+        width: 3ex;
+        height: 3ex;
+        overflow: hidden;
+        padding: 0;
+        outline: 2px solid white;
+      }
+
+      .pallette {
+        display: inherit;
+        gap: inherit;
+        flex-wrap: wrap;
+      }
+
+      .ghost {
+        display: contents;
+      }
+      label {
+        display: flex;
+        align-items: center;
+        flex-direction: row;
+        gap: 1ex;
+        margin-right: 1em;
+      }
+
+      .connection-status {
+        display: flex;
+        flex-direction: row;
+        margin-left: auto;
+        margin-right: 1em;
+        white-space: nowrap;
+        color: black;
+      }
+      .push-right {
+        display: inherit;
+        align-self: stretch;
+        align-items: inherit;
+        margin-left: auto;
+      }
+
+      .color-list {
+        display: flex;
+        background: #0005;
+        padding: 0.8ex;
+        border-radius: 0.5ex;
+      }
+      .connection-status {
+        display: none;
+      }
+
+      .phx-loading .disconnected {
+        display: block;
+      }
+
+      .phx-connected .connected {
+        display: block;
+      }
+
+      :scope .menu-bar {
+        position: static;
+        grid-area: bar;
+      }
+      input[type="checkbox"] {
+        display: none;
+      }
+      label:has(input[type="checkbox"]) {
+        color: #fff;
+        align-self: stretch;
+        display: flex;
+        align-items: center;
+        border-radius: 0.5ex;
+        padding: 0.5ex;
+        margin: 0;
+        background: #0001;
+        user-select: none;
+        filter: saturate(0%) brightness(500%);
+      }
+      label:has(input[type="checkbox"]:checked) {
+        color: #fff;
+        background: #000a;
+        filter: saturate(100%);
+      }
+
+      label:has(input[type="checkbox"]) svg {
+        opacity: 0.5;
+      }
+
+      label:has(input[type="checkbox"]:checked) svg {
+        opacity: 1;
+      }
+      :scope input[type="text"] {
+        background: #fff;
+        color: #000;
+      }
+      :scope.page {
+        display: grid;
+        grid-template-rows: [bar-start] auto [bar-end main-start] 1fr [main-end];
+        grid-template-columns: [bar-start main-start] 1fr [bar-end main-end];
+        position: absolute;
+        inset: 0;
+      }
+
+      :scope .main {
+        position: relative;
+        grid-area: main;
+      }
+    </style>
+    <div class="page">
+      <nav class="toolbar">
+        <form phx-change="change_view">
+          <div>
+            <input
+              name="intersections"
+              type="hidden"
+              value="off"
+            />
+            <label>
+              <input
+                phx-throttle="16"
+                name="intersections"
+                type="checkbox"
+                checked={@intersections}
+              /> Intersections
+            </label>
+          </div>
+          <div>
+            <input
+              name="transforms"
+              type="hidden"
+              value="off"
+            />
+            <label>
+              <input
+                phx-throttle="16"
+                name="transforms"
+                type="checkbox"
+                checked={@transforms}
+              /> Transforms
+            </label>
+          </div>
+          <div>
+            <input
+              name="bisections"
+              type="hidden"
+              value="off"
+            />
+            <label>
+              <input
+                phx-throttle="16"
+                name="bisections"
+                type="checkbox"
+                checked={@bisections}
+              /> Bisections
+            </label>
+          </div>
+        </form>
+        <div>
+          <form phx-submit="add_prompt" phx-change="change_prompt">
+            <input type="text" name="prompt" value={@prompt} />
+            <button>Add</button>
+          </form>
+        </div>
+      </nav>
+
+      <div class="menu-bar">
+        <.menu items={[
+          %{
+            label: "File",
+            items: [
+              %{
+                label: "Close",
+                send: "close"
+              }
+            ]
+          },
+          %{
+            label: "View",
+            items: [
+              %{
+                label: if(@grid, do: "Hide Grid", else: "Show Grid"),
+                shortcut: [key: "g", alt: true],
+                send: "set_grid",
+                value: if(@grid, do: "false", else: "true")
+              },
+              %{
+                label: if(@axis, do: "Hide Axis", else: "Show Axis"),
+                shortcut: [key: "a", alt: true],
+                send: "set_axis",
+                value: if(@axis, do: "false", else: "true")
+              },
+              %{
+                label: if(@transforms, do: "Hide Transforms", else: "Show Transforms"),
+                shortcut: [key: "t", alt: true],
+                send: "set_transforms",
+                value: if(@transforms, do: "false", else: "true")
+              },
+              %{
+                label: if(@intersections, do: "Hide Intersections", else: "Show Intersections"),
+                shortcut: [key: "i", alt: true],
+                send: "set_intersections",
+                value: if(@intersections, do: "false", else: "true")
+              },
+              %{
+                label: if(@bisections, do: "Hide Bisections", else: "Show Bisections"),
+                shortcut: [key: "i", alt: true],
+                send: "set_bisections",
+                value: if(@bisections, do: "false", else: "true")
+              },
+              %{
+                label: if(@bounds, do: "Hide Bounds", else: "Show Bounds"),
+                shortcut: [key: "b", alt: true],
+                send: "set_bounds",
+                value: if(@bounds, do: "false", else: "true")
+              }
+            ]
+          },
+          %{
+            label: "Help",
+            items: [
+              %{
+                label: "www.laszlokorte.de",
+                shortcut: [key: "h", ctrl: true],
+                link: "https://www.laszlokorte.de"
+              }
+            ]
+          }
+        ]}>
+          <:head>
+            CGA2
+          </:head>
+          <div class="segment">
+            <div class="connection-status connected">Connected 🟢</div>
+            <div class="connection-status disconnected">Reconnecting... 🔴</div>
+          </div>
+        </.menu>
+      </div>
+      <div class="main" style={"--auto-stroke: #{@pen}; --auto-fill: #{@pen}"}>
+        <.canvas tools={false} grid={@grid} bounds={@bounds} box={@box}>
+          <g :if={@axis} shape-rendering="geometricPrecision">
+            <line
+              data-inf-line={not @bounds}
+              x1={@box.x + @box.width * 0.01}
+              y1="0"
+              x2={@box.x + @box.width * 0.98}
+              y2="0"
+              stroke-width="6"
+              shape-rendering="geometricPrecision"
+              vector-effect="non-scaling-stroke"
+              stroke="#fff"
+            />
+            <line
+              data-inf-line={not @bounds}
+              y1={@box.y + @box.height * 0.01}
+              x1="0"
+              y2={@box.y + @box.height * 0.98}
+              x2="0"
+              stroke-width="6"
+              shape-rendering="geometricPrecision"
+              vector-effect="non-scaling-stroke"
+              stroke="#fff"
+            />
+            <line
+              data-inf-line={not @bounds}
+              x1={@box.x + @box.width * 0.01}
+              y1="0"
+              x2={@box.x + @box.width * 0.99}
+              y2="0"
+              stroke-width="2"
+              shape-rendering="geometricPrecision"
+              vector-effect="non-scaling-stroke"
+              stroke="#333"
+              marker-end="url(#axis-head)"
+            />
+            <line
+              data-inf-line={not @bounds}
+              y2={@box.y + @box.height * 0.01}
+              x1="0"
+              y1={@box.y + @box.height * 0.99}
+              x2="0"
+              stroke-width="2"
+              shape-rendering="geometricPrecision"
+              vector-effect="non-scaling-stroke"
+              stroke="#333"
+              marker-end="url(#axis-head)"
+            />
+
+            <circle class="origin" cx={0} cy={0} r={2} fill="#666" data-non-scaling />
+          </g>
+
+          <g id="elements">
+            <rect
+              id="spawner"
+              x={@box.x}
+              y={@box.y}
+              width={@box.width}
+              height={@box.height}
+              opacity="0.1"
+              phx-hook=".PointSpawner"
+            >
+            </rect>
+            <%= for {label, color, s} <-@elements do %>
+              <%= CGA2.classify(s) |> case do %>
+                <% {:line, {a, b, c}} when abs(b) > abs(a) -> %>
+                  <%= with x1 <- @box.x,
+                  x2 <- @box.x + @box.width,
+                  y1 <- -(a * x1 + c) / b,
+                  y2 <- -(a * x2 + c) / b
+                do %>
+                    <line
+                      x1={-x1}
+                      y1={y1}
+                      x2={-x2}
+                      y2={y2}
+                      data-inf-line
+                      vector-effect="non-scaling-stroke"
+                      stroke-width="2"
+                      stroke={color}
+                    />
+                    <text x={-(x1 + x2) / 2} y={(y1 + y2) / 2}>
+                      {label}
+                      <title>{inspect(s)}</title>
+                    </text>
+                  <% end %>
+                <% {:line, {a, b, c}} -> %>
+                  <%= with y1 <- -@box.y,
+                  y2 <- -(@box.y + @box.height),
+                  x1 <- -(b * y1 + c) / a,
+                  x2 <- -(b * y2 + c) / a
+                do %>
+                    <line
+                      x1={-x1}
+                      y1={y1}
+                      x2={-x2}
+                      y2={y2}
+                      stroke-width="2"
+                      data-inf-line
+                      vector-effect="non-scaling-stroke"
+                      stroke={color}
+                    />
+
+                    <text x={-(x1 + x2) / 2} y={(y1 + y2) / 2}>
+                      {label}
+                      <title>{inspect(s)}</title>
+                    </text>
+                  <% end %>
+                <% {:circle, {type, {cx, cy}, r}} -> %>
+                  <circle
+                    cx={cx}
+                    cy={-cy}
+                    r={r}
+                    fill="none"
+                    stroke-dasharray={if(type == :real, do: "none", else: "10  10")}
+                    stroke={color}
+                    vector-effect="non-scaling-stroke"
+                    stroke-width="3"
+                  />
+                  <text x={cx + r * 0.9} y={-cy}>
+                    {label}
+                    <title>{inspect(s)}</title>
+                  </text>
+                <% {:point, {cx, cy}} -> %>
+                  <circle
+                    cx={cx}
+                    cy={-cy}
+                    r="5"
+                    fill={color}
+                    data-non-scaling-full
+                    stroke="none"
+                    stroke-width="4"
+                  />
+                  <text x={cx + 10} y={-cy}>
+                    {label}
+
+                    <title>{inspect(s)}</title>
+                  </text>
+                <% {:point_pair, {cx1, cy1}, {cx2, cy2}} -> %>
+                  <circle
+                    cx={cx1}
+                    cy={-cy1}
+                    r="6"
+                    fill={elem(color, 0)}
+                    stroke={elem(color, 1)}
+                    data-non-scaling-full
+                    stroke-width="5"
+                  />
+                  <circle
+                    cx={cx2}
+                    cy={-cy2}
+                    r="6"
+                    fill={elem(color, 0)}
+                    stroke={elem(color, 1)}
+                    data-non-scaling-full
+                    stroke-width="5"
+                  />
+
+                  <text x={cx1 + 5} y={-cy1}>
+                    {label}/1
+                    <title>{inspect(s)}</title>
+                  </text>
+                  <text x={cx2 + 5} y={-cy2}>
+                    {label}/2
+                    <title>{inspect(s)}</title>
+                  </text>
+                <% _ -> %>
+              <% end %>
+            <% end %>
+          </g>
+
+          <g id="layers"></g>
+          <g id="layers-selection" multi-drag-root></g>
+          <defs>
+            <marker
+              id="axis-head"
+              viewBox="0 0 10 10"
+              refX="9"
+              refY="5"
+              markerWidth="10"
+              markerHeight="10"
+              fill="context-stroke"
+              orient="auto-start-reverse"
+            >
+              <path d="M 10 5 l -10 5 l 3 -5 l -3 -5 z" />
+            </marker>
+          </defs>
+        </.canvas>
+      </div>
+    </div>
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".PointSpawner">
+      export default {
+        mounted() {
+          function throttle(fun, delay, fallback) {
+            let lastTime = 0;
+            return function (...args) {
+              let now = Date.now();
+              if (now - lastTime >= delay) {
+                fun(...args);
+                lastTime = now;
+              } else if (fallback) {
+                fallback(...args);
+              }
+            };
+          }
+          const add = throttle((pos) => this.pushEvent("add_point", { pos }), 10);
+          const svg = this.el.ownerSVGElement;
+          const point = svg.createSVGPoint();
+
+          const evtToSvg = (evt, rel, offset) => {
+            point.x = evt.clientX;
+            point.y = evt.clientY;
+            const svgGlobal = point.matrixTransform(
+              (rel || svg).getScreenCTM().inverse(),
+            );
+            return {
+              x: svgGlobal.x - (offset?.x ?? 0),
+              y: -(svgGlobal.y - (offset?.y ?? 0)),
+            };
+          };
+
+          const offset = { x: 0, y: 0 };
+          this.listeners = {
+            pointerdown: (evt) => {
+              if (evt.isPrimary && (evt.pointerType !== "mouse" || evt.button == 0)) {
+                evt.preventDefault();
+                evt.currentTarget.setPointerCapture(evt.pointerId);
+                const pos = evtToSvg(evt);
+                offset.x = pos.x - evt.currentTarget.getAttribute("cx");
+                offset.y = -pos.y - evt.currentTarget.getAttribute("cy");
+
+                add(evtToSvg(evt, null, { x: 0, y: 0 }));
+              }
+            },
+          };
+          this.el.addEventListener("pointerdown", this.listeners.pointerdown);
+          this.el.addEventListener("pointermove", this.listeners.pointermove);
+        },
+        destroy() {
+          this.el.removeEventListener("pointermove", this.listeners.pointermove);
+          this.el.removeEventListener("pointerdown", this.listeners.pointerdown);
+        },
+      };
+    </script>
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".PointDragger">
+      export default {
+        mounted() {
+          function throttle(fun, delay, fallback) {
+            let lastTime = 0;
+            return function (...args) {
+              let now = Date.now();
+              if (now - lastTime >= delay) {
+                fun(...args);
+                lastTime = now;
+              } else if (fallback) {
+                fallback(...args);
+              }
+            };
+          }
+          const move = throttle(
+            (pos) => this.pushEvent("move_point", { id: this.el.id, pos }),
+            10,
+          );
+          const svg = this.el.ownerSVGElement;
+          const point = svg.createSVGPoint();
+
+          const evtToSvg = (evt, rel, offset) => {
+            point.x = evt.clientX;
+            point.y = evt.clientY;
+            const svgGlobal = point.matrixTransform(
+              (rel || svg).getScreenCTM().inverse(),
+            );
+            return {
+              x: svgGlobal.x - (offset?.x ?? 0),
+              y: -(svgGlobal.y - (offset?.y ?? 0)),
+            };
+          };
+
+          const offset = { x: 0, y: 0 };
+          this.listeners = {
+            pointerdown: (evt) => {
+              if (evt.isPrimary && (evt.pointerType !== "mouse" || evt.button == 0)) {
+                evt.preventDefault();
+                evt.currentTarget.setPointerCapture(evt.pointerId);
+                const pos = evtToSvg(evt);
+                offset.x = pos.x - evt.currentTarget.getAttribute("cx");
+                offset.y = -pos.y - evt.currentTarget.getAttribute("cy");
+              }
+            },
+            pointermove: (evt) => {
+              if (evt.currentTarget.hasPointerCapture(evt.pointerId)) {
+                evt.preventDefault();
+                move(evtToSvg(evt, null, offset));
+              }
+            },
+          };
+          this.el.addEventListener("pointerdown", this.listeners.pointerdown);
+          this.el.addEventListener("pointermove", this.listeners.pointermove);
+        },
+        destroy() {
+          this.el.removeEventListener("pointermove", this.listeners.pointermove);
+          this.el.removeEventListener("pointerdown", this.listeners.pointerdown);
+        },
+      };
+    </script>
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".Draggable">
+      export default {
+        mounted() {
+          const canvas = document.createElement("canvas");
+          canvas.width = 24;
+          canvas.height = 24;
+          const ctx = canvas.getContext("2d");
+          const blob = new Blob([this.el.querySelector("svg").outerHTML], {
+            type: "image/svg+xml",
+          });
+          const url = URL.createObjectURL(blob);
+          const img = new Image();
+
+          img.width = 24;
+          img.height = 24;
+          img.onload = function () {
+            ctx.clearRect(0, 0, 24, 24);
+            ctx.drawImage(img, 0, 0, 24, 24);
+            URL.revokeObjectURL(url);
+          };
+          img.onerror = (e) => console.error(e);
+          img.src = url;
+
+          function dragstartHandler(evt) {
+            var svg = evt.currentTarget.querySelector("svg");
+
+            evt.dataTransfer.setDragImage(svg, 0, 0);
+            evt.dataTransfer.setData(
+              "text",
+              JSON.stringify({
+                type: svg.getAttribute("data-type"),
+                color: svg.getAttribute("fill"),
+                source_tip: svg.hasAttribute("source-tip"),
+                target_tip: svg.hasAttribute("target-tip"),
+              }),
+            );
+          }
+          this.el.addEventListener("dragstart", dragstartHandler);
+        },
+      };
+    </script>
+    """
+  end
+
+  def input_plain(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
+    errors = if Phoenix.Component.used_input?(field), do: field.errors, else: []
+
+    assigns
+    |> assign(field: nil, id: field.id)
+    |> assign(:errors, Enum.map(errors, &translate_error(&1)))
+    |> assign_new(:name, fn -> field.name end)
+    |> assign_new(:value, fn -> field.value end)
+    |> input_plain()
+  end
+
+  def input_plain(%{type: "checkbox"} = assigns) do
+    assigns =
+      assign_new(assigns, :checked, fn ->
+        Phoenix.HTML.Form.normalize_value("checkbox", assigns[:value])
+      end)
+
+    ~H"""
+    <label id={@name} draggable="true" phx-hook=".Draggable">
+      <input
+        type="hidden"
+        name={@name}
+        value="false"
+      />
+      <input
+        type="checkbox"
+        name={@name}
+        value="true"
+        checked={@checked}
+      />
+      {render_slot(@inner_block) || @label}
+    </label>
+    """
+  end
+end

@@ -148,35 +148,35 @@ defmodule GeomextricWeb.CGA2Live do
   def render(assigns) do
     c1 =
       CGA2.circle(assigns.points |> Map.get("p0") |> CGA2.cleanup(1.0e-6), 180)
-      |> CGA2.normalize()
+      |> CGA2.normalize!()
 
     # c1_prime =
     #   CGA2.circle(assigns.points |> Map.get("p0") |> CGA2.cleanup(1.0e-6), -140)
-    #   |> CGA2.normalize()
+    #   |> CGA2.normalize!()
 
     c3 =
       CGA2.wedge(assigns.points |> Map.get("p4"), assigns.points |> Map.get("p5"))
       |> CGA2.wedge(assigns.points |> Map.get("p6"))
-      |> CGA2.normalize()
+      |> CGA2.normalize!()
 
     ln1 =
       CGA2.wedge(assigns.points |> Map.get("p7"), assigns.points |> Map.get("p8"))
       |> CGA2.wedge(CGA2.e_inf())
-      |> CGA2.normalize()
+      |> CGA2.normalize!()
 
     ln2 =
       CGA2.wedge(assigns.points |> Map.get("p7"), assigns.points |> Map.get("p9"))
       |> CGA2.wedge(CGA2.e_inf())
-      |> CGA2.normalize()
+      |> CGA2.normalize!()
 
     ln3 =
       CGA2.wedge(assigns.points |> Map.get("p8"), assigns.points |> Map.get("p9"))
       |> CGA2.wedge(CGA2.e_inf())
-      |> CGA2.normalize()
+      |> CGA2.normalize!()
 
     c4 =
       CGA2.circle(assigns.points |> Map.get("p10"), 250)
-      |> CGA2.normalize()
+      |> CGA2.normalize!()
 
     pair2 =
       CGA2.wedge(
@@ -199,7 +199,7 @@ defmodule GeomextricWeb.CGA2Live do
             {"Line 3", :orchid, ln3},
 
             #  {"Line+C'", :orange,
-            #   CGA2.add(c1_prime |> CGA2.normalize(), ln2 |> CGA2.normalize()) |> CGA2.normalize()},
+            #   CGA2.add(c1_prime |> CGA2.normalize!(), ln2 |> CGA2.normalize!()) |> CGA2.normalize!()},
             {"P0", :purple, assigns.points |> Map.get("p0")},
             {"P4", :purple, assigns.points |> Map.get("p4")},
             {"P5", :purple, assigns.points |> Map.get("p5")},
@@ -222,16 +222,16 @@ defmodule GeomextricWeb.CGA2Live do
           if(assigns.bisections,
             do: [
               {"C1 + L2", "#f0fa",
-               CGA2.add(c1 |> CGA2.normalize(), ln2 |> CGA2.normalize()) |> CGA2.normalize()},
+               CGA2.add(c1 |> CGA2.normalize!(), ln2 |> CGA2.normalize!()) |> CGA2.normalize!()},
               {"C1 - L2", "#f0fa",
-               CGA2.sub(c1 |> CGA2.normalize(), ln2 |> CGA2.normalize())
-               |> CGA2.normalize()},
+               CGA2.sub(c1 |> CGA2.normalize!(), ln2 |> CGA2.normalize!())
+               |> CGA2.normalize!()},
               {"C4 - C3", "#0ffa",
-               CGA2.sub(c4 |> CGA2.normalize(), c3 |> CGA2.normalize())
-               |> CGA2.normalize()},
+               CGA2.sub(c4 |> CGA2.normalize!(), c3 |> CGA2.normalize!())
+               |> CGA2.normalize!()},
               {"C4 + C4", "#0ffa",
-               CGA2.add(c4 |> CGA2.normalize(), c3 |> CGA2.normalize())
-               |> CGA2.normalize()},
+               CGA2.add(c4 |> CGA2.normalize!(), c3 |> CGA2.normalize!())
+               |> CGA2.normalize!()},
               {"Line 1+2", "#0001", ln1 |> CGA2.add(ln2)},
               {"Line 1+2", "#0001", ln1 |> CGA2.sub(ln3)},
               {"Line 1+2", "#0001", ln3 |> CGA2.add(ln2)}
@@ -251,7 +251,7 @@ defmodule GeomextricWeb.CGA2Live do
                        assigns.points |> Map.get("p11"),
                        assigns.points |> Map.get("p12")
                      )
-                     |> CGA2.normalize()
+                     |> CGA2.normalize!()
                    )
                    |> CGA2.cleanup(1.0e-6)},
                   {"", "#aaa5", &1}

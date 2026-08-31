@@ -10,7 +10,8 @@ defmodule Geomextric.Application do
     children = [
       {DNSCluster, query: Application.get_env(:geomextric, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Geomextric.PubSub},
-      {Geomextric.Canvas, name: Geomextric.Canvas}
+      {Geomextric.Canvas, name: Geomextric.Canvas},
+      {Geomextric.CGA2Canvas, name: Geomextric.CGA2Canvas}
       # Start a worker by calling: Geomextric.Worker.start_link(arg)
       # {Geomextric.Worker, arg}
     ]

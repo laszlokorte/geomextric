@@ -20,6 +20,7 @@ defmodule GeomextricWeb.Router do
       live "/", HomeLive, :index
       live "/canvas", CanvasLive, :index
       live "/cga", CGA2Live, :index
+      live "/cga-inter", CGA2InterLive, :index
       live "/scene", SceneLive, :index
       live "/tut", TutLive, :index
       live "/playground", PlaygroundLive, :index
