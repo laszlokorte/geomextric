@@ -40,9 +40,10 @@ defmodule GeomextricWeb.HomeLive do
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 10vmin;
+        font-size: 6vmin;
         opacity: 0.8;
         transition: opacity 50ms linear;
+        white-space: nowrap;
       }
 
       .enter-link:hover,
