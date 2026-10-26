@@ -136,7 +136,7 @@ defmodule GeomextricWeb.TutLive do
      update(socket, :camera, fn %{pitch: pitch, yaw: yaw} = c ->
        %{
          c
-         | pitch: clamp(pitch + dp, -:math.pi() / 2.01, :math.pi() / 2.01),
+         | pitch: clamp(pitch + dp, -:math.pi() / 2.05, :math.pi() / 2.05),
            yaw: yaw + dy
        }
      end)}
@@ -160,7 +160,7 @@ defmodule GeomextricWeb.TutLive do
      socket
      |> update(
        :camera,
-       fn c = %{pitch: p} -> %{c | pitch: clamp(p + v, -:math.pi() / 2.01, :math.pi() / 2.01)} end
+       fn c = %{pitch: p} -> %{c | pitch: clamp(p + v, -:math.pi() / 2.05, :math.pi() / 2.05)} end
      )}
   end
 

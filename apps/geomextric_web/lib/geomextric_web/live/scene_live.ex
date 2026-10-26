@@ -162,7 +162,7 @@ defmodule GeomextricWeb.SceneLive do
      update(socket, :camera, fn %{pitch: pitch, yaw: yaw} = c ->
        %{
          c
-         | pitch: clamp(pitch + dp, -:math.pi() / 2.01, :math.pi() / 2.01),
+         | pitch: clamp(pitch + dp, -:math.pi() / 2.05, :math.pi() / 2.05),
            yaw: yaw + dy
        }
      end)}
@@ -186,7 +186,7 @@ defmodule GeomextricWeb.SceneLive do
      socket
      |> update(
        :camera,
-       fn c = %{pitch: p} -> %{c | pitch: clamp(p + v, -:math.pi() / 2.01, :math.pi() / 2.01)} end
+       fn c = %{pitch: p} -> %{c | pitch: clamp(p + v, -:math.pi() / 2.05, :math.pi() / 2.05)} end
      )}
   end
 
@@ -262,7 +262,13 @@ defmodule GeomextricWeb.SceneLive do
     target = PGA3.point(fx, fy, fz)
     pole = PGA3.ideal_point(0, 0, 1)
 
-    assigns = assign(assigns, :camera, look_at(eye, target, pole))
+    assigns =
+      try do
+        assign(assigns, :camera, look_at(eye, target, pole))
+      rescue
+        _ ->
+          assign(assigns, :camera, PGA3.zero())
+      end
 
     ~H"""
     <style rel="stylesheet" :type={GeomextricWeb.ColocatedCSS}>

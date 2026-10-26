@@ -59,7 +59,7 @@ defmodule GeomextricWeb.Geometry do
       <% end %>
 
       <%= for {color, {p1, p2}} <- @geo.edges, @edges  do %>
-        <%= with {{x1, y1, _z1}, {x2,y2,_z2}} <- {project(@camera, rot(@rotation, scale_point(p1, @scale)) |> PGA3.transform(@motor)), project(@camera, rot(@rotation, scale_point(p2, @scale)) |> PGA3.transform(@motor))} do %>
+        <%= with {{x1, y1, _z1}, {x2,y2,_z2}} <- {project(@camera, rot(@rotation, scale_point(p1, @scale))  |> PGA3.transform(@motor)), project(@camera, rot(@rotation, scale_point(p2, @scale)) |> PGA3.transform(@motor))} do %>
           <line
             class="line3d"
             stroke={color}
@@ -153,7 +153,7 @@ defmodule GeomextricWeb.Geometry do
     t =
       PGA3.gp(PGA3.new(e1: 1), PGA3.new(e2: 1))
       |> PGA3.add(PGA3.new(scalar: a / 100))
-      |> PGA3.normalize()
+      |> PGA3.normalize!()
 
     PGA3.transform(o, t)
   end
