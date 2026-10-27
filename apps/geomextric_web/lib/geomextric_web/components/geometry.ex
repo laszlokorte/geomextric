@@ -33,8 +33,17 @@ defmodule GeomextricWeb.Geometry do
           <%= case ps |> Enum.map(&project(@camera, rot(@rotation, scale_point(&1, @scale)) |> PGA3.transform(@motor)))   do %>
             <% [{ax, ay, _}, {bx, by, _}, {cx, cy, _}, {dx,dy, _}] -> %>
               <% ellipse = quad_to_ellipse({ax, ay}, {bx, by}, {cx, cy}, {dx, dy}) %>
+              <line
+                :if={fr(ellipse.radius_b) <= 0.0}
+                x1={fr(ellipse.center_x - ellipse.radius_a)}
+                y1={fr(ellipse.center_y)}
+                x2={fr(ellipse.center_x + ellipse.radius_a)}
+                y2={fr(ellipse.center_y)}
+                stroke={Enum.at(@geo.edges, 0) |> elem(0)}
+                transform={"rotate(#{fr(ellipse.angle * 180 / :math.pi())} #{fr(ellipse.center_x)} #{fr(ellipse.center_y)})"}
+              />
               <ellipse
-                :if={ellipse}
+                :if={fr(ellipse.radius_b) > 0.0}
                 rx={fr(ellipse.radius_a)}
                 ry={fr(ellipse.radius_b)}
                 cx={fr(ellipse.center_x)}
@@ -246,13 +255,15 @@ defmodule GeomextricWeb.Geometry do
         xx * yy - xy * yx +
         wx * xy - wy * xx
 
+    points = [{wx, wy}, {xx, xy}, {yx, yy}, {zx, zy}]
+
     determinant =
       m00 * (m11 * m22 - m21 * m12) -
         m01 * (m10 * m22 - m12 * m20) +
         m02 * (m10 * m21 - m11 * m20)
 
     if determinant == 0.0 do
-      nil
+      degenerate_quad_to_ellipse(points)
     else
       invdet = 1 / determinant
 
@@ -277,61 +288,90 @@ defmodule GeomextricWeb.Geometry do
 
       denominator = b * b - a * c
 
-      center_x = (c * d - b * f) / denominator
-      center_y = (a * f - b * d) / denominator
+      if denominator == 0.0 do
+        degenerate_quad_to_ellipse(points)
+      else
+        center_x = (c * d - b * f) / denominator
+        center_y = (a * f - b * d) / denominator
 
-      common =
-        2 * (a * f * f + c * d * d + g * b * b - 2 * b * d * f - a * c * g)
+        common =
+          2 * (a * f * f + c * d * d + g * b * b - 2 * b * d * f - a * c * g)
 
-      root = :math.sqrt((a - c) * (a - c) + 4 * b * b)
+        root = :math.sqrt((a - c) * (a - c) + 4 * b * b)
 
-      a_den = denominator * (root - (a + c))
-      b_den = denominator * (-root - (a + c))
+        a_den = denominator * (root - (a + c))
+        b_den = denominator * (-root - (a + c))
 
-      radius_a =
-        if a_den != 0 do
-          :math.sqrt(
-            abs(
-              common /
-                a_den
+        radius_a =
+          if a_den != 0 do
+            :math.sqrt(
+              abs(
+                common /
+                  a_den
+              )
             )
-          )
-        else
-          0.0
-        end
+          else
+            0.0
+          end
 
-      radius_b =
-        if b_den != 0.0 do
-          :math.sqrt(
-            abs(
-              common /
-                b_den
+        radius_b =
+          if b_den != 0.0 do
+            :math.sqrt(
+              abs(
+                common /
+                  b_den
+              )
             )
-          )
-        else
-          0.0
-        end
+          else
+            0.0
+          end
 
-      angle =
-        cond do
-          b == 0 and a <= c ->
-            0
+        angle =
+          cond do
+            b == 0 and a <= c ->
+              0
 
-          b == 0 and a >= c ->
-            :math.pi() / 2
+            b == 0 and a >= c ->
+              :math.pi() / 2
 
-          b != 0 ->
-            :math.pi() / 2 +
-              0.5 * (:math.pi() / 2 - :math.atan2(a - c, 2 * b))
-        end
+            b != 0 ->
+              :math.pi() / 2 +
+                0.5 * (:math.pi() / 2 - :math.atan2(a - c, 2 * b))
+          end
 
-      %{
-        center_x: center_x,
-        center_y: center_y,
-        radius_a: radius_a,
-        radius_b: radius_b,
-        angle: angle
-      }
+        %{
+          center_x: center_x,
+          center_y: center_y,
+          radius_a: radius_a,
+          radius_b: radius_b,
+          angle: angle
+        }
+      end
+    end
+  end
+
+  defp degenerate_quad_to_ellipse(points) do
+    pairs =
+      for {first, i} <- Enum.with_index(points),
+          {second, j} <- Enum.with_index(points),
+          i < j do
+        {first, second}
+      end
+
+    case Enum.max_by(pairs, fn {{x1, y1}, {x2, y2}} ->
+           (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)
+         end) do
+      {{x1, y1}, {x2, y2}} ->
+        dx = x2 - x1
+        dy = y2 - y1
+
+        %{
+          center_x: (x1 + x2) / 2,
+          center_y: (y1 + y2) / 2,
+          radius_a: :math.sqrt(dx * dx + dy * dy) / 2,
+          radius_b: 0.0,
+          angle: :math.atan2(dy, dx)
+        }
     end
   end
 end

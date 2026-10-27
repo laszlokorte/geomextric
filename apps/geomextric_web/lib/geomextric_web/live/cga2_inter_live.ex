@@ -667,7 +667,8 @@ defmodule GeomextricWeb.CGA2InterLive do
                     {label}/2
                     <title>{inspect(s)}</title>
                   </text>
-                <% _ -> %>
+                <% e -> %>
+                  <% dbg(e) %>
               <% end %>
             <% end %>
           </g>
