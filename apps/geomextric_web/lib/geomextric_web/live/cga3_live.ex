@@ -35,6 +35,7 @@ defmodule GeomextricWeb.CGA3Live do
        elements: [{@initial_plane, hd(@palette)}],
        point_cloud: letter_point_cloud(),
        element_slots: [0],
+       spheres_added: 0,
        planes_added: 0,
        available_colors:
          @palette
@@ -79,7 +80,33 @@ defmodule GeomextricWeb.CGA3Live do
   end
 
   def handle_event("add_sphere", %{}, socket) do
-    add_element(socket, CGA3.sphere(0, 0, 0, 2.5))
+    case socket.assigns.available_colors do
+      [] ->
+        {:noreply, socket}
+
+      _available ->
+        centers = [{0, 0, 0}, {1, 0, 0}, {0, 1, 0}, {0, 0, 1}]
+        center = Enum.at(centers, rem(socket.assigns.spheres_added, length(centers)))
+        {x, y, z} = center
+
+        socket
+        |> update(:spheres_added, &(&1 + 1))
+        |> add_element(CGA3.sphere(x, y, z, 2.5))
+    end
+  end
+
+  def handle_event("add_line", %{}, socket) do
+    line = CGA3.line(CGA3.point(0, 0, 0), CGA3.point(0, 2, 0))
+    add_element(socket, line)
+  end
+
+  def handle_event("add_circle", %{}, socket) do
+    add_element(socket, CGA3.circle({0, 0, 0}, 2.0, {0, 0, 1}))
+  end
+
+  def handle_event("add_point_pair", %{}, socket) do
+    pair = CGA3.point_pair(CGA3.point(-1.5, 0, 0), CGA3.point(1.5, 0, 0))
+    add_element(socket, pair)
   end
 
   def handle_event("add_plane", %{}, socket) do
@@ -212,6 +239,98 @@ defmodule GeomextricWeb.CGA3Live do
           max(abs(number_param(params, "radius", radius)), 0.1)
         )
 
+      CGA3.point_pair?(object) ->
+        case CGA3.point_pair_parameters(object) do
+          {:real, {ax, ay, az}, {bx, by, bz}} ->
+            point_a =
+              CGA3.point(
+                number_param(params, "ax", ax),
+                number_param(params, "ay", ay),
+                number_param(params, "az", az)
+              )
+
+            point_b =
+              CGA3.point(
+                number_param(params, "bx", bx),
+                number_param(params, "by", by),
+                number_param(params, "bz", bz)
+              )
+
+            # The split order is opposite the arguments to point_pair/2.
+            CGA3.point_pair(point_b, point_a)
+
+          {:tangent, {x, y, z}} ->
+            point =
+              CGA3.point(
+                number_param(params, "ax", x),
+                number_param(params, "ay", y),
+                number_param(params, "az", z)
+              )
+
+            CGA3.point_pair(point, point)
+        end
+
+      CGA3.circle?(object) ->
+        {:circle, {:real, {x, y, z}, radius, {nx, ny, nz}}} = CGA3.circle_parameters(object)
+
+        normal = {
+          number_param(params, "nx", nx),
+          number_param(params, "ny", ny),
+          number_param(params, "nz", nz)
+        }
+
+        if vector_length(normal) > 1.0e-6 do
+          CGA3.circle(
+            {
+              number_param(params, "x", x),
+              number_param(params, "y", y),
+              number_param(params, "z", z)
+            },
+            max(abs(number_param(params, "radius", radius)), 0.1),
+            normal
+          )
+        else
+          object
+        end
+
+      CGA3.line?(object) ->
+        {{x, y, z}, {dx, dy, dz}} = CGA3.line_parameters(object)
+
+        direction = {
+          number_param(params, "dx", dx),
+          number_param(params, "dy", dy),
+          number_param(params, "dz", dz)
+        }
+
+        direction_length = vector_length(direction)
+
+        if direction_length > 1.0e-6 do
+          {dx, dy, dz} = {
+            elem(direction, 0) / direction_length,
+            elem(direction, 1) / direction_length,
+            elem(direction, 2) / direction_length
+          }
+
+          offset = {
+            number_param(params, "ox", x),
+            number_param(params, "oy", y),
+            number_param(params, "oz", z)
+          }
+
+          along = elem(offset, 0) * dx + elem(offset, 1) * dy + elem(offset, 2) * dz
+
+          closest = {
+            elem(offset, 0) - along * dx,
+            elem(offset, 1) - along * dy,
+            elem(offset, 2) - along * dz
+          }
+
+          {x, y, z} = closest
+          CGA3.line(CGA3.point(x, y, z), CGA3.point(x + dx, y + dy, z + dz))
+        else
+          object
+        end
+
       CGA3.plane?(object) ->
         {{nx, ny, nz}, distance} = CGA3.plane_parameters(object)
 
@@ -259,6 +378,51 @@ defmodule GeomextricWeb.CGA3Live do
           {"Radius", "radius", radius, 0.1, 5, 0.1}
         ]
 
+      CGA3.point_pair?(object) ->
+        case CGA3.point_pair_parameters(object) do
+          {:real, {ax, ay, az}, {bx, by, bz}} ->
+            [
+              {"Point A X", "ax", ax, -6, 6, 0.1},
+              {"Point A Y", "ay", ay, -6, 6, 0.1},
+              {"Point A Z", "az", az, -6, 6, 0.1},
+              {"Point B X", "bx", bx, -6, 6, 0.1},
+              {"Point B Y", "by", by, -6, 6, 0.1},
+              {"Point B Z", "bz", bz, -6, 6, 0.1}
+            ]
+
+          {:tangent, {x, y, z}} ->
+            [
+              {"Point X", "ax", x, -6, 6, 0.1},
+              {"Point Y", "ay", y, -6, 6, 0.1},
+              {"Point Z", "az", z, -6, 6, 0.1}
+            ]
+        end
+
+      CGA3.circle?(object) ->
+        {:circle, {:real, {x, y, z}, radius, {nx, ny, nz}}} = CGA3.circle_parameters(object)
+
+        [
+          {"Center X", "x", x, -6, 6, 0.1},
+          {"Center Y", "y", y, -6, 6, 0.1},
+          {"Center Z", "z", z, -6, 6, 0.1},
+          {"Radius", "radius", radius, 0.1, 5, 0.1},
+          {"Normal X", "nx", nx, -1, 1, 0.01},
+          {"Normal Y", "ny", ny, -1, 1, 0.01},
+          {"Normal Z", "nz", nz, -1, 1, 0.01}
+        ]
+
+      CGA3.line?(object) ->
+        {{x, y, z}, {dx, dy, dz}} = CGA3.line_parameters(object)
+
+        [
+          {"Direction X", "dx", dx, -1, 1, 0.01},
+          {"Direction Y", "dy", dy, -1, 1, 0.01},
+          {"Direction Z", "dz", dz, -1, 1, 0.01},
+          {"Origin distance X", "ox", x, -6, 6, 0.1},
+          {"Origin distance Y", "oy", y, -6, 6, 0.1},
+          {"Origin distance Z", "oz", z, -6, 6, 0.1}
+        ]
+
       CGA3.plane?(object) ->
         {{nx, ny, nz}, distance} = CGA3.plane_parameters(object)
 
@@ -274,11 +438,16 @@ defmodule GeomextricWeb.CGA3Live do
     end
   end
 
+  defp element_expression({object, _color}), do: inspect(object, limit: :infinity)
+
   defp element_label({object, _color}, index) do
     type =
       cond do
         CGA3.sphere?(object) -> "Sphere"
+        CGA3.circle?(object) -> "Circle"
+        CGA3.point_pair?(object) -> "Point pair"
         CGA3.plane?(object) -> "Plane"
+        CGA3.line?(object) -> "Line"
         true -> "Unknown"
       end
 
@@ -368,7 +537,7 @@ defmodule GeomextricWeb.CGA3Live do
     {cx, cy, cz} = PGA3.point_coordinates(camera_center)
     distance_squared = cx * cx + cy * cy + cz * cz
 
-    if distance_squared <= radius * radius do
+    if not finite_number?(distance_squared) or distance_squared <= radius * radius do
       nil
     else
       distance = :math.sqrt(distance_squared)
@@ -394,13 +563,7 @@ defmodule GeomextricWeb.CGA3Live do
          tz + tangent_radius * (uz - vz)}
       ]
 
-      inverse_camera = PGA3.reverse(camera)
-
-      projected =
-        Enum.map(camera_points, fn {px, py, pz} ->
-          world = PGA3.transform(PGA3.point(px, py, pz), inverse_camera)
-          project(camera, world)
-        end)
+      projected = Enum.map(camera_points, &project_camera_point/1)
 
       case projected do
         [{x1, y1, _}, {x2, y2, _}, {x3, y3, _}, {x4, y4, _}] ->
@@ -410,7 +573,136 @@ defmodule GeomextricWeb.CGA3Live do
           nil
       end
     end
+  rescue
+    ArgumentError -> nil
   end
+
+  defp project_camera_point({x, y, z}) do
+    if finite_number?(x) and finite_number?(y) and finite_number?(z) and z > 1.0e-9 do
+      screen_x = 100 * x / z
+      screen_y = -100 * y / z
+
+      if finite_number?(screen_x) and finite_number?(screen_y),
+        do: {screen_x, screen_y, z},
+        else: nil
+    else
+      nil
+    end
+  end
+
+  defp finite_number?(number),
+    do: is_number(number) and number == number and abs(number) < 1.0e300
+
+  defp point_pair_geometry(camera, pair) do
+    case CGA3.point_pair_parameters(pair) do
+      {:real, a, b} ->
+        projected =
+          [a, b]
+          |> Enum.map(fn {x, y, z} -> project(camera, PGA3.point(x, y, z)) end)
+
+        case projected do
+          [{ax, ay, ad}, {bx, by, bd}] ->
+            %{a: {ax, ay, ad}, b: {bx, by, bd}, depth: (ad + bd) * 0.5}
+
+          _ ->
+            nil
+        end
+
+      {:tangent, {x, y, z}} ->
+        case project(camera, PGA3.point(x, y, z)) do
+          {px, py, depth} -> %{a: {px, py, depth}, b: {px, py, depth}, depth: depth}
+          _ -> nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  defp circle_geometry(camera, circle) do
+    {:circle, {:real, center, radius, normal}} = CGA3.circle_parameters(circle)
+    {nx, ny, nz} = normalize(normal)
+    reference = if abs(nz) < 0.9, do: {0.0, 0.0, 1.0}, else: {0.0, 1.0, 0.0}
+    u = normalize(cross({nx, ny, nz}, reference))
+    v = normalize(cross({nx, ny, nz}, u))
+    {x, y, z} = center
+
+    projected =
+      [
+        point_on_plane(center, u, v, -radius, -radius),
+        point_on_plane(center, u, v, radius, -radius),
+        point_on_plane(center, u, v, radius, radius),
+        point_on_plane(center, u, v, -radius, radius)
+      ]
+      |> Enum.map(fn {px, py, pz} -> project(camera, PGA3.point(px, py, pz)) end)
+
+    case {projected, project(camera, PGA3.point(x, y, z))} do
+      {[{x1, y1, _}, {x2, y2, _}, {x3, y3, _}, {x4, y4, _}], {_cx, _cy, depth}} ->
+        ellipse = quad_to_ellipse({x1, y1}, {x2, y2}, {x3, y3}, {x4, y4})
+        %{ellipse: ellipse, depth: depth}
+
+      _ ->
+        nil
+    end
+  end
+
+  defp line_geometry(camera, line) do
+    {{x, y, z}, {dx, dy, dz}} = CGA3.line_parameters(line)
+    point = PGA3.transform(PGA3.point(x, y, z), camera) |> PGA3.point_coordinates()
+
+    second =
+      PGA3.transform(PGA3.point(x + dx, y + dy, z + dz), camera) |> PGA3.point_coordinates()
+
+    direction =
+      {elem(second, 0) - elem(point, 0), elem(second, 1) - elem(point, 1),
+       elem(second, 2) - elem(point, 2)}
+
+    constraints = [
+      {elem(point, 2) - 0.001, elem(direction, 2)},
+      {elem(point, 2) - elem(point, 0), elem(direction, 2) - elem(direction, 0)},
+      {elem(point, 2) + elem(point, 0), elem(direction, 2) + elem(direction, 0)},
+      {elem(point, 2) - elem(point, 1), elem(direction, 2) - elem(direction, 1)},
+      {elem(point, 2) + elem(point, 1), elem(direction, 2) + elem(direction, 1)}
+    ]
+
+    case clip_line(constraints, {-1.0e6, 1.0e6}) do
+      {minimum, maximum} when minimum <= maximum ->
+        {x1, y1, z1} = camera_line_point(point, direction, minimum)
+        {x2, y2, z2} = camera_line_point(point, direction, maximum)
+
+        %{
+          x1: 100 * x1 / z1,
+          y1: -100 * y1 / z1,
+          x2: 100 * x2 / z2,
+          y2: -100 * y2 / z2,
+          depth: (z1 + z2) * 0.5
+        }
+
+      _ ->
+        nil
+    end
+  end
+
+  defp clip_line([], interval), do: interval
+
+  defp clip_line([{value, slope} | rest], {minimum, maximum}) do
+    cond do
+      abs(slope) < 1.0e-9 and value < 0 ->
+        nil
+
+      abs(slope) < 1.0e-9 ->
+        clip_line(rest, {minimum, maximum})
+
+      slope > 0 ->
+        clip_line(rest, {max(minimum, -value / slope), maximum})
+
+      true ->
+        clip_line(rest, {minimum, min(maximum, -value / slope)})
+    end
+  end
+
+  defp camera_line_point({x, y, z}, {dx, dy, dz}, t),
+    do: {x + dx * t, y + dy * t, z + dz * t}
 
   defp plane_grid(camera, plane) do
     {{nx, ny, nz}, distance} = CGA3.plane_parameters(plane)
@@ -481,6 +773,24 @@ defmodule GeomextricWeb.CGA3Live do
             geometry = plane_grid(camera, element)
             [Map.merge(%{id: index, color: color, type: :plane}, geometry)]
 
+          CGA3.point_pair?(element) ->
+            case point_pair_geometry(camera, element) do
+              nil -> []
+              geometry -> [Map.merge(%{id: index, color: color, type: :point_pair}, geometry)]
+            end
+
+          CGA3.circle?(element) ->
+            case circle_geometry(camera, element) do
+              nil -> []
+              geometry -> [Map.merge(%{id: index, color: color, type: :circle}, geometry)]
+            end
+
+          CGA3.line?(element) ->
+            case line_geometry(camera, element) do
+              nil -> []
+              geometry -> [Map.merge(%{id: index, color: color, type: :line}, geometry)]
+            end
+
           true ->
             []
         end
@@ -530,13 +840,17 @@ defmodule GeomextricWeb.CGA3Live do
       .sphere-ring { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; }
       .sphere-ring-secondary { stroke-width: 1; opacity: .72; }
       .plane-fill { stroke: none; opacity: .1; }
+      .scene-line { stroke-width: 2; vector-effect: non-scaling-stroke; }
+      .scene-circle { fill-opacity: .12; stroke-width: 2; vector-effect: non-scaling-stroke; }
+      .point-pair-link { stroke-width: 1.5; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+      .point-pair-point { stroke: #fff; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
             .elements-panel {
               position: fixed;
               z-index: 1000;
               left: 1rem;
               bottom: 1rem;
-              width: min(17rem, calc(100vw - 2rem));
-              max-height: 40vh;
+              width: min(21rem, calc(100vw - 2rem));
+              max-height: 50vh;
               overflow: auto;
               padding: .75rem;
               color: #222;
@@ -547,33 +861,69 @@ defmodule GeomextricWeb.CGA3Live do
             }
             .elements-panel h2 { margin: 0 0 .5rem; font-size: .95rem; }
             .element-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .3rem 0; }
-            .element-actions { display: flex; gap: .5rem; margin-top: .75rem; }
-            .element-actions button, .delete-element { border: 1px solid #0002; border-radius: .4rem; padding: .25rem .5rem; cursor: pointer; align-self:start}
+            .element-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+            .element-actions button, .delete-element { border: 1px solid #0002; border-radius: .4rem; padding: .25rem .5rem; cursor: pointer; }
             .element-actions button:disabled { opacity: .45; cursor: not-allowed; }
-            .delete-element { margin: .35rem 0; color: #fff; background: #7f1d1d; border-color: #7f1d1d; }
+            .delete-element {
+              grid-column: 2;
+              justify-self: end;
+              width: 1.5rem;
+              height: 1.5rem;
+              display: grid;
+              place-items: center;
+              margin: 0;
+              padding: 0;
+              color: #fff;
+              background: #7f1d1d;
+              border-color: #7f1d1d;
+              font-size: 1rem;
+              line-height: 1;
+            }
             .delete-element:hover { background: #991b1b; }
             .element-editor {
               display: grid;
-              grid-template-columns: minmax(0, 1fr) auto;
+              grid-template-columns: minmax(0, 1fr) 1.5rem;
               align-items: start;
               gap: .5rem;
               margin: .25rem 0;
               accent-color: var(--element-color);
             }
-            .element-disclosure { min-width: 0; }
-            .element-disclosure summary { color: var(--element-color); cursor: pointer; }
+
+            .element-disclosure { grid-column: 1; width: 100%; min-width: 0; }
+            .element-editor summary { color: var(--element-color); cursor: pointer; }
+            .element-expression { display: block; margin: .25rem 0 .5rem; color: #555; font: .68rem/1.35 ui-monospace, SFMono-Regular, monospace; overflow-wrap: anywhere; }
             .element-row + .element-row { border-top: 1px solid #0001; }
             .element-row input[type="color"] { width: 2.5rem; height: 2rem; padding: 0; border: 0; background: transparent; cursor: pointer; }
-            .element-controls { display: grid; grid-template-columns: 1fr; gap: .35rem; padding: .5rem 0; }
-            .element-control { display: grid; grid-template-columns: 5.5rem 1fr; align-items: center; gap: .5rem; font-size: .8rem; }
-            .element-control input { width: 100%; min-width: 0; }
+            .element-controls { display: grid; grid-template-columns: minmax(0, 1fr); width: calc(100% + 2rem); box-sizing: border-box; gap: .35rem; padding: .5rem 0; }
+            .element-control { display: grid; grid-template-columns: 6rem minmax(0, 1fr); align-items: center; gap: .5rem; font-size: .8rem; }
+            .element-control input { display: block; width: 100%; min-width: 0; box-sizing: border-box; margin: 0; }
     </style>
     <div class="screen">
       <div class="bar">
         <.menu items={[
           %{label: "File", items: [%{label: "close", send: "close"}]},
-          %{label: "Camera", items: [%{label: "Reset", send: "reset"}]}
-        ]} />
+          %{label: "Camera", items: [%{label: "Reset", send: "reset"}]},
+          %{
+            label: "Help",
+            items: [
+              %{
+                label: "www.laszlokorte.de",
+                shortcut: [key: "h", ctrl: true],
+                link: "https://www.laszlokorte.de"
+              }
+            ]
+          }
+        ]}>
+          <:head>
+            <.link navigate={~p"/cga"}>
+              CGA3
+            </.link>
+          </:head>
+          <div class="segment">
+            <div class="connection-status connected">Connected 🟢</div>
+            <div class="connection-status disconnected">Reconnecting... 🔴</div>
+          </div>
+        </.menu>
       </div>
       <div class="elements-panel" id="cga3-elements" phx-hook=".ElementPanels">
         <h2>Scene elements ({length(@elements)}/16)</h2>
@@ -584,6 +934,9 @@ defmodule GeomextricWeb.CGA3Live do
         >
           <details id={"cga3-element-panel-#{index}"} class="element-disclosure">
             <summary>{element_label(element, index)}</summary>
+            <code id={"cga3-element-expression-#{index}"} class="element-expression">
+              {element_expression(element)}
+            </code>
             <form id={"cga3-element-#{index}"} class="element-controls" phx-change="change_element">
               <input type="hidden" name="index" value={index} />
               <label class="element-row" for={"cga3-element-color-#{index}"}>
@@ -620,8 +973,10 @@ defmodule GeomextricWeb.CGA3Live do
             class="delete-element"
             phx-click="delete_element"
             phx-value-index={index}
+            aria-label={"Remove #{element_label(element, index)}"}
+            title="Remove element"
           >
-            Remove
+            ×
           </button>
         </div>
         <div class="element-actions">
@@ -637,11 +992,29 @@ defmodule GeomextricWeb.CGA3Live do
             phx-click="add_plane"
             disabled={@available_colors == []}
           >Add plane</button>
+          <button
+            id="add-line"
+            type="button"
+            phx-click="add_line"
+            disabled={@available_colors == []}
+          >Add line</button>
+          <button
+            id="add-circle"
+            type="button"
+            phx-click="add_circle"
+            disabled={@available_colors == []}
+          >Add circle</button>
+          <button
+            id="add-point-pair"
+            type="button"
+            phx-click="add_point_pair"
+            disabled={@available_colors == []}
+          >Add point pair</button>
         </div>
       </div>
       <div class="toolbar">
-        <label for="cga3-zoom">
-          Camera distance
+        <fieldset>
+          <legend>Zoom</legend>
           <input
             id="cga3-zoom"
             type="range"
@@ -651,8 +1024,7 @@ defmodule GeomextricWeb.CGA3Live do
             value={@camera.radius}
             phx-hook=".Zoom"
           />
-        </label>
-        <span>Drag the scene to orbit · scroll to zoom</span>
+        </fieldset>
       </div>
       <svg
         id="cga3-scene"
@@ -662,52 +1034,95 @@ defmodule GeomextricWeb.CGA3Live do
         phx-hook=".Orb"
       >
         <g :for={object <- @scene_elements} id={"scene-object-#{object.id}"} stroke={object.color}>
-          <%= if object.type == :plane do %>
-            <polygon
-              :if={object.fill}
-              points={
-                object.fill |> Enum.map(fn {x, y, _} -> "#{fr(x)},#{fr(y)}" end) |> Enum.join(" ")
-              }
-              fill={object.color}
-              class="plane-fill"
-            />
-            <polygon
-              :for={points <- object.cells}
-              points={points |> Enum.map(fn {x, y, _} -> "#{fr(x)},#{fr(y)}" end) |> Enum.join(" ")}
-              fill="none"
-              class="grid-cell"
-            />
-          <% else %>
-            <ellipse
-              :if={object.fill}
-              cx={fr(object.fill.center_x)}
-              cy={fr(object.fill.center_y)}
-              rx={fr(object.fill.radius_a)}
-              ry={fr(object.fill.radius_b)}
-              transform={"rotate(#{fr(object.fill.angle * 180 / :math.pi())} #{fr(object.fill.center_x)} #{fr(object.fill.center_y)})"}
-              fill={object.color}
-              class="sphere-fill"
-            />
-            <line
-              :for={ellipse <- object.ellipses}
-              :if={fr(ellipse.radius_b) <= 0.0}
-              x1={fr(ellipse.center_x - ellipse.radius_a)}
-              y1={fr(ellipse.center_y)}
-              x2={fr(ellipse.center_x + ellipse.radius_a)}
-              y2={fr(ellipse.center_y)}
-              transform={"rotate(#{fr(ellipse.angle * 180 / :math.pi())} #{fr(ellipse.center_x)} #{fr(ellipse.center_y)})"}
-              class={["sphere-ring", ellipse.secondary && "sphere-ring-secondary"]}
-            />
-            <ellipse
-              :for={ellipse <- object.ellipses}
-              :if={fr(ellipse.radius_b) > 0.0}
-              cx={fr(ellipse.center_x)}
-              cy={fr(ellipse.center_y)}
-              rx={fr(ellipse.radius_a)}
-              ry={fr(ellipse.radius_b)}
-              transform={"rotate(#{fr(ellipse.angle * 180 / :math.pi())} #{fr(ellipse.center_x)} #{fr(ellipse.center_y)})"}
-              class={["sphere-ring", ellipse.secondary && "sphere-ring-secondary"]}
-            />
+          <%= cond do %>
+            <% object.type == :plane -> %>
+              <polygon
+                :if={object.fill}
+                points={
+                  object.fill |> Enum.map(fn {x, y, _} -> "#{fr(x)},#{fr(y)}" end) |> Enum.join(" ")
+                }
+                fill={object.color}
+                class="plane-fill"
+              />
+              <polygon
+                :for={points <- object.cells}
+                points={points |> Enum.map(fn {x, y, _} -> "#{fr(x)},#{fr(y)}" end) |> Enum.join(" ")}
+                fill="none"
+                class="grid-cell"
+              />
+            <% object.type == :sphere -> %>
+              <ellipse
+                :if={object.fill}
+                cx={fr(object.fill.center_x)}
+                cy={fr(object.fill.center_y)}
+                rx={fr(object.fill.radius_a)}
+                ry={fr(object.fill.radius_b)}
+                transform={"rotate(#{fr(object.fill.angle * 180 / :math.pi())} #{fr(object.fill.center_x)} #{fr(object.fill.center_y)})"}
+                fill={object.color}
+                class="sphere-fill"
+              />
+              <line
+                :for={ellipse <- object.ellipses}
+                :if={fr(ellipse.radius_b) <= 0.0}
+                x1={fr(ellipse.center_x - ellipse.radius_a)}
+                y1={fr(ellipse.center_y)}
+                x2={fr(ellipse.center_x + ellipse.radius_a)}
+                y2={fr(ellipse.center_y)}
+                transform={"rotate(#{fr(ellipse.angle * 180 / :math.pi())} #{fr(ellipse.center_x)} #{fr(ellipse.center_y)})"}
+                class={["sphere-ring", ellipse.secondary && "sphere-ring-secondary"]}
+              />
+              <ellipse
+                :for={ellipse <- object.ellipses}
+                :if={fr(ellipse.radius_b) > 0.0}
+                cx={fr(ellipse.center_x)}
+                cy={fr(ellipse.center_y)}
+                rx={fr(ellipse.radius_a)}
+                ry={fr(ellipse.radius_b)}
+                transform={"rotate(#{fr(ellipse.angle * 180 / :math.pi())} #{fr(ellipse.center_x)} #{fr(ellipse.center_y)})"}
+                class={["sphere-ring", ellipse.secondary && "sphere-ring-secondary"]}
+              />
+            <% object.type == :circle -> %>
+              <ellipse
+                cx={fr(object.ellipse.center_x)}
+                cy={fr(object.ellipse.center_y)}
+                rx={fr(object.ellipse.radius_a)}
+                ry={fr(object.ellipse.radius_b)}
+                transform={"rotate(#{fr(object.ellipse.angle * 180 / :math.pi())} #{fr(object.ellipse.center_x)} #{fr(object.ellipse.center_y)})"}
+                fill={object.color}
+                class="scene-circle"
+              />
+            <% object.type == :point_pair -> %>
+              <line
+                x1={fr(elem(object.a, 0))}
+                y1={fr(elem(object.a, 1))}
+                x2={fr(elem(object.b, 0))}
+                y2={fr(elem(object.b, 1))}
+                opacity="0.65"
+                class="point-pair-link"
+              />
+              <circle
+                cx={fr(elem(object.a, 0))}
+                cy={fr(elem(object.a, 1))}
+                r={fr(2.5 / elem(object.a, 2))}
+                fill={object.color}
+                class="point-pair-point"
+              />
+              <circle
+                cx={fr(elem(object.b, 0))}
+                cy={fr(elem(object.b, 1))}
+                r={fr(2.5 / elem(object.b, 2))}
+                fill={object.color}
+                class="point-pair-point"
+              />
+            <% object.type == :line -> %>
+              <line
+                x1={fr(object.x1)}
+                y1={fr(object.y1)}
+                x2={fr(object.x2)}
+                y2={fr(object.y2)}
+                class="scene-line"
+              />
+            <% true -> %>
           <% end %>
         </g>
         <g id="point-cloud" data-point-count={length(@projected_point_cloud)} opacity="0.65">

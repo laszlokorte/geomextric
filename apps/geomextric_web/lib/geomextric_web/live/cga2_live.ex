@@ -587,7 +587,9 @@ defmodule GeomextricWeb.CGA2Live do
           }
         ]}>
           <:head>
-            CGA2
+            <.link navigate={~p"/cga3"}>
+              CGA2
+            </.link>
           </:head>
           <div class="segment">
             <div class="connection-status connected">Connected 🟢</div>
