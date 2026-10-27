@@ -32,7 +32,7 @@ defmodule GeomextricWeb.CGA3Live do
      assign(socket,
        camera: %{yaw: 0.0, pitch: 0.3, radius: 10.0},
        focus: {0.0, 0.0, 0.0},
-       elements: [{@initial_plane, hd(@palette)}],
+       elements: [],
        point_cloud: letter_point_cloud(),
        element_slots: [0],
        spheres_added: 0,
@@ -256,8 +256,7 @@ defmodule GeomextricWeb.CGA3Live do
                 number_param(params, "bz", bz)
               )
 
-            # The split order is opposite the arguments to point_pair/2.
-            CGA3.point_pair(point_b, point_a)
+            CGA3.point_pair(point_a, point_b)
 
           {:tangent, {x, y, z}} ->
             point =
