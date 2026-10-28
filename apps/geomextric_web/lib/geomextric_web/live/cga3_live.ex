@@ -25,15 +25,20 @@ defmodule GeomextricWeb.CGA3Live do
     "#0e7490",
     "#9f1239"
   ]
-  @initial_plane CGA3.plane({0.25, 0.7, 1.0}, -0.5)
 
   def mount(%{}, _, socket) do
     {:ok,
      assign(socket,
        camera: %{yaw: 0.0, pitch: 0.3, radius: 10.0},
        focus: {0.0, 0.0, 0.0},
-       elements: [],
+       elements: [{CGA3.plane({0, 0, 1}, 0), Enum.at(@palette, 0)}],
        point_cloud: letter_point_cloud(),
+       point_cloud_offset: %{x: 0.0, y: 0.0, z: 0.0},
+       show_point_cloud: false,
+       show_sum_all: false,
+       show_meet_all: false,
+       show_gp_all: false,
+       point_cloud_transform: "gp",
        element_slots: [0],
        spheres_added: 0,
        planes_added: 0,
@@ -45,10 +50,57 @@ defmodule GeomextricWeb.CGA3Live do
      )}
   end
 
-  defp scene_transform(elements) do
-    Enum.reduce(elements, CGA3.new(scalar: 1), fn {element, _color}, transform ->
-      CGA3.gp(transform, element)
+  defp offset_point(point, %{x: offset_x, y: offset_y, z: offset_z}) do
+    {x, y, z} = CGA3.point_coordinates(point)
+    CGA3.point(x + offset_x, y + offset_y, z + offset_z)
+  end
+
+  defp global_axis_directions(camera) do
+    origin = camera_coordinates({0, 0, 0}, camera)
+    origin_screen = perspective_project(origin)
+
+    projected_axes =
+      [
+        {:x, "#ef4444", {1, 0, 0}},
+        {:y, "#22c55e", {0, 1, 0}},
+        {:z, "#3b82f6", {0, 0, 1}}
+      ]
+      |> Enum.map(fn {axis, color, point} ->
+        endpoint = clip_axis_endpoint(origin, camera_coordinates(point, camera))
+        {x, y} = perspective_project(endpoint)
+        {axis, color, x - elem(origin_screen, 0), y - elem(origin_screen, 1)}
+      end)
+
+    longest =
+      projected_axes
+      |> Enum.map(fn {_axis, _color, x, y} -> :math.sqrt(x * x + y * y) end)
+      |> Enum.max(fn -> 0.0 end)
+
+    scale = if longest > 0, do: 30 / longest, else: 1.0
+
+    Enum.map(projected_axes, fn {axis, color, x, y} ->
+      %{axis: axis, color: color, x: x * scale, y: y * scale}
     end)
+  end
+
+  defp camera_coordinates(point, camera) do
+    point
+    |> then(fn {x, y, z} -> PGA3.point(x, y, z) end)
+    |> PGA3.transform(camera)
+    |> PGA3.point_coordinates()
+  end
+
+  defp perspective_project({x, y, z}), do: {100 * x / z, -100 * y / z}
+
+  defp clip_axis_endpoint({origin_x, origin_y, origin_z}, {end_x, end_y, end_z}) do
+    near = 0.05
+
+    if end_z > near do
+      {end_x, end_y, end_z}
+    else
+      t = (near - origin_z) / (end_z - origin_z)
+      {origin_x + t * (end_x - origin_x), origin_y + t * (end_y - origin_y), near}
+    end
   end
 
   defp project_point_cloud(points, camera) do
@@ -151,11 +203,53 @@ defmodule GeomextricWeb.CGA3Live do
        assign(socket,
          elements: elements,
          element_slots: slots,
-         available_colors: available_colors
+         available_colors: available_colors,
+         show_sum_all: length(elements) >= 2 and socket.assigns.show_sum_all,
+         show_meet_all: length(elements) >= 2 and socket.assigns.show_meet_all,
+         show_gp_all: length(elements) >= 2 and socket.assigns.show_gp_all,
+         point_cloud_transform: socket.assigns.point_cloud_transform
        )}
     else
       _ -> {:noreply, socket}
     end
+  end
+
+  def handle_event("toggle_point_cloud", %{"point_cloud" => value}, socket) do
+    {:noreply, assign(socket, :show_point_cloud, value == "on")}
+  end
+
+  def handle_event("toggle_sum_all", %{"sum_all" => value}, socket) do
+    enabled = value == "on" and length(socket.assigns.elements) >= 2
+    {:noreply, assign(socket, :show_sum_all, enabled)}
+  end
+
+  def handle_event("toggle_meet_all", %{"meet_all" => value}, socket) do
+    enabled = value == "on" and length(socket.assigns.elements) >= 2
+    {:noreply, assign(socket, :show_meet_all, enabled)}
+  end
+
+  def handle_event("toggle_gp_all", %{"gp_all" => value}, socket) do
+    enabled = value == "on" and length(socket.assigns.elements) >= 2
+    {:noreply, assign(socket, :show_gp_all, enabled)}
+  end
+
+  def handle_event(
+        "change_point_cloud_transform",
+        %{"point_cloud_transform" => transform},
+        socket
+      )
+      when transform in ["sum", "meet", "gp"] do
+    {:noreply, assign(socket, :point_cloud_transform, transform)}
+  end
+
+  def handle_event("change_point_cloud_offset", %{"x" => x, "y" => y, "z" => z}, socket) do
+    offset = %{
+      x: clamp(parse_number(x), -10, 10),
+      y: clamp(parse_number(y), -10, 10),
+      z: clamp(parse_number(z), -10, 10)
+    }
+
+    {:noreply, assign(socket, :point_cloud_offset, offset)}
   end
 
   def handle_event("close", %{}, socket) do
@@ -619,26 +713,46 @@ defmodule GeomextricWeb.CGA3Live do
   end
 
   defp circle_geometry(camera, circle) do
-    {:circle, {:real, center, radius, normal}} = CGA3.circle_parameters(circle)
-    {nx, ny, nz} = normalize(normal)
-    reference = if abs(nz) < 0.9, do: {0.0, 0.0, 1.0}, else: {0.0, 1.0, 0.0}
-    u = normalize(cross({nx, ny, nz}, reference))
-    v = normalize(cross({nx, ny, nz}, u))
-    {x, y, z} = center
+    case CGA3.circle_parameters(circle) do
+      {:circle, {:real, center, radius, normal}} ->
+        {nx, ny, nz} = normalize(normal)
+        reference = if abs(nz) < 0.9, do: {0.0, 0.0, 1.0}, else: {0.0, 1.0, 0.0}
+        u = normalize(cross({nx, ny, nz}, reference))
+        v = normalize(cross({nx, ny, nz}, u))
+        {x, y, z} = center
 
-    projected =
-      [
-        point_on_plane(center, u, v, -radius, -radius),
-        point_on_plane(center, u, v, radius, -radius),
-        point_on_plane(center, u, v, radius, radius),
-        point_on_plane(center, u, v, -radius, radius)
-      ]
-      |> Enum.map(fn {px, py, pz} -> project(camera, PGA3.point(px, py, pz)) end)
+        projected =
+          [
+            point_on_plane(center, u, v, -radius, -radius),
+            point_on_plane(center, u, v, radius, -radius),
+            point_on_plane(center, u, v, radius, radius),
+            point_on_plane(center, u, v, -radius, radius)
+          ]
+          |> Enum.map(fn {px, py, pz} -> project(camera, PGA3.point(px, py, pz)) end)
 
-    case {projected, project(camera, PGA3.point(x, y, z))} do
-      {[{x1, y1, _}, {x2, y2, _}, {x3, y3, _}, {x4, y4, _}], {_cx, _cy, depth}} ->
-        ellipse = quad_to_ellipse({x1, y1}, {x2, y2}, {x3, y3}, {x4, y4})
-        %{ellipse: ellipse, depth: depth}
+        case {projected, project(camera, PGA3.point(x, y, z))} do
+          {[{x1, y1, _}, {x2, y2, _}, {x3, y3, _}, {x4, y4, _}], {_cx, _cy, depth}} ->
+            ellipse = quad_to_ellipse({x1, y1}, {x2, y2}, {x3, y3}, {x4, y4})
+            %{ellipse: ellipse, depth: depth}
+
+          _ ->
+            nil
+        end
+
+      {:circle, {:tangent, {x, y, z}, _radius, _normal}} ->
+        case project(camera, PGA3.point(x, y, z)) do
+          {projected_x, projected_y, depth} ->
+            %{tangent: true, x: projected_x, y: projected_y, depth: depth}
+
+          _ ->
+            nil
+        end
+
+      {:circle, {:imag, _center, _radius, _normal}} ->
+        case point_pair_geometry(camera, CGA3.dual(circle)) do
+          nil -> nil
+          geometry -> Map.put(geometry, :type, :point_pair)
+        end
 
       _ ->
         nil
@@ -758,6 +872,34 @@ defmodule GeomextricWeb.CGA3Live do
     {x / length, y / length, z / length}
   end
 
+  defp sum_all(elements) do
+    case Enum.map(elements, fn {element, _color} -> CGA3.normalize!(element) end) do
+      [] ->
+        CGA3.new(scalar: 0)
+
+      [first | rest] ->
+        Enum.reduce(rest, first, &CGA3.add/2)
+    end
+  end
+
+  defp meet_all([]), do: CGA3.new(scalar: 1)
+
+  defp meet_all([{element, _color}]), do: element
+
+  defp meet_all([{first, _color} | rest]) do
+    Enum.reduce(rest, first, fn {element, _color}, result ->
+      CGA3.meet(result, element)
+    end)
+  end
+
+  defp gp_all([]), do: CGA3.new(scalar: 1)
+
+  defp gp_all([{first, _color} | rest]) do
+    Enum.reduce(rest, first, fn {element, _color}, result ->
+      CGA3.gp(result, element)
+    end)
+  end
+
   defp classify_elements(elements, camera) do
     elements
     |> Enum.with_index()
@@ -801,14 +943,57 @@ defmodule GeomextricWeb.CGA3Live do
     camera = camera_transform(assigns.camera, assigns.focus)
     elements = classify_elements(assigns.elements, camera)
 
-    transform = scene_transform(assigns.elements)
-    transformed_points = Enum.map(assigns.point_cloud, &CGA3.transform(&1, transform))
+    sum_result = sum_all(assigns.elements)
+    meet_result = meet_all(assigns.elements)
+    gp_result = gp_all(assigns.elements)
+
+    sum_elements =
+      if assigns.show_sum_all and length(assigns.elements) >= 2 and sum_result do
+        classify_elements([{sum_result, "#7c3aed"}], camera)
+        |> Enum.map(&%{&1 | id: "sum-all-result", color: "#7c3aed"})
+      else
+        []
+      end
+
+    meet_elements =
+      if assigns.show_meet_all and length(assigns.elements) >= 2 and meet_result do
+        classify_elements([{meet_result, "#dc2626"}], camera)
+        |> Enum.map(&%{&1 | id: "meet-all-result", color: "#dc2626"})
+      else
+        []
+      end
+
+    gp_elements =
+      if assigns.show_gp_all and gp_result do
+        classify_elements([{gp_result, "#0891b2"}], camera)
+        |> Enum.map(&%{&1 | id: "gp-all-result", color: "#0891b2"})
+      else
+        []
+      end
+
+    transform =
+      if assigns.elements == [] do
+        CGA3.new(scalar: 1)
+      else
+        case assigns.point_cloud_transform do
+          "sum" -> sum_result
+          "meet" -> meet_result
+          "gp" -> gp_result
+        end
+      end
+
+    offset_points = Enum.map(assigns.point_cloud, &offset_point(&1, assigns.point_cloud_offset))
+    transformed_points = Enum.map(offset_points, &CGA3.transform(&1, transform))
 
     assigns =
       assign(assigns,
         camera_transform: camera,
-        scene_elements: elements,
-        projected_point_cloud: project_point_cloud(assigns.point_cloud, camera),
+        global_axes: global_axis_directions(camera),
+        scene_elements: elements ++ sum_elements ++ meet_elements ++ gp_elements,
+        sum_expression: inspect(sum_result, limit: :infinity),
+        meet_expression: inspect(meet_result, limit: :infinity),
+        gp_expression: inspect(gp_result, limit: :infinity),
+        projected_point_cloud: project_point_cloud(offset_points, camera),
         projected_transformed_point_cloud: project_point_cloud(transformed_points, camera)
       )
 
@@ -816,6 +1001,22 @@ defmodule GeomextricWeb.CGA3Live do
     <style :type={GeomextricWeb.ColocatedScopedCSS}>
       .screen { position: absolute; inset: 0; }
       .scene { position: absolute; inset: 0; width: 100%; height: 100%; background: #fff; touch-action: none; }
+      .axis-indicator {
+        position: fixed;
+        z-index: 1000;
+        right: 1rem;
+        bottom: 1rem;
+        width: 7.5rem;
+        height: 7.5rem;
+        padding: .35rem;
+        border: 0;
+        border-radius: 50%;
+        background: rgb(0 0 0 / 16%);
+        box-shadow: none;
+        pointer-events: none;
+      }
+      .axis-indicator line { stroke-width: 3; stroke-linecap: round; }
+      .axis-indicator text { font: 700 9px ui-sans-serif, sans-serif; }
       .bar { z-index: 2; }
       .toolbar {
               position: fixed;
@@ -827,10 +1028,9 @@ defmodule GeomextricWeb.CGA3Live do
               padding: 1ex;
               display: flex;
               flex-direction: row;
-              flex-wrap: wrap-reverse;
+              flex-wrap: wrap;
               align-items: center;
               gap: 1ex;
-              color: #fff;
               background: #0003;
               border-radius: 1ex;
             }
@@ -841,8 +1041,33 @@ defmodule GeomextricWeb.CGA3Live do
       .plane-fill { stroke: none; opacity: .1; }
       .scene-line { stroke-width: 2; vector-effect: non-scaling-stroke; }
       .scene-circle { fill-opacity: .12; stroke-width: 2; vector-effect: non-scaling-stroke; }
-      .point-pair-link { stroke-width: 1.5; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
-      .point-pair-point { stroke: #fff; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+      .point-pair-link { stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+      .point-pair-point { stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke; }
+      .toolbar input[type="checkbox"] { display: none; }
+
+      .toolbar fieldset {
+        display: flex;
+      }
+      .point-cloud-offsets legend { padding: 0 .25rem; font-size: .75rem; }
+      .point-cloud-offsets label { display: grid; gap: .2rem; font-size: .7rem; }
+      .point-cloud-offsets input { width: 100%; min-width: 0; margin: 0;  }
+      .toolbar label:has(input[type="checkbox"]) {
+        align-self: stretch;
+        display: flex;
+        align-items: center;
+        border-radius: .5ex;
+        padding: .5ex;
+        margin: 0;
+        background: #0001;
+        user-select: none;
+        filter: saturate(0%) brightness(500%);
+        cursor: pointer;
+      }
+      .toolbar label:has(input[type="checkbox"]:checked) {
+        background: #000a;
+        filter: saturate(100%);
+      }
+      .toolbar label:has(input[type="checkbox"]:focus-visible) { outline: 2px solid #fff; }
             .elements-panel {
               position: fixed;
               z-index: 1000;
@@ -860,7 +1085,25 @@ defmodule GeomextricWeb.CGA3Live do
             }
             .elements-panel h2 { margin: 0 0 .5rem; font-size: .95rem; }
             .element-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .3rem 0; }
-            .element-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
+            .element-actions { margin-top: .75rem; }
+                        .element-actions-label { display: block; margin-bottom: .25rem; font-size: .75rem; font-weight: 600; }
+                        .element-action-buttons { display: flex; flex-wrap: wrap; gap: .3rem; }
+                        .element-action-buttons button { padding: .15rem .35rem; font-size: .75rem; }
+            .derived-results { margin-top: .75rem; border-top: 1px solid #0002; }
+            .derived-result { padding-top: .5rem; }
+            .derived-result + .derived-result { margin-top: .25rem; border-top: 1px solid #0001; }
+            .derived-result-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: .4rem; }
+            .derived-result-title { grid-column: 1; grid-row: 1; display: flex; align-items: center; gap: .35rem; white-space: nowrap; }
+                        .derived-result-title strong { font-size: .8rem; }
+                        .derived-result-title label { display: flex; align-items: center; gap: .15rem; margin: 0; font-size: .65rem; cursor: pointer; }
+                        .derived-result-title label:has(input:disabled) { opacity: .45; cursor: not-allowed; }
+                        .derived-result-row form.render-result { grid-column: 4; grid-row: 1; }
+                        .derived-result-row form.transform-choice { grid-column: 3; grid-row: 1; }
+                        .derived-result-row .element-expression { grid-column: 2; grid-row: 1; }
+            .derived-result-row form, .derived-result-row label { margin: 0; }
+            .derived-result-row label { display: flex; align-items: center; gap: .25rem; font-size: .7rem; white-space: nowrap; cursor: pointer; }
+            .derived-result-row label:has(input:disabled) { opacity: .45; cursor: not-allowed; }
+            .derived-result-row .element-expression { min-width: 0; margin: 0; padding: .3rem; font-size: .65rem; }
             .element-actions button, .delete-element { border: 1px solid #0002; border-radius: .4rem; padding: .25rem .5rem; cursor: pointer; }
             .element-actions button:disabled { opacity: .45; cursor: not-allowed; }
             .delete-element {
@@ -890,7 +1133,21 @@ defmodule GeomextricWeb.CGA3Live do
 
             .element-disclosure { grid-column: 1; width: 100%; min-width: 0; }
             .element-editor summary { color: var(--element-color); cursor: pointer; }
-            .element-expression { display: block; margin: .25rem 0 .5rem; color: #555; font: .68rem/1.35 ui-monospace, SFMono-Regular, monospace; overflow-wrap: anywhere; }
+            .element-expression {
+              display: block;
+              width: 100%;
+              box-sizing: border-box;
+              margin: .35rem 0 .5rem;
+              padding: .35rem .45rem;
+              border: 1px solid #0002;
+              border-radius: .35rem;
+              color: #555;
+              background: #f7f7f7;
+              font: .68rem ui-monospace, SFMono-Regular, monospace;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
             .element-row + .element-row { border-top: 1px solid #0001; }
             .element-row input[type="color"] { width: 2.5rem; height: 2rem; padding: 0; border: 0; background: transparent; cursor: pointer; }
             .element-controls { display: grid; grid-template-columns: minmax(0, 1fr); width: calc(100% + 2rem); box-sizing: border-box; gap: .35rem; padding: .5rem 0; }
@@ -933,9 +1190,15 @@ defmodule GeomextricWeb.CGA3Live do
         >
           <details id={"cga3-element-panel-#{index}"} class="element-disclosure">
             <summary>{element_label(element, index)}</summary>
-            <code id={"cga3-element-expression-#{index}"} class="element-expression">
-              {element_expression(element)}
-            </code>
+            <input
+              id={"cga3-element-expression-#{index}"}
+              class="element-expression"
+              type="text"
+              readonly
+              value={element_expression(element)}
+              title={element_expression(element)}
+              aria-label={"Algebraic expression for #{element_label(element, index)}"}
+            />
             <form id={"cga3-element-#{index}"} class="element-controls" phx-change="change_element">
               <input type="hidden" name="index" value={index} />
               <label class="element-row" for={"cga3-element-color-#{index}"}>
@@ -978,52 +1241,225 @@ defmodule GeomextricWeb.CGA3Live do
             ×
           </button>
         </div>
+        <div class="derived-results" id="cga3-derived-results">
+          <section class="derived-result" id="cga3-sum-result">
+            <div class="derived-result-row">
+              <strong>Sum all</strong>
+              <form
+                id="cga3-transform-sum-form"
+                class="transform-choice"
+                phx-change="change_point_cloud_transform"
+              >
+                <label for="cga3-transform-sum">
+                  <input
+                    id="cga3-transform-sum"
+                    type="radio"
+                    name="point_cloud_transform"
+                    value="sum"
+                    checked={@point_cloud_transform == "sum"}
+                  /> Cloud
+                </label>
+              </form>
+              <input
+                id="cga3-sum-expression"
+                class="element-expression"
+                type="text"
+                readonly
+                value={@sum_expression}
+                title={@sum_expression}
+                aria-label="Algebraic expression for sum of all elements"
+              />
+              <form id="cga3-sum-visibility" class="render-result" phx-change="toggle_sum_all">
+                <input type="hidden" name="sum_all" value="off" />
+                <label for="cga3-show-sum-all">
+                  <input
+                    id="cga3-show-sum-all"
+                    name="sum_all"
+                    type="checkbox"
+                    value="on"
+                    checked={@show_sum_all && length(@elements) >= 2}
+                    disabled={length(@elements) < 2}
+                  /> Show
+                </label>
+              </form>
+            </div>
+          </section>
+          <section class="derived-result" id="cga3-meet-result">
+            <div class="derived-result-row">
+              <strong>Meet all</strong>
+              <form
+                id="cga3-transform-meet-form"
+                class="transform-choice"
+                phx-change="change_point_cloud_transform"
+              >
+                <label for="cga3-transform-meet">
+                  <input
+                    id="cga3-transform-meet"
+                    type="radio"
+                    name="point_cloud_transform"
+                    value="meet"
+                    checked={@point_cloud_transform == "meet"}
+                  /> Cloud
+                </label>
+              </form>
+              <input
+                id="cga3-meet-expression"
+                class="element-expression"
+                type="text"
+                readonly
+                value={@meet_expression}
+                title={@meet_expression}
+                aria-label="Algebraic expression for meet of all elements"
+              />
+              <form id="cga3-meet-visibility" class="render-result" phx-change="toggle_meet_all">
+                <input type="hidden" name="meet_all" value="off" />
+                <label for="cga3-show-meet-all">
+                  <input
+                    id="cga3-show-meet-all"
+                    name="meet_all"
+                    type="checkbox"
+                    value="on"
+                    checked={@show_meet_all && length(@elements) >= 2}
+                    disabled={length(@elements) < 2}
+                  /> Show
+                </label>
+              </form>
+            </div>
+          </section>
+          <section class="derived-result" id="cga3-gp-result">
+            <div class="derived-result-row">
+              <strong>GP all</strong>
+              <form
+                id="cga3-transform-gp-form"
+                class="transform-choice"
+                phx-change="change_point_cloud_transform"
+              >
+                <label for="cga3-transform-gp">
+                  <input
+                    id="cga3-transform-gp"
+                    type="radio"
+                    name="point_cloud_transform"
+                    value="gp"
+                    checked={@point_cloud_transform == "gp"}
+                  /> Cloud
+                </label>
+              </form>
+              <input
+                id="cga3-gp-expression"
+                class="element-expression"
+                type="text"
+                readonly
+                value={@gp_expression}
+                title={@gp_expression}
+                aria-label="Algebraic expression for geometric product of all elements"
+              />
+              <form id="cga3-gp-visibility" class="render-result" phx-change="toggle_gp_all">
+                <input type="hidden" name="gp_all" value="off" />
+                <label for="cga3-show-gp-all">
+                  <input
+                    id="cga3-show-gp-all"
+                    name="gp_all"
+                    type="checkbox"
+                    value="on"
+                    checked={@show_gp_all && length(@elements) >= 2}
+                    disabled={length(@elements) < 2}
+                  /> show
+                </label>
+              </form>
+            </div>
+          </section>
+        </div>
         <div class="element-actions">
-          <button
-            id="add-sphere"
-            type="button"
-            phx-click="add_sphere"
-            disabled={@available_colors == []}
-          >Add sphere</button>
-          <button
-            id="add-plane"
-            type="button"
-            phx-click="add_plane"
-            disabled={@available_colors == []}
-          >Add plane</button>
-          <button
-            id="add-line"
-            type="button"
-            phx-click="add_line"
-            disabled={@available_colors == []}
-          >Add line</button>
-          <button
-            id="add-circle"
-            type="button"
-            phx-click="add_circle"
-            disabled={@available_colors == []}
-          >Add circle</button>
-          <button
-            id="add-point-pair"
-            type="button"
-            phx-click="add_point_pair"
-            disabled={@available_colors == []}
-          >Add point pair</button>
+          <strong class="element-actions-label">Add</strong>
+          <div class="element-action-buttons">
+            <button
+              id="add-sphere"
+              type="button"
+              phx-click="add_sphere"
+              disabled={@available_colors == []}
+            >Sphere</button>
+            <button
+              id="add-plane"
+              type="button"
+              phx-click="add_plane"
+              disabled={@available_colors == []}
+            >Plane</button>
+            <button
+              id="add-line"
+              type="button"
+              phx-click="add_line"
+              disabled={@available_colors == []}
+            >Line</button>
+            <button
+              id="add-circle"
+              type="button"
+              phx-click="add_circle"
+              disabled={@available_colors == []}
+            >Circle</button>
+            <button
+              id="add-point-pair"
+              type="button"
+              phx-click="add_point_pair"
+              disabled={@available_colors == []}
+            >Point pair</button>
+          </div>
         </div>
       </div>
       <div class="toolbar">
-        <fieldset>
-          <legend>Zoom</legend>
-          <input
-            id="cga3-zoom"
-            type="range"
-            min="1"
-            max="30"
-            step="0.1"
-            value={@camera.radius}
-            phx-hook=".Zoom"
-          />
-        </fieldset>
+        <form>
+          <fieldset>
+            <legend>Zoom</legend>
+            <label>
+              <input
+                id="cga3-zoom"
+                type="range"
+                min="1"
+                max="30"
+                step="0.1"
+                value={@camera.radius}
+                phx-hook=".Zoom"
+              />
+            </label>
+          </fieldset>
+        </form>
+        <form id="cga3-cloud-visibility" phx-change="toggle_point_cloud">
+          <input type="hidden" name="point_cloud" value="off" />
+          <label for="cga3-show-point-cloud">
+            <input
+              id="cga3-show-point-cloud"
+              name="point_cloud"
+              type="checkbox"
+              value="on"
+              checked={@show_point_cloud}
+              phx-throttle="16"
+            /> Point cloud
+          </label>
+        </form>
+
+        <%= if @show_point_cloud do %>
+          <form id="cga3-point-cloud-offset" phx-change="change_point_cloud_offset">
+            <fieldset class="point-cloud-offsets">
+              <legend>Point cloud offset</legend>
+              <label :for={
+                {axis, value} <- [
+                  x: @point_cloud_offset.x,
+                  y: @point_cloud_offset.y,
+                  z: @point_cloud_offset.z
+                ]
+              }>
+                <input
+                  id={"cga3-point-cloud-offset-#{axis}"}
+                  type="range"
+                  name={axis}
+                  min="-3"
+                  max="3"
+                  step="0.1"
+                  value={value}
+                />
+              </label>
+            </fieldset>
+          </form>
+        <% end %>
       </div>
       <svg
         id="cga3-scene"
@@ -1032,6 +1468,20 @@ defmodule GeomextricWeb.CGA3Live do
         preserveAspectRatio="xMidYMid slice"
         phx-hook=".Orb"
       >
+        <defs>
+          <marker
+            id="cga3-line-arrow"
+            viewBox="0 0 10 10"
+            refX="5"
+            refY="5"
+            markerWidth="7"
+            markerHeight="7"
+            fill="context-stroke"
+            orient="auto"
+          >
+            <circle cx="5" cy="5" r="3" />
+          </marker>
+        </defs>
         <g :for={object <- @scene_elements} id={"scene-object-#{object.id}"} stroke={object.color}>
           <%= cond do %>
             <% object.type == :plane -> %>
@@ -1081,7 +1531,16 @@ defmodule GeomextricWeb.CGA3Live do
                 class={["sphere-ring", ellipse.secondary && "sphere-ring-secondary"]}
               />
             <% object.type == :circle -> %>
+              <circle
+                :if={Map.get(object, :tangent, false)}
+                cx={fr(object.x)}
+                cy={fr(object.y)}
+                r="1.5"
+                fill={object.color}
+                class="scene-circle-tangent"
+              />
               <ellipse
+                :if={!Map.get(object, :tangent, false)}
                 cx={fr(object.ellipse.center_x)}
                 cy={fr(object.ellipse.center_y)}
                 rx={fr(object.ellipse.radius_a)}
@@ -1096,20 +1555,21 @@ defmodule GeomextricWeb.CGA3Live do
                 y1={fr(elem(object.a, 1))}
                 x2={fr(elem(object.b, 0))}
                 y2={fr(elem(object.b, 1))}
-                opacity="0.65"
+                opacity="0.25"
+                stroke-dasharray={"#{fr(70 / object.depth)} #{fr(40 / object.depth)}"}
                 class="point-pair-link"
               />
               <circle
                 cx={fr(elem(object.a, 0))}
                 cy={fr(elem(object.a, 1))}
-                r={fr(2.5 / elem(object.a, 2))}
+                r={fr(5 / :math.sqrt(elem(object.a, 2)))}
                 fill={object.color}
                 class="point-pair-point"
               />
               <circle
                 cx={fr(elem(object.b, 0))}
                 cy={fr(elem(object.b, 1))}
-                r={fr(2.5 / elem(object.b, 2))}
+                r={fr(5 / :math.sqrt(elem(object.b, 2)))}
                 fill={object.color}
                 class="point-pair-point"
               />
@@ -1119,12 +1579,18 @@ defmodule GeomextricWeb.CGA3Live do
                 y1={fr(object.y1)}
                 x2={fr(object.x2)}
                 y2={fr(object.y2)}
+                marker-end="url(#cga3-line-arrow)"
                 class="scene-line"
               />
             <% true -> %>
           <% end %>
         </g>
-        <g id="point-cloud" data-point-count={length(@projected_point_cloud)} opacity="0.65">
+        <g
+          :if={@show_point_cloud}
+          id="point-cloud"
+          data-point-count={length(@projected_point_cloud)}
+          opacity="0.65"
+        >
           <circle
             :for={{x, y, depth} <- @projected_point_cloud}
             cx={fr(x)}
@@ -1134,6 +1600,7 @@ defmodule GeomextricWeb.CGA3Live do
           />
         </g>
         <g
+          :if={@show_point_cloud}
           id="transformed-point-cloud"
           data-point-count={length(@projected_transformed_point_cloud)}
           opacity="0.55"
@@ -1145,6 +1612,49 @@ defmodule GeomextricWeb.CGA3Live do
             r={fr(14 / depth)}
             fill="#2563eb"
           />
+        </g>
+      </svg>
+      <svg
+        id="cga3-axis-indicator"
+        class="axis-indicator"
+        viewBox="0 0 100 100"
+        role="img"
+        aria-label="Global XYZ orientation"
+      >
+        <defs>
+          <marker
+            id="cga3-axis-arrow"
+            viewBox="0 0 10 10"
+            refX="5"
+            refY="5"
+            markerWidth="6"
+            markerHeight="6"
+            fill="context-stroke"
+            orient="auto"
+          >
+            <circle cx="5" cy="5" r="3" />
+          </marker>
+        </defs>
+        <title>Global XYZ orientation</title>
+        <circle cx="50" cy="50" r="2.5" fill="#444" />
+        <g :for={axis <- @global_axes} class={"axis-#{axis.axis}"}>
+          <line
+            x1="50"
+            y1="50"
+            x2={fr(50 + axis.x)}
+            y2={fr(50 + axis.y)}
+            stroke={axis.color}
+            marker-end="url(#cga3-axis-arrow)"
+          />
+          <text
+            x={fr(56 + axis.x)}
+            y={fr(44 + axis.y)}
+            fill={axis.color}
+            text-anchor="start"
+            dominant-baseline="middle"
+          >
+            {String.upcase(to_string(axis.axis))}
+          </text>
         </g>
       </svg>
     </div>
