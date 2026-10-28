@@ -33,9 +33,9 @@ defmodule GeomextricWeb.Geometry do
               <% ellipse = quad_to_ellipse({ax, ay}, {bx, by}, {cx, cy}, {dx, dy}) %>
               <line
                 :if={fr(ellipse.radius_b) <= 0.0}
-                x1={fr(ellipse.center_x - ellipse.radius_a)}
+                x1={fr(ellipse.center_x) - fr(ellipse.radius_a)}
                 y1={fr(ellipse.center_y)}
-                x2={fr(ellipse.center_x + ellipse.radius_a)}
+                x2={fr(ellipse.center_x) + fr(ellipse.radius_a)}
                 y2={fr(ellipse.center_y)}
                 stroke={Enum.at(@geo.edges, 0) |> elem(0)}
                 transform={"rotate(#{fr(ellipse.angle * 180 / :math.pi())} #{fr(ellipse.center_x)} #{fr(ellipse.center_y)})"}
@@ -189,7 +189,12 @@ defmodule GeomextricWeb.Geometry do
             |> PGA3.transform(assigns.motor))
         )
 
-      projected = project_polygon(assigns.camera, transformed_points)
+      projected =
+        if assigns.quad_ellipse and length(transformed_points) == 4 do
+          project_quad_for_ellipse(assigns.camera, transformed_points)
+        else
+          project_polygon(assigns.camera, transformed_points)
+        end
 
       if length(projected) >= 3 do
         path = Enum.map_join(projected, " ", fn {x, y, _z} -> "#{fr(x)} #{fr(y)}" end)
@@ -201,9 +206,39 @@ defmodule GeomextricWeb.Geometry do
   end
 
   def project_polygon(camera, points) do
-    camera_points = Enum.map(points, &camera_coordinates(camera, &1))
+    points
+    |> Enum.map(&camera_coordinates(camera, &1))
+    |> project_camera_polygon()
+  end
 
-    camera_points
+  def project_quad_for_ellipse(camera, points) when length(points) == 4 do
+    points
+    |> Enum.map(&camera_coordinates(camera, &1))
+    |> project_camera_quad_for_ellipse()
+  end
+
+  def project_camera_quad_for_ellipse(points) when length(points) == 4 do
+    projected =
+      Enum.map(points, fn {x, y, z} ->
+        depth =
+          if abs(z) < @near_clip do
+            if z < 0, do: -@near_clip, else: @near_clip
+          else
+            z
+          end
+
+        {x * 100 / depth, -y * 100 / depth, depth}
+      end)
+
+    if Enum.all?(projected, fn {_x, _y, z} -> z >= @near_clip end) do
+      projected
+    else
+      []
+    end
+  end
+
+  def project_camera_polygon(points) do
+    points
     |> clip_polygon()
     |> Enum.map(&project_camera_point/1)
   end
@@ -256,6 +291,10 @@ defmodule GeomextricWeb.Geometry do
     first = camera_coordinates(camera, first)
     second = camera_coordinates(camera, second)
 
+    project_camera_line(first, second)
+  end
+
+  def project_camera_line(first, second) do
     case clip_to_frustum(first, second) do
       nil ->
         nil
@@ -479,39 +518,65 @@ defmodule GeomextricWeb.Geometry do
                 0.5 * (:math.pi() / 2 - :math.atan2(a - c, 2 * b))
           end
 
-        %{
+        ellipse = %{
           center_x: center_x,
           center_y: center_y,
           radius_a: radius_a,
           radius_b: radius_b,
           angle: angle
         }
+
+        cond do
+          Float.round(radius_a, @fr) == 0.0 and Float.round(radius_b, @fr) == 0.0 ->
+            degenerate_quad_to_ellipse(points)
+
+          Float.round(radius_a, @fr) == 0.0 ->
+            %{ellipse | radius_a: radius_b, radius_b: radius_a, angle: angle + :math.pi() / 2}
+
+          true ->
+            ellipse
+        end
       end
     end
   end
 
-  defp degenerate_quad_to_ellipse(points) do
+  defp degenerate_quad_to_ellipse([first, second, third, fourth] = points) do
     pairs =
-      for {first, i} <- Enum.with_index(points),
-          {second, j} <- Enum.with_index(points),
+      for {point, i} <- Enum.with_index(points),
+          {other_point, j} <- Enum.with_index(points),
           i < j do
-        {first, second}
+        {point, other_point}
       end
 
-    case Enum.max_by(pairs, fn {{x1, y1}, {x2, y2}} ->
-           (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)
-         end) do
-      {{x1, y1}, {x2, y2}} ->
-        dx = x2 - x1
-        dy = y2 - y1
+    {{x1, y1}, {x2, y2}} =
+      Enum.max_by(pairs, fn {{x1, y1}, {x2, y2}} ->
+        (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)
+      end)
 
-        %{
-          center_x: (x1 + x2) / 2,
-          center_y: (y1 + y2) / 2,
-          radius_a: :math.sqrt(dx * dx + dy * dy) / 2,
-          radius_b: 0.0,
-          angle: :math.atan2(dy, dx)
-        }
-    end
+    edge_lengths_squared = [
+      squared_distance(first, second),
+      squared_distance(second, third),
+      squared_distance(third, fourth),
+      squared_distance(fourth, first)
+    ]
+
+    adjacent_edge_sums =
+      for {edge, next_edge} <-
+            Enum.zip(edge_lengths_squared, tl(edge_lengths_squared) ++ [hd(edge_lengths_squared)]) do
+        edge + next_edge
+      end
+
+    dx = x2 - x1
+    dy = y2 - y1
+
+    %{
+      center_x: (x1 + x2) / 2,
+      center_y: (y1 + y2) / 2,
+      radius_a: :math.sqrt(Enum.max(adjacent_edge_sums)) / 2,
+      radius_b: 0.0,
+      angle: :math.atan2(dy, dx)
+    }
   end
+
+  defp squared_distance({x1, y1}, {x2, y2}), do: (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1)
 end

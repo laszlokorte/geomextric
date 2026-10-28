@@ -4,7 +4,18 @@ defmodule GeomextricWeb.CGA3Live do
   alias Galixir.Algebras.CGA3
   alias Galixir.Algebras.PGA3
 
-  import GeomextricWeb.Geometry, only: [fr: 1, project: 2, quad_to_ellipse: 4]
+  import GeomextricWeb.Geometry,
+    only: [
+      fr: 1,
+      project: 2,
+      project_line: 3,
+      project_camera_line: 2,
+      project_camera_quad_for_ellipse: 1,
+      project_polygon: 2,
+      project_quad_for_ellipse: 2,
+      quad_to_ellipse: 4
+    ]
+
   import GeomextricWeb.Menu
 
   @palette [
@@ -177,6 +188,14 @@ defmodule GeomextricWeb.CGA3Live do
     end
   end
 
+  def handle_event("dual_element", %{"index" => index}, socket) do
+    transform_element(socket, index, &CGA3.dual/1)
+  end
+
+  def handle_event("negate_element", %{"index" => index}, socket) do
+    transform_element(socket, index, &CGA3.scale(-1, &1))
+  end
+
   def handle_event("delete_element", %{"index" => index}, socket) do
     with {index, ""} <- Integer.parse(index),
          true <- index >= 0,
@@ -204,9 +223,9 @@ defmodule GeomextricWeb.CGA3Live do
          elements: elements,
          element_slots: slots,
          available_colors: available_colors,
-         show_sum_all: length(elements) >= 2 and socket.assigns.show_sum_all,
-         show_meet_all: length(elements) >= 2 and socket.assigns.show_meet_all,
-         show_gp_all: length(elements) >= 2 and socket.assigns.show_gp_all,
+         show_sum_all: socket.assigns.show_sum_all,
+         show_meet_all: socket.assigns.show_meet_all,
+         show_gp_all: socket.assigns.show_gp_all,
          point_cloud_transform: socket.assigns.point_cloud_transform
        )}
     else
@@ -219,18 +238,15 @@ defmodule GeomextricWeb.CGA3Live do
   end
 
   def handle_event("toggle_sum_all", %{"sum_all" => value}, socket) do
-    enabled = value == "on" and length(socket.assigns.elements) >= 2
-    {:noreply, assign(socket, :show_sum_all, enabled)}
+    {:noreply, assign(socket, :show_sum_all, value == "on")}
   end
 
   def handle_event("toggle_meet_all", %{"meet_all" => value}, socket) do
-    enabled = value == "on" and length(socket.assigns.elements) >= 2
-    {:noreply, assign(socket, :show_meet_all, enabled)}
+    {:noreply, assign(socket, :show_meet_all, value == "on")}
   end
 
   def handle_event("toggle_gp_all", %{"gp_all" => value}, socket) do
-    enabled = value == "on" and length(socket.assigns.elements) >= 2
-    {:noreply, assign(socket, :show_gp_all, enabled)}
+    {:noreply, assign(socket, :show_gp_all, value == "on")}
   end
 
   def handle_event(
@@ -306,6 +322,21 @@ defmodule GeomextricWeb.CGA3Live do
     end
   end
 
+  defp transform_element(socket, index, transform) do
+    with {index, ""} <- Integer.parse(index),
+         true <- index >= 0,
+         {object, color} when is_binary(color) <- Enum.at(socket.assigns.elements, index) do
+      elements =
+        List.update_at(socket.assigns.elements, index, fn {_object, old_color} ->
+          {transform.(object), old_color}
+        end)
+
+      {:noreply, assign(socket, :elements, elements)}
+    else
+      _ -> {:noreply, socket}
+    end
+  end
+
   defp add_element(socket, object) do
     case socket.assigns.available_colors do
       [{slot, color} | remaining] ->
@@ -324,14 +355,18 @@ defmodule GeomextricWeb.CGA3Live do
   defp update_element(object, params) do
     cond do
       CGA3.sphere?(object) ->
-        {:sphere, {:real, {x, y, z}, radius}} = CGA3.sphere_parameters(object)
+        case CGA3.sphere_parameters(object) do
+          {:sphere, {kind, {x, y, z}, radius}} when kind in [:real, :imag, :tangent] ->
+            CGA3.sphere(
+              number_param(params, "x", x),
+              number_param(params, "y", y),
+              number_param(params, "z", z),
+              number_param(params, "radius", if(kind == :imag, do: -radius, else: radius))
+            )
 
-        CGA3.sphere(
-          number_param(params, "x", x),
-          number_param(params, "y", y),
-          number_param(params, "z", z),
-          max(abs(number_param(params, "radius", radius)), 0.1)
-        )
+          _ ->
+            object
+        end
 
       CGA3.point_pair?(object) ->
         case CGA3.point_pair_parameters(object) do
@@ -361,29 +396,39 @@ defmodule GeomextricWeb.CGA3Live do
               )
 
             CGA3.point_pair(point, point)
+
+          {:imag, _center, _radius, _direction} ->
+            object
         end
 
       CGA3.circle?(object) ->
-        {:circle, {:real, {x, y, z}, radius, {nx, ny, nz}}} = CGA3.circle_parameters(object)
+        case CGA3.circle_parameters(object) do
+          {:circle, {kind, {x, y, z}, radius, {nx, ny, nz}}}
+          when kind in [:real, :imag, :tangent] ->
+            normal = {
+              number_param(params, "nx", nx),
+              number_param(params, "ny", ny),
+              number_param(params, "nz", nz)
+            }
 
-        normal = {
-          number_param(params, "nx", nx),
-          number_param(params, "ny", ny),
-          number_param(params, "nz", nz)
-        }
+            if vector_length(normal) > 1.0e-6 do
+              signed_radius = if kind == :imag, do: -radius, else: radius
 
-        if vector_length(normal) > 1.0e-6 do
-          CGA3.circle(
-            {
-              number_param(params, "x", x),
-              number_param(params, "y", y),
-              number_param(params, "z", z)
-            },
-            max(abs(number_param(params, "radius", radius)), 0.1),
-            normal
-          )
-        else
-          object
+              CGA3.circle(
+                {
+                  number_param(params, "x", x),
+                  number_param(params, "y", y),
+                  number_param(params, "z", z)
+                },
+                number_param(params, "radius", signed_radius),
+                normal
+              )
+            else
+              object
+            end
+
+          _ ->
+            object
         end
 
       CGA3.line?(object) ->
@@ -462,14 +507,18 @@ defmodule GeomextricWeb.CGA3Live do
   defp element_controls({object, _color}) do
     cond do
       CGA3.sphere?(object) ->
-        {:sphere, {:real, {x, y, z}, radius}} = CGA3.sphere_parameters(object)
+        case CGA3.sphere_parameters(object) do
+          {:sphere, {kind, {x, y, z}, radius}} when kind in [:real, :imag, :tangent] ->
+            [
+              {"Center X", "x", x, -6, 6, 0.1},
+              {"Center Y", "y", y, -6, 6, 0.1},
+              {"Center Z", "z", z, -6, 6, 0.1},
+              {"Radius", "radius", if(kind == :imag, do: -radius, else: radius), -5, 5, 0.1}
+            ]
 
-        [
-          {"Center X", "x", x, -6, 6, 0.1},
-          {"Center Y", "y", y, -6, 6, 0.1},
-          {"Center Z", "z", z, -6, 6, 0.1},
-          {"Radius", "radius", radius, 0.1, 5, 0.1}
-        ]
+          _ ->
+            []
+        end
 
       CGA3.point_pair?(object) ->
         case CGA3.point_pair_parameters(object) do
@@ -489,20 +538,28 @@ defmodule GeomextricWeb.CGA3Live do
               {"Point Y", "ay", y, -6, 6, 0.1},
               {"Point Z", "az", z, -6, 6, 0.1}
             ]
+
+          {:imag, _center, _radius, _direction} ->
+            []
         end
 
       CGA3.circle?(object) ->
-        {:circle, {:real, {x, y, z}, radius, {nx, ny, nz}}} = CGA3.circle_parameters(object)
+        case CGA3.circle_parameters(object) do
+          {:circle, {kind, {x, y, z}, radius, {nx, ny, nz}}}
+          when kind in [:real, :imag, :tangent] ->
+            [
+              {"Center X", "x", x, -6, 6, 0.1},
+              {"Center Y", "y", y, -6, 6, 0.1},
+              {"Center Z", "z", z, -6, 6, 0.1},
+              {"Radius", "radius", if(kind == :imag, do: -radius, else: radius), -5, 5, 0.1},
+              {"Normal X", "nx", nx, -1, 1, 0.01},
+              {"Normal Y", "ny", ny, -1, 1, 0.01},
+              {"Normal Z", "nz", nz, -1, 1, 0.01}
+            ]
 
-        [
-          {"Center X", "x", x, -6, 6, 0.1},
-          {"Center Y", "y", y, -6, 6, 0.1},
-          {"Center Z", "z", z, -6, 6, 0.1},
-          {"Radius", "radius", radius, 0.1, 5, 0.1},
-          {"Normal X", "nx", nx, -1, 1, 0.01},
-          {"Normal Y", "ny", ny, -1, 1, 0.01},
-          {"Normal Z", "nz", nz, -1, 1, 0.01}
-        ]
+          _ ->
+            []
+        end
 
       CGA3.line?(object) ->
         {{x, y, z}, {dx, dy, dz}} = CGA3.line_parameters(object)
@@ -571,8 +628,34 @@ defmodule GeomextricWeb.CGA3Live do
   end
 
   defp sphere_ellipses(camera, sphere) do
-    {:sphere, {:real, {x, y, z}, radius}} = CGA3.sphere_parameters(sphere)
+    case CGA3.sphere_parameters(sphere) do
+      {:sphere, {:real, center, radius}} ->
+        sphere_ellipses(camera, center, radius, false)
 
+      {:sphere, {:imag, center, radius}} ->
+        sphere_ellipses(camera, center, radius, true)
+
+      {:sphere, {:tangent, {x, y, z}, _radius}} ->
+        tangent =
+          case project(camera, PGA3.point(x, y, z)) do
+            {screen_x, screen_y, depth} -> {screen_x, screen_y, depth}
+            _ -> nil
+          end
+
+        %{
+          ellipses: [],
+          fill: nil,
+          depth: if(tangent, do: elem(tangent, 2), else: 0),
+          tangent: tangent,
+          imaginary: false
+        }
+
+      _ ->
+        %{ellipses: [], fill: nil, depth: 0, tangent: nil, imaginary: false}
+    end
+  end
+
+  defp sphere_ellipses(camera, {x, y, z}, radius, imaginary) do
     center = project(camera, PGA3.point(x, y, z))
 
     fill = sphere_silhouette(camera, {x, y, z}, radius)
@@ -605,12 +688,31 @@ defmodule GeomextricWeb.CGA3Live do
         ]
 
         projected =
-          Enum.map(points, &project(camera, PGA3.point(elem(&1, 0), elem(&1, 1), elem(&1, 2))))
+          Enum.map(points, fn {px, py, pz} -> PGA3.point(px, py, pz) end)
+          |> then(&project_quad_for_ellipse(camera, &1))
 
         case projected do
           [{x1, y1, _}, {x2, y2, _}, {x3, y3, _}, {x4, y4, _}] ->
             ellipse = quad_to_ellipse({x1, y1}, {x2, y2}, {x3, y3}, {x4, y4})
+
+            ellipse =
+              if fr(ellipse.radius_b) <= 0.0 do
+                projected_circle_line(
+                  camera,
+                  {x + cx, y + cy, z + cz},
+                  circle_radius,
+                  {ax, ay, az},
+                  {bx, by, bz},
+                  ellipse
+                )
+              else
+                ellipse
+              end
+
             Map.put(ellipse, :secondary, secondary)
+
+          points when length(points) >= 3 ->
+            %{points: points, secondary: secondary}
 
           _ ->
             nil
@@ -620,8 +722,83 @@ defmodule GeomextricWeb.CGA3Live do
     ellipses = Enum.reject(ellipses, &is_nil/1)
 
     case center do
-      {_screen_x, _screen_y, depth} -> %{ellipses: ellipses, fill: fill, depth: depth}
-      _ -> %{ellipses: ellipses, fill: fill, depth: 0}
+      {_screen_x, _screen_y, depth} ->
+        %{ellipses: ellipses, fill: fill, depth: depth, tangent: nil, imaginary: imaginary}
+
+      _ ->
+        %{ellipses: ellipses, fill: fill, depth: 0, tangent: nil, imaginary: imaginary}
+    end
+  end
+
+  defp projected_circle_line(camera, {cx, cy, cz}, radius, {ax, ay, az}, {bx, by, bz}, fallback) do
+    center = camera_coordinates({cx, cy, cz}, camera)
+    axis_a = camera_coordinates({cx + radius * ax, cy + radius * ay, cz + radius * az}, camera)
+    axis_b = camera_coordinates({cx + radius * bx, cy + radius * by, cz + radius * bz}, camera)
+    {center_x, center_y, center_z} = center
+    {axis_ax, axis_ay, axis_az} = axis_a
+    {axis_bx, axis_by, axis_bz} = axis_b
+
+    u = {axis_ax - center_x, axis_ay - center_y, axis_az - center_z}
+    v = {axis_bx - center_x, axis_by - center_y, axis_bz - center_z}
+    direction_x = :math.cos(fallback.angle)
+    direction_y = :math.sin(fallback.angle)
+
+    n0 = 100 * (direction_x * center_x - direction_y * center_y)
+    n1 = 100 * (direction_x * elem(u, 0) - direction_y * elem(u, 1))
+    n2 = 100 * (direction_x * elem(v, 0) - direction_y * elem(v, 1))
+    d0 = center_z
+    d1 = elem(u, 2)
+    d2 = elem(v, 2)
+
+    constant = n2 * d1 - n1 * d2
+    cos_coefficient = n2 * d0 - n0 * d2
+    sin_coefficient = n0 * d1 - n1 * d0
+    amplitude = :math.sqrt(cos_coefficient * cos_coefficient + sin_coefficient * sin_coefficient)
+
+    if amplitude > 1.0e-12 do
+      ratio = -constant / amplitude
+
+      if abs(ratio) < 1.0 do
+        phase = :math.atan2(sin_coefficient, cos_coefficient)
+        offset = :math.acos(ratio)
+        angles = [phase - offset, phase + offset]
+
+        projected =
+          Enum.map(angles, fn angle ->
+            cos = :math.cos(angle)
+            sin = :math.sin(angle)
+
+            point =
+              PGA3.point(
+                cx + radius * (ax * cos + bx * sin),
+                cy + radius * (ay * cos + by * sin),
+                cz + radius * (az * cos + bz * sin)
+              )
+
+            project(camera, point)
+          end)
+
+        case projected do
+          [{x1, y1, _}, {x2, y2, _}] ->
+            dx = x2 - x1
+            dy = y2 - y1
+
+            %{
+              center_x: (x1 + x2) / 2,
+              center_y: (y1 + y2) / 2,
+              radius_a: :math.sqrt(dx * dx + dy * dy) / 2,
+              radius_b: 0.0,
+              angle: :math.atan2(dy, dx)
+            }
+
+          _ ->
+            fallback
+        end
+      else
+        fallback
+      end
+    else
+      fallback
     end
   end
 
@@ -656,11 +833,14 @@ defmodule GeomextricWeb.CGA3Live do
          tz + tangent_radius * (uz - vz)}
       ]
 
-      projected = Enum.map(camera_points, &project_camera_point/1)
+      projected = project_camera_quad_for_ellipse(camera_points)
 
       case projected do
         [{x1, y1, _}, {x2, y2, _}, {x3, y3, _}, {x4, y4, _}] ->
           quad_to_ellipse({x1, y1}, {x2, y2}, {x3, y3}, {x4, y4})
+
+        points when length(points) >= 3 ->
+          %{points: points}
 
         _ ->
           nil
@@ -670,32 +850,21 @@ defmodule GeomextricWeb.CGA3Live do
     ArgumentError -> nil
   end
 
-  defp project_camera_point({x, y, z}) do
-    if finite_number?(x) and finite_number?(y) and finite_number?(z) and z > 1.0e-9 do
-      screen_x = 100 * x / z
-      screen_y = -100 * y / z
-
-      if finite_number?(screen_x) and finite_number?(screen_y),
-        do: {screen_x, screen_y, z},
-        else: nil
-    else
-      nil
-    end
-  end
-
   defp finite_number?(number),
     do: is_number(number) and number == number and abs(number) < 1.0e300
 
   defp point_pair_geometry(camera, pair) do
     case CGA3.point_pair_parameters(pair) do
-      {:real, a, b} ->
-        projected =
-          [a, b]
-          |> Enum.map(fn {x, y, z} -> project(camera, PGA3.point(x, y, z)) end)
-
-        case projected do
-          [{ax, ay, ad}, {bx, by, bd}] ->
-            %{a: {ax, ay, ad}, b: {bx, by, bd}, depth: (ad + bd) * 0.5}
+      {:real, {ax, ay, az}, {bx, by, bz}} ->
+        case project_line(camera, PGA3.point(ax, ay, az), PGA3.point(bx, by, bz)) do
+          {{screen_ax, screen_ay, depth_a}, {screen_bx, screen_by, depth_b}} ->
+            %{
+              a: {screen_ax, screen_ay, depth_a},
+              b: {screen_bx, screen_by, depth_b},
+              a_visible: not is_nil(project(camera, PGA3.point(ax, ay, az))),
+              b_visible: not is_nil(project(camera, PGA3.point(bx, by, bz))),
+              depth: (depth_a + depth_b) * 0.5
+            }
 
           _ ->
             nil
@@ -703,8 +872,17 @@ defmodule GeomextricWeb.CGA3Live do
 
       {:tangent, {x, y, z}} ->
         case project(camera, PGA3.point(x, y, z)) do
-          {px, py, depth} -> %{a: {px, py, depth}, b: {px, py, depth}, depth: depth}
-          _ -> nil
+          {px, py, depth} ->
+            %{
+              a: {px, py, depth},
+              b: {px, py, depth},
+              a_visible: true,
+              b_visible: true,
+              depth: depth
+            }
+
+          _ ->
+            nil
         end
 
       _ ->
@@ -728,12 +906,16 @@ defmodule GeomextricWeb.CGA3Live do
             point_on_plane(center, u, v, radius, radius),
             point_on_plane(center, u, v, -radius, radius)
           ]
-          |> Enum.map(fn {px, py, pz} -> project(camera, PGA3.point(px, py, pz)) end)
+          |> Enum.map(fn {px, py, pz} -> PGA3.point(px, py, pz) end)
+          |> then(&project_quad_for_ellipse(camera, &1))
 
         case {projected, project(camera, PGA3.point(x, y, z))} do
           {[{x1, y1, _}, {x2, y2, _}, {x3, y3, _}, {x4, y4, _}], {_cx, _cy, depth}} ->
             ellipse = quad_to_ellipse({x1, y1}, {x2, y2}, {x3, y3}, {x4, y4})
             %{ellipse: ellipse, depth: depth}
+
+          {points, {_cx, _cy, depth}} when length(points) >= 3 ->
+            %{polygon: points, depth: depth}
 
           _ ->
             nil
@@ -783,13 +965,19 @@ defmodule GeomextricWeb.CGA3Live do
         {x1, y1, z1} = camera_line_point(point, direction, minimum)
         {x2, y2, z2} = camera_line_point(point, direction, maximum)
 
-        %{
-          x1: 100 * x1 / z1,
-          y1: -100 * y1 / z1,
-          x2: 100 * x2 / z2,
-          y2: -100 * y2 / z2,
-          depth: (z1 + z2) * 0.5
-        }
+        case project_camera_line({x1, y1, z1}, {x2, y2, z2}) do
+          {{screen_x1, screen_y1, depth1}, {screen_x2, screen_y2, depth2}} ->
+            %{
+              x1: screen_x1,
+              y1: screen_y1,
+              x2: screen_x2,
+              y2: screen_y2,
+              depth: (depth1 + depth2) * 0.5
+            }
+
+          _ ->
+            nil
+        end
 
       _ ->
         nil
@@ -833,15 +1021,20 @@ defmodule GeomextricWeb.CGA3Live do
         v0 = -extent + row * step
         v1 = v0 + step
 
-        [
+        points = [
           point_on_plane(origin, u, v, u0, v0),
           point_on_plane(origin, u, v, u1, v0),
           point_on_plane(origin, u, v, u1, v1),
           point_on_plane(origin, u, v, u0, v1)
         ]
-        |> Enum.map(fn {x, y, z} -> project(camera, PGA3.point(x, y, z)) end)
+
+        projected =
+          Enum.map(points, fn {x, y, z} -> PGA3.point(x, y, z) end)
+          |> then(&project_polygon(camera, &1))
+
+        if length(projected) >= 3, do: projected, else: nil
       end
-      |> Enum.reject(&Enum.any?(&1, fn point -> is_nil(point) end))
+      |> Enum.reject(&is_nil/1)
 
     fill =
       [
@@ -850,10 +1043,11 @@ defmodule GeomextricWeb.CGA3Live do
         point_on_plane(origin, u, v, extent, extent),
         point_on_plane(origin, u, v, -extent, extent)
       ]
-      |> Enum.map(fn {x, y, z} -> project(camera, PGA3.point(x, y, z)) end)
+      |> Enum.map(fn {x, y, z} -> PGA3.point(x, y, z) end)
+      |> then(&project_polygon(camera, &1))
 
     center = project(camera, PGA3.point(elem(origin, 0), elem(origin, 1), elem(origin, 2)))
-    fill = if Enum.any?(fill, &is_nil/1), do: nil, else: fill
+    fill = if length(fill) >= 3, do: fill, else: nil
 
     case center do
       {_x, _y, depth} -> %{cells: cells, fill: fill, depth: depth}
@@ -873,7 +1067,12 @@ defmodule GeomextricWeb.CGA3Live do
   end
 
   defp sum_all(elements) do
-    case Enum.map(elements, fn {element, _color} -> CGA3.normalize!(element) end) do
+    case Enum.map(elements, fn {element, _color} ->
+           case CGA3.normalize(element) do
+             {:ok, normalized} -> normalized
+             :error -> element
+           end
+         end) do
       [] ->
         CGA3.new(scalar: 0)
 
@@ -903,40 +1102,69 @@ defmodule GeomextricWeb.CGA3Live do
   defp classify_elements(elements, camera) do
     elements
     |> Enum.with_index()
-    |> Enum.flat_map(fn
-      {{element, color}, index} ->
-        cond do
-          CGA3.sphere?(element) ->
-            geometry = sphere_ellipses(camera, element)
-            [Map.merge(%{id: index, color: color, type: :sphere}, geometry)]
+    |> Enum.flat_map(fn {{element, color}, index} ->
+      components = grade_components(element)
 
-          CGA3.plane?(element) ->
-            geometry = plane_grid(camera, element)
-            [Map.merge(%{id: index, color: color, type: :plane}, geometry)]
-
-          CGA3.point_pair?(element) ->
-            case point_pair_geometry(camera, element) do
-              nil -> []
-              geometry -> [Map.merge(%{id: index, color: color, type: :point_pair}, geometry)]
-            end
-
-          CGA3.circle?(element) ->
-            case circle_geometry(camera, element) do
-              nil -> []
-              geometry -> [Map.merge(%{id: index, color: color, type: :circle}, geometry)]
-            end
-
-          CGA3.line?(element) ->
-            case line_geometry(camera, element) do
-              nil -> []
-              geometry -> [Map.merge(%{id: index, color: color, type: :line}, geometry)]
-            end
-
-          true ->
+      Enum.flat_map(components, fn {component, grade} ->
+        case classify_component(component, camera) do
+          nil ->
             []
+
+          {type, geometry} ->
+            id = if grade, do: "#{index}-grade-#{grade}", else: index
+            [Map.merge(%{id: id, color: color, type: type}, geometry)]
         end
+      end)
     end)
     |> Enum.sort_by(& &1.depth, :desc)
+  end
+
+  defp grade_components(element) do
+    case CGA3.grades(element) do
+      [_grade] ->
+        [{element, nil}]
+
+      grades ->
+        Enum.map(grades, fn grade -> {CGA3.grade(element, grade), grade} end)
+    end
+  end
+
+  defp classify_component(element, camera) do
+    case classify_direct(element, camera) do
+      nil -> classify_direct(CGA3.dual(element), camera)
+      classified -> classified
+    end
+  end
+
+  defp classify_direct(element, camera) do
+    cond do
+      CGA3.sphere?(element) ->
+        {:sphere, sphere_ellipses(camera, element)}
+
+      CGA3.plane?(element) ->
+        {:plane, plane_grid(camera, element)}
+
+      CGA3.point_pair?(element) ->
+        case point_pair_geometry(camera, element) do
+          nil -> nil
+          geometry -> {:point_pair, geometry}
+        end
+
+      CGA3.circle?(element) ->
+        case circle_geometry(camera, element) do
+          nil -> nil
+          geometry -> {Map.get(geometry, :type, :circle), geometry}
+        end
+
+      CGA3.line?(element) ->
+        case line_geometry(camera, element) do
+          nil -> nil
+          geometry -> {:line, geometry}
+        end
+
+      true ->
+        nil
+    end
   end
 
   def render(assigns) do
@@ -964,7 +1192,7 @@ defmodule GeomextricWeb.CGA3Live do
       end
 
     gp_elements =
-      if assigns.show_gp_all and gp_result do
+      if assigns.show_gp_all and length(assigns.elements) >= 2 and gp_result do
         classify_elements([{gp_result, "#0891b2"}], camera)
         |> Enum.map(&%{&1 | id: "gp-all-result", color: "#0891b2"})
       else
@@ -1036,8 +1264,10 @@ defmodule GeomextricWeb.CGA3Live do
             }
       .grid-cell { stroke-width: .7; vector-effect: non-scaling-stroke; }
       .sphere-fill { stroke: none; opacity: .12; }
+      .sphere-fill-imaginary { opacity: .035; }
       .sphere-ring { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; }
       .sphere-ring-secondary { stroke-width: 1; opacity: .72; }
+      .sphere-ring-imaginary { stroke-dasharray: 5 3; }
       .plane-fill { stroke: none; opacity: .1; }
       .scene-line { stroke-width: 2; vector-effect: non-scaling-stroke; }
       .scene-circle { fill-opacity: .12; stroke-width: 2; vector-effect: non-scaling-stroke; }
@@ -1086,6 +1316,19 @@ defmodule GeomextricWeb.CGA3Live do
             .elements-panel h2 { margin: 0 0 .5rem; font-size: .95rem; }
             .element-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .3rem 0; }
             .element-actions { margin-top: .75rem; }
+            .element-side-actions { grid-column: 2; display: flex; align-items: center; gap: .2rem; }
+            .element-operations { display: flex; gap: .2rem; }
+            .element-operation {
+              border: 1px solid #0002;
+              border-radius: .3rem;
+              padding: .1rem .3rem;
+              color: #333;
+              background: #fff;
+              font-size: .65rem;
+              line-height: 1.2;
+              cursor: pointer;
+            }
+            .element-operation:hover { background: #f3f4f6; }
                         .element-actions-label { display: block; margin-bottom: .25rem; font-size: .75rem; font-weight: 600; }
                         .element-action-buttons { display: flex; flex-wrap: wrap; gap: .3rem; }
                         .element-action-buttons button { padding: .15rem .35rem; font-size: .75rem; }
@@ -1107,8 +1350,7 @@ defmodule GeomextricWeb.CGA3Live do
             .element-actions button, .delete-element { border: 1px solid #0002; border-radius: .4rem; padding: .25rem .5rem; cursor: pointer; }
             .element-actions button:disabled { opacity: .45; cursor: not-allowed; }
             .delete-element {
-              grid-column: 2;
-              justify-self: end;
+              flex: none;
               width: 1.5rem;
               height: 1.5rem;
               display: grid;
@@ -1124,7 +1366,7 @@ defmodule GeomextricWeb.CGA3Live do
             .delete-element:hover { background: #991b1b; }
             .element-editor {
               display: grid;
-              grid-template-columns: minmax(0, 1fr) 1.5rem;
+              grid-template-columns: minmax(0, 1fr) auto;
               align-items: start;
               gap: .5rem;
               margin: .25rem 0;
@@ -1229,17 +1471,39 @@ defmodule GeomextricWeb.CGA3Live do
               </label>
             </form>
           </details>
-          <button
-            id={"delete-element-#{index}"}
-            type="button"
-            class="delete-element"
-            phx-click="delete_element"
-            phx-value-index={index}
-            aria-label={"Remove #{element_label(element, index)}"}
-            title="Remove element"
-          >
-            ×
-          </button>
+          <div class="element-side-actions">
+            <div class="element-operations">
+              <button
+                id={"dual-element-#{index}"}
+                type="button"
+                class="element-operation"
+                phx-click="dual_element"
+                phx-value-index={index}
+                aria-label={"Dualize #{element_label(element, index)}"}
+                title="Dualize element"
+              >Dual</button>
+              <button
+                id={"negate-element-#{index}"}
+                type="button"
+                class="element-operation"
+                phx-click="negate_element"
+                phx-value-index={index}
+                aria-label={"Negate #{element_label(element, index)}"}
+                title="Negate element"
+              >Negate</button>
+            </div>
+            <button
+              id={"delete-element-#{index}"}
+              type="button"
+              class="delete-element"
+              phx-click="delete_element"
+              phx-value-index={index}
+              aria-label={"Remove #{element_label(element, index)}"}
+              title="Remove element"
+            >
+              ×
+            </button>
+          </div>
         </div>
         <div class="derived-results" id="cga3-derived-results">
           <section class="derived-result" id="cga3-sum-result">
@@ -1277,8 +1541,7 @@ defmodule GeomextricWeb.CGA3Live do
                     name="sum_all"
                     type="checkbox"
                     value="on"
-                    checked={@show_sum_all && length(@elements) >= 2}
-                    disabled={length(@elements) < 2}
+                    checked={@show_sum_all}
                   /> Show
                 </label>
               </form>
@@ -1319,8 +1582,7 @@ defmodule GeomextricWeb.CGA3Live do
                     name="meet_all"
                     type="checkbox"
                     value="on"
-                    checked={@show_meet_all && length(@elements) >= 2}
-                    disabled={length(@elements) < 2}
+                    checked={@show_meet_all}
                   /> Show
                 </label>
               </form>
@@ -1361,8 +1623,7 @@ defmodule GeomextricWeb.CGA3Live do
                     name="gp_all"
                     type="checkbox"
                     value="on"
-                    checked={@show_gp_all && length(@elements) >= 2}
-                    disabled={length(@elements) < 2}
+                    checked={@show_gp_all}
                   /> show
                 </label>
               </form>
@@ -1500,35 +1761,76 @@ defmodule GeomextricWeb.CGA3Live do
                 class="grid-cell"
               />
             <% object.type == :sphere -> %>
+              <polygon
+                :if={object.fill && Map.has_key?(object.fill, :points)}
+                points={
+                  Enum.map_join(object.fill.points, " ", fn {x, y, _} -> "#{fr(x)},#{fr(y)}" end)
+                }
+                fill={object.color}
+                class={["sphere-fill", object.imaginary && "sphere-fill-imaginary"]}
+              />
               <ellipse
-                :if={object.fill}
+                :if={object.fill && !Map.has_key?(object.fill, :points)}
                 cx={fr(object.fill.center_x)}
                 cy={fr(object.fill.center_y)}
                 rx={fr(object.fill.radius_a)}
                 ry={fr(object.fill.radius_b)}
                 transform={"rotate(#{fr(object.fill.angle * 180 / :math.pi())} #{fr(object.fill.center_x)} #{fr(object.fill.center_y)})"}
                 fill={object.color}
-                class="sphere-fill"
+                class={["sphere-fill", object.imaginary && "sphere-fill-imaginary"]}
+              />
+              <circle
+                :if={object.tangent}
+                cx={fr(elem(object.tangent, 0))}
+                cy={fr(elem(object.tangent, 1))}
+                r="2"
+                fill={object.color}
+                class="sphere-tangent"
+              />
+              <polygon
+                :for={ellipse <- object.ellipses}
+                :if={Map.has_key?(ellipse, :points)}
+                points={Enum.map_join(ellipse.points, " ", fn {x, y, _} -> "#{fr(x)},#{fr(y)}" end)}
+                fill="none"
+                class={[
+                  "sphere-ring",
+                  ellipse.secondary && "sphere-ring-secondary",
+                  object.imaginary && "sphere-ring-imaginary"
+                ]}
               />
               <line
                 :for={ellipse <- object.ellipses}
-                :if={fr(ellipse.radius_b) <= 0.0}
-                x1={fr(ellipse.center_x - ellipse.radius_a)}
+                :if={
+                  !Map.has_key?(ellipse, :points) && fr(ellipse.radius_b) <= 0.0 &&
+                    fr(ellipse.radius_a) > 0.0
+                }
+                x1={fr(ellipse.center_x) - fr(ellipse.radius_a)}
                 y1={fr(ellipse.center_y)}
-                x2={fr(ellipse.center_x + ellipse.radius_a)}
+                x2={fr(ellipse.center_x) + fr(ellipse.radius_a)}
                 y2={fr(ellipse.center_y)}
                 transform={"rotate(#{fr(ellipse.angle * 180 / :math.pi())} #{fr(ellipse.center_x)} #{fr(ellipse.center_y)})"}
-                class={["sphere-ring", ellipse.secondary && "sphere-ring-secondary"]}
+                class={[
+                  "sphere-ring",
+                  ellipse.secondary && "sphere-ring-secondary",
+                  object.imaginary && "sphere-ring-imaginary"
+                ]}
               />
               <ellipse
                 :for={ellipse <- object.ellipses}
-                :if={fr(ellipse.radius_b) > 0.0}
+                :if={
+                  !Map.has_key?(ellipse, :points) && fr(ellipse.radius_b) > 0.0 &&
+                    fr(ellipse.radius_a) > 0.0
+                }
                 cx={fr(ellipse.center_x)}
                 cy={fr(ellipse.center_y)}
                 rx={fr(ellipse.radius_a)}
                 ry={fr(ellipse.radius_b)}
                 transform={"rotate(#{fr(ellipse.angle * 180 / :math.pi())} #{fr(ellipse.center_x)} #{fr(ellipse.center_y)})"}
-                class={["sphere-ring", ellipse.secondary && "sphere-ring-secondary"]}
+                class={[
+                  "sphere-ring",
+                  ellipse.secondary && "sphere-ring-secondary",
+                  object.imaginary && "sphere-ring-imaginary"
+                ]}
               />
             <% object.type == :circle -> %>
               <circle
@@ -1539,8 +1841,14 @@ defmodule GeomextricWeb.CGA3Live do
                 fill={object.color}
                 class="scene-circle-tangent"
               />
+              <polygon
+                :if={Map.has_key?(object, :polygon)}
+                points={Enum.map_join(object.polygon, " ", fn {x, y, _} -> "#{fr(x)},#{fr(y)}" end)}
+                fill={object.color}
+                class="scene-circle"
+              />
               <ellipse
-                :if={!Map.get(object, :tangent, false)}
+                :if={Map.has_key?(object, :ellipse)}
                 cx={fr(object.ellipse.center_x)}
                 cy={fr(object.ellipse.center_y)}
                 rx={fr(object.ellipse.radius_a)}
@@ -1560,6 +1868,7 @@ defmodule GeomextricWeb.CGA3Live do
                 class="point-pair-link"
               />
               <circle
+                :if={object.a_visible}
                 cx={fr(elem(object.a, 0))}
                 cy={fr(elem(object.a, 1))}
                 r={fr(5 / :math.sqrt(elem(object.a, 2)))}
@@ -1567,6 +1876,7 @@ defmodule GeomextricWeb.CGA3Live do
                 class="point-pair-point"
               />
               <circle
+                :if={object.b_visible}
                 cx={fr(elem(object.b, 0))}
                 cy={fr(elem(object.b, 1))}
                 r={fr(5 / :math.sqrt(elem(object.b, 2)))}
@@ -1579,7 +1889,6 @@ defmodule GeomextricWeb.CGA3Live do
                 y1={fr(object.y1)}
                 x2={fr(object.x2)}
                 y2={fr(object.y2)}
-                marker-end="url(#cga3-line-arrow)"
                 class="scene-line"
               />
             <% true -> %>

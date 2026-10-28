@@ -19,23 +19,77 @@ defmodule GeomextricWeb.CGA3LiveTest do
     assert has_element?(view, "#cga3-sum-expression[value='#{expected_sum}']")
   end
 
-  test "renders the meet of scene elements when enabled", %{conn: conn} do
+  test "dualizes and negates individual scene elements", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/cga3")
+
+    assert has_element?(view, "#dual-element-0")
+    assert has_element?(view, "#negate-element-0")
+    assert has_element?(view, "#cga3-element-color-0[value='#b45309']")
+
+    render_click(element(view, "#dual-element-0"))
+
+    dual_expression = inspect(CGA3.dual(CGA3.plane({0, 0, 1}, 0)), limit: :infinity)
+    assert has_element?(view, "#cga3-element-expression-0[value='#{dual_expression}']")
+    assert has_element?(view, "#cga3-element-color-0[value='#b45309']")
+
+    render_click(element(view, "#negate-element-0"))
+
+    negated_expression =
+      inspect(CGA3.scale(-1, CGA3.dual(CGA3.plane({0, 0, 1}, 0))), limit: :infinity)
+
+    assert has_element?(view, "#cga3-element-expression-0[value='#{negated_expression}']")
+    assert has_element?(view, "#cga3-element-color-0[value='#b45309']")
+  end
+
+  test "renders and preserves imaginary point pairs created by dualizing a circle", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/cga3")
+    clear_initial_plane(view)
+    render_click(element(view, "#add-circle"))
+
+    render_hook(view, "change_element", %{"index" => "0", "radius" => "-2"})
+    render_click(element(view, "#dual-element-0"))
+
+    imaginary_pair = CGA3.circle({0, 0, 0}, -2, {0, 0, 1}) |> CGA3.dual()
+    expression = inspect(imaginary_pair, limit: :infinity)
+
+    assert has_element?(view, "#cga3-element-expression-0[readonly][value='#{expression}']")
+    assert has_element?(view, "#dual-element-0")
+    assert has_element?(view, "#negate-element-0")
+
+    render_hook(view, "change_element", %{"index" => "0", "color" => "#ff0000"})
+    assert has_element?(view, "#cga3-element-color-0[value='#ff0000']")
+  end
+
+  test "keeps derived render toggles enabled without enough elements", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/cga3")
     clear_initial_plane(view)
 
-    assert has_element?(view, "#cga3-show-meet-all[disabled]")
-    render_click(element(view, "#add-plane"))
-    assert has_element?(view, "#cga3-show-meet-all[disabled]")
-    render_click(element(view, "#add-plane"))
+    assert has_element?(view, "#cga3-show-sum-all:not([disabled])")
     assert has_element?(view, "#cga3-show-meet-all:not([disabled])")
-    refute has_element?(view, "#scene-object-meet-all-result")
+    assert has_element?(view, "#cga3-show-gp-all:not([disabled])")
 
     render_change(element(view, "#cga3-meet-visibility"), %{"meet_all" => "on"})
+    render_change(element(view, "#cga3-sum-visibility"), %{"sum_all" => "on"})
+    render_change(element(view, "#cga3-gp-visibility"), %{"gp_all" => "on"})
 
     assert has_element?(view, "#cga3-show-meet-all:checked")
-    render_change(element(view, "#cga3-sum-visibility"), %{"sum_all" => "on"})
     assert has_element?(view, "#cga3-show-sum-all:checked")
+    assert has_element?(view, "#cga3-show-gp-all:checked")
+    refute has_element?(view, "#scene-object-meet-all-result")
+    refute has_element?(view, "#scene-object-sum-all-result")
+    refute has_element?(view, "#scene-object-gp-all-result")
+
+    render_click(element(view, "#add-plane"))
+    assert has_element?(view, "#cga3-show-meet-all:checked")
+    assert has_element?(view, "#cga3-show-sum-all:checked")
+    assert has_element?(view, "#cga3-show-gp-all:checked")
+    refute has_element?(view, "#scene-object-meet-all-result")
+    refute has_element?(view, "#scene-object-sum-all-result")
+    refute has_element?(view, "#scene-object-gp-all-result")
+
+    render_click(element(view, "#add-plane"))
     assert has_element?(view, "#scene-object-meet-all-result line.scene-line")
+    assert has_element?(view, "#scene-object-sum-all-result")
     assert has_element?(view, "#cga3-meet-result strong", "Meet all")
     assert has_element?(view, "#cga3-meet-expression[readonly]")
     refute has_element?(view, "#cga3-element-2")
@@ -47,11 +101,12 @@ defmodule GeomextricWeb.CGA3LiveTest do
     render_change(element(view, "#cga3-meet-visibility"), %{"meet_all" => "on"})
     render_click(element(view, "#delete-element-1"))
 
-    assert has_element?(view, "#cga3-show-meet-all[disabled]")
-    refute has_element?(view, "#cga3-show-meet-all:checked")
+    assert has_element?(view, "#cga3-show-meet-all:checked")
+    assert has_element?(view, "#cga3-show-sum-all:checked")
+    assert has_element?(view, "#cga3-show-gp-all:checked")
     refute has_element?(view, "#scene-object-meet-all-result")
-    assert has_element?(view, "#cga3-show-sum-all[disabled]")
-    refute has_element?(view, "#cga3-show-sum-all:checked")
+    refute has_element?(view, "#scene-object-sum-all-result")
+    refute has_element?(view, "#scene-object-gp-all-result")
   end
 
   test "shows the geometric product result and selects cloud transforms", %{conn: conn} do
@@ -80,8 +135,9 @@ defmodule GeomextricWeb.CGA3LiveTest do
     assert has_element?(view, "#cga3-transform-meet:checked")
     assert has_element?(view, "#cga3-transform-sum:not([disabled])")
     assert has_element?(view, "#cga3-transform-meet:not([disabled])")
-    assert has_element?(view, "#cga3-show-gp-all[disabled]")
-    refute has_element?(view, "#cga3-show-gp-all:checked")
+    assert has_element?(view, "#cga3-show-gp-all:not([disabled])")
+    assert has_element?(view, "#cga3-show-gp-all:checked")
+    refute has_element?(view, "#scene-object-gp-all-result")
   end
 
   test "point-cloud transforms remain selectable with no scene elements", %{conn: conn} do
@@ -241,6 +297,28 @@ defmodule GeomextricWeb.CGA3LiveTest do
     assert has_element?(view, "#scene-object-0 circle.point-pair-point[fill='#2563eb']")
   end
 
+  test "renders a negative-radius sphere as an imaginary shell", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/cga3")
+    clear_initial_plane(view)
+    render_click(element(view, "#add-sphere"))
+
+    render_hook(view, "change_element", %{"index" => "0", "radius" => "-1"})
+
+    assert has_element?(view, "#scene-object-0 ellipse.sphere-ring-imaginary")
+    assert has_element?(view, "#cga3-element-0-radius[value='-1.0']")
+  end
+
+  test "renders a tangent sphere without crashing", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/cga3")
+    clear_initial_plane(view)
+    render_click(element(view, "#add-sphere"))
+
+    render_hook(view, "change_element", %{"index" => "0", "radius" => "0"})
+
+    assert has_element?(view, "#scene-object-0 circle.sphere-tangent")
+    refute has_element?(view, "#scene-object-0 ellipse.sphere-fill")
+  end
+
   test "sphere silhouettes tolerate steep camera angles", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/cga3")
     clear_initial_plane(view)
@@ -303,15 +381,15 @@ defmodule GeomextricWeb.CGA3LiveTest do
     refute has_element?(view, "#transformed-point-cloud")
     refute has_element?(view, "#cga3-show-point-cloud:checked")
     assert has_element?(view, "#cga3-sum-expression[readonly][value='~G[-1.0e12pm]']")
-    assert has_element?(view, "#cga3-show-sum-all[disabled]")
+    assert has_element?(view, "#cga3-show-sum-all:not([disabled])")
     refute has_element?(view, "#cga3-show-sum-all:checked")
-    assert has_element?(view, "#cga3-show-meet-all[disabled]")
+    assert has_element?(view, "#cga3-show-meet-all:not([disabled])")
     assert has_element?(view, "#cga3-meet-expression[readonly][value]")
     refute has_element?(view, "#cga3-meet-expression[value='Needs at least two elements']")
     refute has_element?(view, "#scene-object-meet-all-result")
 
     render_change(element(view, "#cga3-sum-visibility"), %{"sum_all" => "on"})
-    refute has_element?(view, "#cga3-show-sum-all:checked")
+    assert has_element?(view, "#cga3-show-sum-all:checked")
     refute has_element?(view, "#scene-object-sum-all-result")
 
     clear_initial_plane(view)

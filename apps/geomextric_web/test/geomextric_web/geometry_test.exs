@@ -54,6 +54,36 @@ defmodule GeomextricWeb.GeometryTest do
     assert html != shifted_html
   end
 
+  test "projects ellipse quads with four vertices when fully inside the clip box" do
+    camera = PGA3.new(scalar: 1)
+
+    quad = [
+      PGA3.point(-0.5, -0.5, 2),
+      PGA3.point(0.5, -0.5, 2),
+      PGA3.point(0.5, 0.5, 2),
+      PGA3.point(-0.5, 0.5, 2)
+    ]
+
+    assert length(Geometry.project_quad_for_ellipse(camera, quad)) == 4
+  end
+
+  test "keeps ellipse quads outside side planes for SVG viewport clipping" do
+    camera = PGA3.new(scalar: 1)
+
+    quad = [
+      PGA3.point(-0.2, -0.2, 1),
+      PGA3.point(3, -0.2, 1),
+      PGA3.point(0.2, 3, 1),
+      PGA3.point(-3, 0.2, 1)
+    ]
+
+    projected = Geometry.project_quad_for_ellipse(camera, quad)
+
+    assert length(projected) == 4
+    assert Enum.any?(projected, fn {x, y, _z} -> abs(x) > 100 or abs(y) > 100 end)
+    assert length(Geometry.project_polygon(camera, quad)) > 4
+  end
+
   test "clips a quad crossing the near plane into a visible polygon" do
     camera = PGA3.new(scalar: 1)
 
@@ -64,11 +94,11 @@ defmodule GeomextricWeb.GeometryTest do
       PGA3.point(-0.5, 0.5, -1)
     ]
 
-    projected = Geometry.project_polygon(camera, quad)
+    assert Geometry.project_quad_for_ellipse(camera, quad) == []
+    clipped_polygon = Geometry.project_polygon(camera, quad)
+    assert length(clipped_polygon) > 4
 
-    assert length(projected) > 4
-
-    assert Enum.all?(projected, fn {x, y, z} ->
+    assert Enum.all?(clipped_polygon, fn {x, y, z} ->
              z >= 1.0e-3 - 1.0e-9 and abs(x) <= 100 and abs(y) <= 100
            end)
   end
@@ -114,6 +144,26 @@ defmodule GeomextricWeb.GeometryTest do
     assert_in_delta ellipse.radius_a, :math.sqrt(5), 1.0e-9
     assert ellipse.radius_b == 0.0
     assert_in_delta ellipse.angle, :math.atan2(2, 4), 1.0e-9
+  end
+
+  test "matches the ellipse diameter when a projected quad collapses to a line" do
+    ellipse = Geometry.quad_to_ellipse({2, 0}, {0, 0}, {-2, 0}, {0, 0})
+
+    assert_in_delta ellipse.center_x, 0, 1.0e-9
+    assert_in_delta ellipse.center_y, 0, 1.0e-9
+    assert_in_delta ellipse.radius_a, :math.sqrt(2), 1.0e-9
+    assert ellipse.radius_b == 0.0
+    assert_in_delta abs(ellipse.angle), :math.pi(), 1.0e-9
+  end
+
+  test "keeps the major axis when the minor ellipse radius rounds to zero" do
+    ellipse = Geometry.quad_to_ellipse({-0.001, -2}, {0.001, -2}, {0.001, 2}, {-0.001, 2})
+
+    assert_in_delta ellipse.center_x, 0, 1.0e-9
+    assert_in_delta ellipse.center_y, 0, 1.0e-9
+    assert_in_delta ellipse.radius_a, 2, 1.0e-9
+    assert ellipse.radius_b == 0.001
+    assert_in_delta ellipse.angle, :math.pi() / 2, 1.0e-9
   end
 
   test "handles a collapsed quad at a single point without dividing by zero" do
