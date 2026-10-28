@@ -5,6 +5,7 @@ defmodule GeomextricWeb.Geometry do
   alias Galixir.Algebras.PGA3
 
   @fr 1
+  @near_clip 1.0e-3
 
   def fr(n), do: Float.round(n, @fr)
 
@@ -21,16 +22,13 @@ defmodule GeomextricWeb.Geometry do
   attr :motor, :map, default: PGA3.new(scalar: 1)
 
   def geometry(assigns) do
+    assigns = assign(assigns, :projected_faces, project_faces(assigns))
+
     ~H"""
     <g id={"obj-#{@id}"}>
-      <%= for {color, ps}<- @geo.faces, @faces, path =
-                    (for p <- ps  do
-                      with({screen_x, screen_y, _z} <- project(@camera, rot(@rotation, scale_point(p, @scale)) |> PGA3.transform(@motor)), do:
-                      "#{fr(screen_x)} #{fr(screen_y)}", else: (_e ->  ""))
-                    end
-                    |> Enum.join(" ")) do %>
+      <%= for {color, projected, path} <- @projected_faces do %>
         <%= if @quad_ellipse do %>
-          <%= case ps |> Enum.map(&project(@camera, rot(@rotation, scale_point(&1, @scale)) |> PGA3.transform(@motor)))   do %>
+          <%= case projected do %>
             <% [{ax, ay, _}, {bx, by, _}, {cx, cy, _}, {dx,dy, _}] -> %>
               <% ellipse = quad_to_ellipse({ax, ay}, {bx, by}, {cx, cy}, {dx, dy}) %>
               <line
@@ -68,7 +66,11 @@ defmodule GeomextricWeb.Geometry do
       <% end %>
 
       <%= for {color, {p1, p2}} <- @geo.edges, @edges  do %>
-        <%= with {{x1, y1, _z1}, {x2,y2,_z2}} <- {project(@camera, rot(@rotation, scale_point(p1, @scale))  |> PGA3.transform(@motor)), project(@camera, rot(@rotation, scale_point(p2, @scale)) |> PGA3.transform(@motor))} do %>
+        <%= with {{x1, y1, _z1}, {x2, y2, _z2}} <- project_line(
+          @camera,
+          rot(@rotation, scale_point(p1, @scale)) |> PGA3.transform(@motor),
+          rot(@rotation, scale_point(p2, @scale)) |> PGA3.transform(@motor)
+        ) do %>
           <line
             class="line3d"
             stroke={color}
@@ -174,6 +176,144 @@ defmodule GeomextricWeb.Geometry do
       e013: PGA3.coefficient(p, :e013) * s,
       e120: PGA3.coefficient(p, :e120) * s
     )
+  end
+
+  defp project_faces(%{faces: false}), do: []
+
+  defp project_faces(assigns) do
+    Enum.flat_map(assigns.geo.faces, fn {color, points} ->
+      transformed_points =
+        Enum.map(
+          points,
+          &(rot(assigns.rotation, scale_point(&1, assigns.scale))
+            |> PGA3.transform(assigns.motor))
+        )
+
+      projected = project_polygon(assigns.camera, transformed_points)
+
+      if length(projected) >= 3 do
+        path = Enum.map_join(projected, " ", fn {x, y, _z} -> "#{fr(x)} #{fr(y)}" end)
+        [{color, projected, path}]
+      else
+        []
+      end
+    end)
+  end
+
+  def project_polygon(camera, points) do
+    camera_points = Enum.map(points, &camera_coordinates(camera, &1))
+
+    camera_points
+    |> clip_polygon()
+    |> Enum.map(&project_camera_point/1)
+  end
+
+  defp clip_polygon(points) do
+    constraints = [
+      fn {_, _, z} -> z - @near_clip end,
+      fn {x, _, z} -> z - x end,
+      fn {x, _, z} -> z + x end,
+      fn {_, y, z} -> z - y end,
+      fn {_, y, z} -> z + y end
+    ]
+
+    Enum.reduce(constraints, points, &clip_polygon_against(&2, &1))
+  end
+
+  defp clip_polygon_against([], _constraint), do: []
+
+  defp clip_polygon_against(points, constraint) do
+    previous = List.last(points)
+
+    Enum.zip([previous | points], points)
+    |> Enum.flat_map(fn {first, second} ->
+      first_value = constraint.(first)
+      second_value = constraint.(second)
+      first_inside = first_value >= 0
+      second_inside = second_value >= 0
+
+      cond do
+        first_inside and second_inside ->
+          [second]
+
+        first_inside ->
+          [intersect_plane(first, second, first_value, second_value)]
+
+        second_inside ->
+          [intersect_plane(first, second, first_value, second_value), second]
+
+        true ->
+          []
+      end
+    end)
+  end
+
+  defp intersect_plane(first, second, first_value, second_value) do
+    interpolate_point(first, second, first_value / (first_value - second_value))
+  end
+
+  def project_line(camera, first, second) do
+    first = camera_coordinates(camera, first)
+    second = camera_coordinates(camera, second)
+
+    case clip_to_frustum(first, second) do
+      nil ->
+        nil
+
+      {clipped_first, clipped_second} ->
+        {project_camera_point(clipped_first), project_camera_point(clipped_second)}
+    end
+  end
+
+  defp camera_coordinates(camera, point) do
+    point
+    |> PGA3.transform(camera)
+    |> PGA3.point_coordinates()
+  end
+
+  defp project_camera_point({x, y, z}), do: {x * 100 / z, -y * 100 / z, z}
+
+  defp clip_to_frustum(first, second) do
+    constraints = [
+      fn {_, _, z} -> z - @near_clip end,
+      fn {x, _, z} -> z - x end,
+      fn {x, _, z} -> z + x end,
+      fn {_, y, z} -> z - y end,
+      fn {_, y, z} -> z + y end
+    ]
+
+    Enum.reduce_while(constraints, {0.0, 1.0}, fn constraint, {enter, exit} ->
+      first_value = constraint.(first)
+      second_value = constraint.(second)
+      delta = second_value - first_value
+
+      cond do
+        delta == 0 and first_value < 0 ->
+          {:halt, nil}
+
+        delta == 0 ->
+          {:cont, {enter, exit}}
+
+        delta > 0 ->
+          next_enter = max(enter, -first_value / delta)
+          if next_enter > exit, do: {:halt, nil}, else: {:cont, {next_enter, exit}}
+
+        true ->
+          next_exit = min(exit, -first_value / delta)
+          if next_exit < enter, do: {:halt, nil}, else: {:cont, {enter, next_exit}}
+      end
+    end)
+    |> case do
+      nil ->
+        nil
+
+      {enter, exit} ->
+        {interpolate_point(first, second, enter), interpolate_point(first, second, exit)}
+    end
+  end
+
+  defp interpolate_point({x1, y1, z1}, {x2, y2, z2}, t) do
+    {x1 + (x2 - x1) * t, y1 + (y2 - y1) * t, z1 + (z2 - z1) * t}
   end
 
   def project(cam, p) do
