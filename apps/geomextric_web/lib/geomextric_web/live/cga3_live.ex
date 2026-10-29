@@ -46,8 +46,7 @@ defmodule GeomextricWeb.CGA3Live do
      assign(socket,
        camera: %{yaw: 0.0, pitch: 0.3, radius: 10.0},
        focus: {0.0, 0.0, 0.0},
-       elements: [{CGA3.plane({0, 0, 1}, 0), Enum.at(@palette, 0)}],
-       dual_elements: MapSet.new(),
+       elements: [],
        point_cloud: letter_point_cloud(),
        vector_field: vector_field_cloud(),
        vector_field_samples: empty_vector_field_samples(),
@@ -63,12 +62,10 @@ defmodule GeomextricWeb.CGA3Live do
        show_meet_all: true,
        show_gp_all: false,
        point_cloud_transform: "gp",
-       expanded_add_group: nil,
        element_slots: [0],
        available_colors:
          @palette
          |> Enum.with_index()
-         |> Enum.drop(1)
          |> Enum.map(fn {color, slot} -> {slot, color} end)
      )}
   end
@@ -129,55 +126,99 @@ defmodule GeomextricWeb.CGA3Live do
   defp project_vector_field(samples, completed, camera) do
     samples
     |> Enum.with_index()
-    |> Enum.flat_map(fn {world_samples, index} ->
-      projected =
-        Enum.map(world_samples, fn {x, y, z} ->
-          project(camera, PGA3.point(x, y, z))
-        end)
+    |> Enum.flat_map(fn
+      {[], _index} ->
+        []
 
-      if length(projected) >= 2 and Enum.all?(projected, &match?({_, _, _}, &1)) do
+      {world_samples, index} ->
+        projected =
+          Enum.map(world_samples, fn {x, y, z} ->
+            project(camera, PGA3.point(x, y, z))
+          end)
+
+        visible_paths =
+          projected
+          |> Enum.chunk_by(&is_nil/1)
+          |> Enum.filter(fn
+            [{_, _, _} | _] = path -> length(path) >= 2
+            _ -> false
+          end)
+
+        marker_depth =
+          case List.last(projected) do
+            {_, _, depth} -> depth
+            _ -> 10.0
+          end
+
         [
           %{
-            points: projected,
-            complete?: MapSet.member?(completed, index)
+            id: "vector-field-arrow-#{index}",
+            marker_id: "cga3-vector-arrow-#{index}",
+            marker_size: clamp(20 / marker_depth, 1, 4),
+            paths: visible_paths,
+            complete?:
+              MapSet.member?(completed, index) and List.last(projected) != nil and
+                length(visible_paths) == 1
           }
         ]
-      else
-        []
-      end
     end)
   end
+
+  defp vector_field_paths_path(paths) do
+    Enum.map_join(paths, " ", &vector_field_path/1)
+  end
+
+  defp vector_field_path(points) do
+    case Enum.map(points, fn {x, y, _depth} -> {x, y} end) do
+      [] ->
+        ""
+
+      [first, second | rest] ->
+        "M #{vector_field_path_point(first)}" <>
+          quadratic_path_segments([first, second | rest])
+    end
+  end
+
+  defp quadratic_path_segments([_start, endpoint]) do
+    " Q #{vector_field_path_point(endpoint)} #{vector_field_path_point(endpoint)}"
+  end
+
+  defp quadratic_path_segments([_start, control, next | rest]) do
+    midpoint = {(elem(control, 0) + elem(next, 0)) / 2, (elem(control, 1) + elem(next, 1)) / 2}
+
+    " Q #{vector_field_path_point(control)} #{vector_field_path_point(midpoint)}" <>
+      quadratic_path_segments([midpoint, next | rest])
+  end
+
+  defp vector_field_path_point({x, y}), do: "#{fr(x)} #{fr(y)}"
 
   defp empty_vector_field_samples do
     List.duplicate([], @vector_field_count)
   end
 
   defp calculate_vector_field(points, transform, parent, generation) do
+    Process.flag(:priority, :low)
+    Process.sleep(@vector_field_debounce_ms)
+
     with {:ok, generator} <- CGA3Motor.interpolation_generator(transform),
          {:ok, motors} <- interpolated_motors(generator) do
       points
       |> Enum.with_index()
       |> Enum.each(fn {point, point_index} ->
-        result =
-          motors
-          |> Enum.with_index()
-          |> Enum.reduce_while(:ok, fn {motor, step_index}, :ok ->
+        samples =
+          Enum.reduce_while(motors, {:ok, []}, fn motor, {:ok, samples} ->
             case point |> CGA3.transform(motor) |> finite_point_coordinates() do
-              {x, y, z} ->
-                send(
-                  parent,
-                  {:vector_field_sample, generation, point_index, step_index, {x, y, z}}
-                )
-
-                {:cont, :ok}
-
-              nil ->
-                {:halt, :invalid}
+              {x, y, z} -> {:cont, {:ok, [{x, y, z} | samples]}}
+              nil -> {:halt, :invalid}
             end
           end)
 
-        if result == :invalid do
-          send(parent, {:vector_field_arrow_invalid, generation, point_index})
+        case samples do
+          {:ok, samples} ->
+            send(parent, {:vector_field_arrow, generation, point_index, Enum.reverse(samples)})
+
+          :invalid ->
+            send(parent, {:vector_field_arrow_invalid, generation, point_index})
         end
       end)
     else
@@ -208,7 +249,6 @@ defmodule GeomextricWeb.CGA3Live do
       points = socket.assigns.vector_field
 
       start_async(socket, :vector_field, fn ->
-        Process.sleep(@vector_field_debounce_ms)
         calculate_vector_field(points, transform, parent, generation)
       end)
     else
@@ -216,31 +256,15 @@ defmodule GeomextricWeb.CGA3Live do
     end
   end
 
-  def handle_info(
-        {:vector_field_sample, generation, point_index, step_index, coordinates},
-        socket
-      ) do
+  def handle_info({:vector_field_arrow, generation, point_index, samples}, socket) do
     if generation == socket.assigns.vector_field_generation and
          not MapSet.member?(socket.assigns.vector_field_invalid_arrows, point_index) do
-      samples = Enum.at(socket.assigns.vector_field_samples, point_index)
-
-      if length(samples) == step_index do
-        vector_field_samples =
-          List.update_at(socket.assigns.vector_field_samples, point_index, &(&1 ++ [coordinates]))
-
-        completed =
-          if step_index == 10,
-            do: MapSet.put(socket.assigns.vector_field_completed, point_index),
-            else: socket.assigns.vector_field_completed
-
-        {:noreply,
-         assign(socket,
-           vector_field_samples: vector_field_samples,
-           vector_field_completed: completed
-         )}
-      else
-        {:noreply, socket}
-      end
+      {:noreply,
+       assign(socket,
+         vector_field_samples:
+           List.replace_at(socket.assigns.vector_field_samples, point_index, samples),
+         vector_field_completed: MapSet.put(socket.assigns.vector_field_completed, point_index)
+       )}
     else
       {:noreply, socket}
     end
@@ -299,7 +323,7 @@ defmodule GeomextricWeb.CGA3Live do
   defp selected_transform(assigns) do
     case assigns.point_cloud_transform do
       "sum" -> sum_all(assigns.elements)
-      "meet" -> meet_all(assigns.elements)
+      "wedge" -> meet_all(assigns.elements)
       "gp" -> gp_all(assigns.elements)
     end
   end
@@ -372,61 +396,72 @@ defmodule GeomextricWeb.CGA3Live do
   end
 
   def handle_event("add_point", %{"axis" => "origin"}, socket) do
-    add_element(socket, point_reflection(0, 0, 0), "point")
+    add_element(socket, CGA3.new(e123: 1.0))
   end
 
   def handle_event("add_point", %{"axis" => axis}, socket) when axis in ["x", "y", "z"] do
     {x, y, z} = axis_vector(axis, 1.0)
-    add_element(socket, point_reflection(x, y, z), "point")
+    point = point_reflection(x, y, z) |> CGA3.dual()
+    add_element(socket, point)
   end
 
   def handle_event("add_sphere", %{"axis" => "origin"}, socket) do
-    add_element(socket, CGA3.sphere(0, 0, 0, 2.5), "sphere")
+    add_element(socket, CGA3.new(ep: 1.0))
   end
 
   def handle_event("add_sphere", %{"axis" => axis}, socket) when axis in ["x", "y", "z"] do
     {x, y, z} = axis_vector(axis, 1.0)
-    add_element(socket, CGA3.sphere(x, y, z, 2.5), "sphere")
+    sphere = CGA3.sphere(x, y, z, 1.0) |> CGA3.dual()
+    add_element(socket, sphere)
   end
 
   def handle_event("add_line", %{"axis" => axis}, socket) when axis in ["x", "y", "z"] do
-    {dx, dy, dz} = axis_vector(axis, 2.0)
-    line = CGA3.line(CGA3.point(0, 0, 0), CGA3.point(dx, dy, dz))
-    add_element(socket, line, "line")
+    line =
+      case axis do
+        "x" -> CGA3.new(e23: 1.0)
+        "y" -> CGA3.new(e13: 1.0)
+        "z" -> CGA3.new(e12: 1.0)
+      end
+
+    add_element(socket, line)
   end
 
   def handle_event("add_circle", %{"axis" => axis}, socket) when axis in ["x", "y", "z"] do
-    normal = axis_vector(axis, 1.0)
-    add_element(socket, CGA3.circle({0, 0, 0}, 2.0, normal), "circle")
+    circle =
+      case axis do
+        "x" -> CGA3.new(e1p: 1.0)
+        "y" -> CGA3.new(e2p: 1.0)
+        "z" -> CGA3.new(e3p: 1.0)
+      end
+
+    add_element(socket, circle)
   end
 
   def handle_event("add_point_pair", %{"axis" => axis}, socket)
       when axis in ["x", "y", "z"] do
-    {dx, dy, dz} = axis_vector(axis, 1.5)
-
     pair =
-      CGA3.point_pair(
-        CGA3.point(-dx, -dy, -dz),
-        CGA3.point(dx, dy, dz)
-      )
+      case axis do
+        "x" -> CGA3.new(e1m: 1.0)
+        "y" -> CGA3.new(e2m: 1.0)
+        "z" -> CGA3.new(e3m: 1.0)
+      end
 
-    add_element(socket, pair, "point-pair")
+    add_element(socket, pair)
   end
 
   def handle_event("add_plane", %{"axis" => axis}, socket) when axis in ["x", "y", "z"] do
-    add_element(socket, CGA3.plane(axis_vector(axis, 1.0), 0), "plane")
+    plane =
+      case axis do
+        "x" -> CGA3.new(e1: 1.0)
+        "y" -> CGA3.new(e2: 1.0)
+        "z" -> CGA3.new(e3: 1.0)
+      end
+
+    add_element(socket, plane)
   end
 
-  def handle_event("collapse_add_group", %{"group" => group}, socket) do
-    if socket.assigns.expanded_add_group == group do
-      {:noreply, assign(socket, :expanded_add_group, nil)}
-    else
-      {:noreply, socket}
-    end
-  end
-
-  def handle_event("dual_element", %{"index" => index}, socket) do
-    transform_element(socket, index, &CGA3.dual/1, :toggle_dual)
+  def handle_event("toggle_representation", %{"index" => index}, socket) do
+    transform_element(socket, index, &CGA3.dual/1)
   end
 
   def handle_event("negate_element", %{"index" => index}, socket) do
@@ -450,14 +485,6 @@ defmodule GeomextricWeb.CGA3Live do
         |> Enum.reject(fn {_slot, current_index} -> current_index == index end)
         |> Enum.map(&elem(&1, 0))
 
-      dual_elements =
-        socket.assigns.dual_elements
-        |> Enum.reject(&(&1 == index))
-        |> Enum.map(fn current_index ->
-          if current_index > index, do: current_index - 1, else: current_index
-        end)
-        |> MapSet.new()
-
       restored_color = Enum.at(@palette, slot)
 
       available_colors =
@@ -468,7 +495,6 @@ defmodule GeomextricWeb.CGA3Live do
           elements: elements,
           element_slots: slots,
           available_colors: available_colors,
-          dual_elements: dual_elements,
           show_sum_all: socket.assigns.show_sum_all,
           show_meet_all: socket.assigns.show_meet_all,
           show_gp_all: socket.assigns.show_gp_all,
@@ -519,7 +545,7 @@ defmodule GeomextricWeb.CGA3Live do
         %{"point_cloud_transform" => transform},
         socket
       )
-      when transform in ["sum", "meet", "gp"] do
+      when transform in ["sum", "wedge", "gp"] do
     socket = assign(socket, :point_cloud_transform, transform)
     {:noreply, schedule_vector_field(socket)}
   end
@@ -572,8 +598,7 @@ defmodule GeomextricWeb.CGA3Live do
          {object, old_color} <- Enum.at(socket.assigns.elements, index),
          color when is_binary(color) <- Map.get(params, "color", old_color),
          true <- Regex.match?(~r/^#[0-9a-fA-F]{6}$/, color) do
-      dual? = MapSet.member?(socket.assigns.dual_elements, index)
-      object = update_element(object, params, dual?)
+      object = update_element(object, params)
 
       elements =
         socket.assigns.elements
@@ -590,7 +615,7 @@ defmodule GeomextricWeb.CGA3Live do
     end
   end
 
-  defp transform_element(socket, index, transform, duality_action \\ :preserve) do
+  defp transform_element(socket, index, transform) do
     with {index, ""} <- Integer.parse(index),
          true <- index >= 0,
          {object, color} when is_binary(color) <- Enum.at(socket.assigns.elements, index) do
@@ -599,18 +624,7 @@ defmodule GeomextricWeb.CGA3Live do
           {transform.(object), old_color}
         end)
 
-      dual_elements =
-        if duality_action == :toggle_dual do
-          if MapSet.member?(socket.assigns.dual_elements, index) do
-            MapSet.delete(socket.assigns.dual_elements, index)
-          else
-            MapSet.put(socket.assigns.dual_elements, index)
-          end
-        else
-          socket.assigns.dual_elements
-        end
-
-      socket = assign(socket, elements: elements, dual_elements: dual_elements)
+      socket = assign(socket, :elements, elements)
       {:noreply, schedule_vector_field(socket)}
     else
       _ -> {:noreply, socket}
@@ -638,16 +652,14 @@ defmodule GeomextricWeb.CGA3Live do
         assign(socket,
           elements: [{result, color}],
           element_slots: [slot],
-          available_colors: available_colors,
-          dual_elements: MapSet.new()
+          available_colors: available_colors
         )
 
       {[], [{slot, color} | remaining]} ->
         assign(socket,
           elements: [{result, color}],
           element_slots: [slot],
-          available_colors: remaining,
-          dual_elements: MapSet.new()
+          available_colors: remaining
         )
 
       {[], []} ->
@@ -655,15 +667,14 @@ defmodule GeomextricWeb.CGA3Live do
     end
   end
 
-  defp add_element(socket, object, group) do
+  defp add_element(socket, object) do
     case socket.assigns.available_colors do
       [{slot, color} | remaining] ->
         socket =
           assign(socket,
             elements: socket.assigns.elements ++ [{object, color}],
             element_slots: socket.assigns.element_slots ++ [slot],
-            available_colors: remaining,
-            expanded_add_group: group
+            available_colors: remaining
           )
 
         {:noreply, schedule_vector_field(socket)}
@@ -673,11 +684,11 @@ defmodule GeomextricWeb.CGA3Live do
     end
   end
 
-  defp update_element(object, params, dual?) do
-    case editable_element(object, dual?) do
-      {primitive, _type} ->
+  defp update_element(object, params) do
+    case editable_element(object) do
+      {primitive, _type, representation} ->
         updated = update_primitive_element(primitive, params)
-        if dual?, do: CGA3.dual(updated), else: updated
+        if representation == :reflecting, do: CGA3.dual(updated), else: updated
 
       :unknown ->
         object
@@ -852,11 +863,9 @@ defmodule GeomextricWeb.CGA3Live do
   defp axis_vector("y", magnitude), do: {0, magnitude, 0}
   defp axis_vector("z", magnitude), do: {0, 0, magnitude}
 
-  defp element_controls({object, color}, index, dual_elements) do
-    dual? = MapSet.member?(dual_elements, index)
-
-    case editable_element(object, dual?) do
-      {primitive, _type} -> primitive_element_controls({primitive, color})
+  defp element_controls({object, color}) do
+    case editable_element(object) do
+      {primitive, _type, _representation} -> primitive_element_controls({primitive, color})
       :unknown -> []
     end
   end
@@ -951,14 +960,11 @@ defmodule GeomextricWeb.CGA3Live do
 
   defp element_expression({object, _color}), do: inspect(object, limit: :infinity)
 
-  defp element_label({object, _color}, index, dual_elements) do
-    dual? = MapSet.member?(dual_elements, index)
-
+  defp element_label({object, _color}, index) do
     label =
-      case editable_element(object, dual?) do
-        {_primitive, type} ->
-          base_label = element_type_label(type)
-          if dual?, do: "Dual of #{base_label}", else: base_label
+      case editable_element(object) do
+        {_primitive, type, representation} ->
+          "#{representation_label(representation)} #{element_type_label(type)}"
 
         :unknown ->
           "Unknown"
@@ -967,21 +973,36 @@ defmodule GeomextricWeb.CGA3Live do
     "#{label} #{index + 1}"
   end
 
-  defp editable_element(object, false) do
-    case primitive_element_type(object) do
-      nil -> :unknown
-      type -> {object, type}
+  defp editable_element(object) do
+    direct_type = primitive_element_type(object)
+    reflected_object = CGA3.undual(object)
+    reflected_type = primitive_element_type(reflected_object)
+
+    cond do
+      reflected_type == :sphere and direct_type != :sphere ->
+        {reflected_object, :sphere, :reflecting}
+
+      direct_type == :point_pair and reflected_type == :circle and
+          imaginary_point_pair?(object) ->
+        {reflected_object, :circle, :reflecting}
+
+      direct_type != nil ->
+        {object, direct_type, :directing}
+
+      reflected_type != nil ->
+        {reflected_object, reflected_type, :reflecting}
+
+      true ->
+        :unknown
     end
   end
 
-  defp editable_element(object, true) do
-    primitive = CGA3.undual(object)
-
-    case primitive_element_type(primitive) do
-      nil -> :unknown
-      type -> {primitive, type}
-    end
+  defp imaginary_point_pair?(object) do
+    match?({:imag, _, _, _}, CGA3.point_pair_parameters(object))
   end
+
+  defp representation_label(:directing), do: "Directing"
+  defp representation_label(:reflecting), do: "Reflecting"
 
   defp primitive_element_type(object) do
     cond do
@@ -1540,7 +1561,7 @@ defmodule GeomextricWeb.CGA3Live do
 
   defp meet_all([{first, _color} | rest]) do
     Enum.reduce(rest, first, fn {element, _color}, result ->
-      CGA3.meet(result, element)
+      CGA3.wedge(result, element)
     end)
   end
 
@@ -1583,9 +1604,15 @@ defmodule GeomextricWeb.CGA3Live do
   end
 
   defp classify_component(element, camera) do
-    case classify_direct(element, camera) do
-      nil -> classify_direct(CGA3.dual(element), camera)
-      classified -> classified
+    case editable_element(element) do
+      {primitive, _type, _representation} ->
+        classify_direct(primitive, camera)
+
+      :unknown ->
+        case classify_direct(element, camera) do
+          nil -> classify_direct(CGA3.dual(element), camera)
+          classified -> classified
+        end
     end
   end
 
@@ -1641,7 +1668,11 @@ defmodule GeomextricWeb.CGA3Live do
     sum_elements =
       if assigns.show_sum_all and length(assigns.elements) >= 2 and sum_result do
         classify_elements([{sum_result, "#7c3aed"}], camera)
-        |> Enum.map(&%{&1 | id: "sum-all-result", color: "#7c3aed"})
+        |> Enum.with_index()
+        |> Enum.map(fn {element, index} ->
+          id = if index == 0, do: "sum-all-result", else: "sum-all-result-#{index}"
+          %{element | id: id, color: "#7c3aed"}
+        end)
       else
         []
       end
@@ -1649,7 +1680,11 @@ defmodule GeomextricWeb.CGA3Live do
     meet_elements =
       if assigns.show_meet_all and length(assigns.elements) >= 2 and meet_result do
         classify_elements([{meet_result, "#dc2626"}], camera)
-        |> Enum.map(&%{&1 | id: "meet-all-result", color: "#dc2626"})
+        |> Enum.with_index()
+        |> Enum.map(fn {element, index} ->
+          id = if index == 0, do: "meet-all-result", else: "meet-all-result-#{index}"
+          %{element | id: id, color: "#dc2626"}
+        end)
       else
         []
       end
@@ -1657,7 +1692,11 @@ defmodule GeomextricWeb.CGA3Live do
     gp_elements =
       if assigns.show_gp_all and length(assigns.elements) >= 2 and gp_result do
         classify_elements([{gp_result, "#0891b2"}], camera)
-        |> Enum.map(&%{&1 | id: "gp-all-result", color: "#0891b2"})
+        |> Enum.with_index()
+        |> Enum.map(fn {element, index} ->
+          id = if index == 0, do: "gp-all-result", else: "gp-all-result-#{index}"
+          %{element | id: id, color: "#0891b2"}
+        end)
       else
         []
       end
@@ -1665,7 +1704,7 @@ defmodule GeomextricWeb.CGA3Live do
     transform =
       case assigns.point_cloud_transform do
         "sum" -> sum_result
-        "meet" -> meet_result
+        "wedge" -> meet_result
         "gp" -> gp_result
       end
 
@@ -1747,7 +1786,34 @@ defmodule GeomextricWeb.CGA3Live do
               border-radius: 1ex;
             }
       .grid-cell { stroke-width: .7; vector-effect: non-scaling-stroke; }
-      .vector-field-arrow { fill: none; stroke-width: 1.25; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+      @keyframes vector-field-fade-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes vector-field-flow {
+        to { stroke-dashoffset: -.8; }
+      }
+      .vector-field-arrow-base {
+        fill: none;
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        vector-effect: non-scaling-stroke;
+        opacity: .35;
+      }
+      .vector-field-arrow {
+        fill: none;
+        stroke-width: 3;
+        stroke-dasharray: .32 .48;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        vector-effect: non-scaling-stroke;
+        animation: vector-field-fade-in .35s ease-out both,
+          vector-field-flow 1s linear .35s infinite;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .vector-field-arrow { animation: none; stroke-dasharray: .32 .48; }
+      }
       .ground-grid-cell { stroke-width: .55; vector-effect: non-scaling-stroke; }
       .sphere-fill { stroke: none; opacity: .12; }
       .sphere-fill-imaginary { opacity: .035; }
@@ -1976,16 +2042,16 @@ defmodule GeomextricWeb.CGA3Live do
         >
           <details id={"cga3-element-panel-#{index}"} class="element-disclosure">
             <summary>
-              <span class="element-summary-label">{element_label(element, index, @dual_elements)}</span>
+              <span class="element-summary-label">{element_label(element, index)}</span>
               <span class="element-side-actions">
                 <span class="element-operations">
                   <button
-                    id={"dual-element-#{index}"}
+                    id={"representation-element-#{index}"}
                     type="button"
                     class="element-operation"
-                    phx-click="dual_element"
+                    phx-click="toggle_representation"
                     phx-value-index={index}
-                    aria-label={"Dualize #{element_label(element, index, @dual_elements)}"}
+                    aria-label={"Dualize #{element_label(element, index)}"}
                     title="Dualize element"
                   >Dual</button>
                   <button
@@ -1994,7 +2060,7 @@ defmodule GeomextricWeb.CGA3Live do
                     class="element-operation"
                     phx-click="negate_element"
                     phx-value-index={index}
-                    aria-label={"Negate #{element_label(element, index, @dual_elements)}"}
+                    aria-label={"Negate #{element_label(element, index)}"}
                     title="Negate element"
                   >Negate</button>
                 </span>
@@ -2004,7 +2070,7 @@ defmodule GeomextricWeb.CGA3Live do
                   class="delete-element"
                   phx-click="delete_element"
                   phx-value-index={index}
-                  aria-label={"Remove #{element_label(element, index, @dual_elements)}"}
+                  aria-label={"Remove #{element_label(element, index)}"}
                   title="Remove element"
                 >×</button>
               </span>
@@ -2016,7 +2082,7 @@ defmodule GeomextricWeb.CGA3Live do
               readonly
               value={element_expression(element)}
               title={element_expression(element)}
-              aria-label={"Algebraic expression for #{element_label(element, index, @dual_elements)}"}
+              aria-label={"Algebraic expression for #{element_label(element, index)}"}
             />
             <form id={"cga3-element-#{index}"} class="element-controls" phx-change="change_element">
               <input type="hidden" name="index" value={index} />
@@ -2027,13 +2093,13 @@ defmodule GeomextricWeb.CGA3Live do
                   type="color"
                   name="color"
                   value={elem(element, 1)}
-                  aria-label={"Color for #{element_label(element, index, @dual_elements)}"}
+                  aria-label={"Color for #{element_label(element, index)}"}
                 />
               </label>
               <label
                 :for={
                   {label, name, value, min, max, step} <-
-                    element_controls(element, index, @dual_elements)
+                    element_controls(element)
                 }
                 class="element-control"
                 for={"cga3-element-#{index}-#{name}"}
@@ -2104,7 +2170,7 @@ defmodule GeomextricWeb.CGA3Live do
           </section>
           <section class="derived-result" id="cga3-meet-result">
             <div class="derived-result-row">
-              <strong>Meet all</strong>
+              <strong>Wedge all</strong>
               <form
                 id="cga3-transform-meet-form"
                 class="transform-choice"
@@ -2115,8 +2181,8 @@ defmodule GeomextricWeb.CGA3Live do
                     id="cga3-transform-meet"
                     type="radio"
                     name="point_cloud_transform"
-                    value="meet"
-                    checked={@point_cloud_transform == "meet"}
+                    value="wedge"
+                    checked={@point_cloud_transform == "wedge"}
                   /> Cloud
                 </label>
               </form>
@@ -2127,7 +2193,7 @@ defmodule GeomextricWeb.CGA3Live do
                 readonly
                 value={@meet_expression}
                 title={@meet_expression}
-                aria-label="Algebraic expression for meet of all elements"
+                aria-label="Algebraic expression for wedge of all elements"
               />
               <form id="cga3-meet-visibility" class="render-result" phx-change="toggle_meet_all">
                 <input type="hidden" name="meet_all" value="off" />
@@ -2206,10 +2272,9 @@ defmodule GeomextricWeb.CGA3Live do
           <div class="element-action-buttons">
             <div
               id="add-point-group"
-              class={["axis-add-group", @expanded_add_group == "point" && "expanded"]}
+              class={["axis-add-group"]}
               role="group"
               aria-label="Add point"
-              phx-mouseleave="collapse_add_group"
               phx-value-group="point"
             >
               <span class="axis-add-label">Point</span>
@@ -2238,10 +2303,9 @@ defmodule GeomextricWeb.CGA3Live do
             </div>
             <div
               id="add-sphere-group"
-              class={["axis-add-group", @expanded_add_group == "sphere" && "expanded"]}
+              class={["axis-add-group"]}
               role="group"
               aria-label="Add sphere"
-              phx-mouseleave="collapse_add_group"
               phx-value-group="sphere"
             >
               <span class="axis-add-label">Sphere</span>
@@ -2270,10 +2334,9 @@ defmodule GeomextricWeb.CGA3Live do
             </div>
             <div
               id="add-plane-group"
-              class={["axis-add-group", @expanded_add_group == "plane" && "expanded"]}
+              class={["axis-add-group"]}
               role="group"
               aria-label="Add plane"
-              phx-mouseleave="collapse_add_group"
               phx-value-group="plane"
             >
               <span class="axis-add-label">Plane</span>
@@ -2292,10 +2355,9 @@ defmodule GeomextricWeb.CGA3Live do
             </div>
             <div
               id="add-line-group"
-              class={["axis-add-group", @expanded_add_group == "line" && "expanded"]}
+              class={["axis-add-group"]}
               role="group"
               aria-label="Add line"
-              phx-mouseleave="collapse_add_group"
               phx-value-group="line"
             >
               <span class="axis-add-label">Line</span>
@@ -2314,10 +2376,9 @@ defmodule GeomextricWeb.CGA3Live do
             </div>
             <div
               id="add-circle-group"
-              class={["axis-add-group", @expanded_add_group == "circle" && "expanded"]}
+              class={["axis-add-group"]}
               role="group"
               aria-label="Add circle"
-              phx-mouseleave="collapse_add_group"
               phx-value-group="circle"
             >
               <span class="axis-add-label">Circle</span>
@@ -2336,10 +2397,9 @@ defmodule GeomextricWeb.CGA3Live do
             </div>
             <div
               id="add-point-pair-group"
-              class={["axis-add-group", @expanded_add_group == "point-pair" && "expanded"]}
+              class={["axis-add-group"]}
               role="group"
               aria-label="Add point pair"
-              phx-mouseleave="collapse_add_group"
               phx-value-group="point-pair"
             >
               <span class="axis-add-label">Point pair</span>
@@ -2436,12 +2496,14 @@ defmodule GeomextricWeb.CGA3Live do
       >
         <defs>
           <marker
-            id="cga3-vector-arrow"
+            :for={arrow <- @projected_vector_field}
+            id={arrow.marker_id}
             viewBox="0 0 10 10"
             refX="8"
             refY="5"
-            markerWidth="6"
-            markerHeight="6"
+            markerWidth={arrow.marker_size}
+            markerHeight={arrow.marker_size}
+            markerUnits="userSpaceOnUse"
             fill="context-stroke"
             orient="auto"
           >
@@ -2645,19 +2707,25 @@ defmodule GeomextricWeb.CGA3Live do
         <g
           :if={@show_vector_field}
           id="vector-field"
-          data-arrow-count={length(@projected_vector_field)}
+          data-arrow-count={Enum.count(@projected_vector_field, &(&1.paths != []))}
           data-computing={@vector_field_computing}
           opacity="0.65"
           stroke="#f97316"
         >
-          <polyline
+          <path
             :for={arrow <- @projected_vector_field}
-            points={
-              arrow.points
-              |> Enum.map(fn {x, y, _depth} -> "#{fr(x)},#{fr(y)}" end)
-              |> Enum.join(" ")
-            }
-            marker-end={if(arrow.complete?, do: "url(#cga3-vector-arrow)")}
+            id={"#{arrow.id}-base"}
+            d={vector_field_paths_path(arrow.paths)}
+            pathLength="1"
+            data-step-count="10"
+            class="vector-field-arrow-base"
+          />
+          <path
+            :for={arrow <- @projected_vector_field}
+            id={arrow.id}
+            d={vector_field_paths_path(arrow.paths)}
+            marker-end={if(arrow.complete?, do: "url(##{arrow.marker_id})")}
+            pathLength="1"
             data-step-count="10"
             class="vector-field-arrow"
           />
