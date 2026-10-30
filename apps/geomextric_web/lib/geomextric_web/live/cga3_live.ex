@@ -62,7 +62,7 @@ defmodule GeomextricWeb.CGA3Live do
        show_meet_all: true,
        show_gp_all: false,
        point_cloud_transform: "gp",
-       element_slots: [0],
+       element_slots: [],
        available_colors:
          @palette
          |> Enum.with_index()
@@ -330,9 +330,8 @@ defmodule GeomextricWeb.CGA3Live do
 
   defp interpolated_motors(generator) do
     Enum.reduce_while(0..10, {:ok, []}, fn step, {:ok, motors} ->
-      case CGA3Motor.exp(CGA3.scale(step / 10, generator)) do
-        {:ok, motor} -> {:cont, {:ok, [motor | motors]}}
-        :error -> {:halt, :error}
+      case CGA3Motor.exp(CGA3.scale(-step / 5 / :math.pi(), generator)) do
+        motor -> {:cont, {:ok, [motor | motors]}}
       end
     end)
     |> case do
@@ -1851,19 +1850,36 @@ defmodule GeomextricWeb.CGA3Live do
       }
       .toolbar label:has(input[type="checkbox"]:focus-visible) { outline: 2px solid #fff; }
             .elements-panel {
+            display: grid;
+            grid-template-rows: auto 1fr auto;
               position: fixed;
               z-index: 1000;
               left: 1rem;
               bottom: 1rem;
               width: min(21rem, calc(100vw - 2rem));
-              max-height: 50vh;
-              overflow: auto;
+              max-height: 70vh;
               padding: .75rem;
               color: #222;
               background: #fffffff0;
               border: 1px solid #0002;
               border-radius: .75rem;
               box-shadow: 0 .5rem 1.5rem #0002;
+            }
+            .elements-list {
+              height: 100%;
+              overflow: auto;
+              border-bottom: 1px solid #0002;
+              display: flex;
+              flex-direction: column;
+            }
+            .elements-list.empty {
+            border: none;
+            }
+            .elements-list.empty::after {
+              content: "None";
+              text-align: center;
+              justify-self: center;
+              color: #888;
             }
             .elements-panel h2 { margin: 0 0 .5rem; font-size: .95rem; }
             .element-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .3rem 0; }
@@ -1894,10 +1910,10 @@ defmodule GeomextricWeb.CGA3Live do
                           background: #1f2937;
                         }
                         .axis-add-label {
-                          position: absolute;
                           z-index: 1;
                           inset: 0;
-                          display: grid;
+                          padding: 0 1ex 0 2ex;
+                          align-self: center;
                           place-items: center;
                           color: #fff;
                           font-size: .7rem;
@@ -1905,21 +1921,8 @@ defmodule GeomextricWeb.CGA3Live do
                           pointer-events: none;
                           transition: opacity .15s ease;
                         }
-                        .axis-add-options {
-                          display: flex;
-                          width: 100%;
-                          opacity: 0;
-                          pointer-events: none;
-                          transition: opacity .15s ease;
-                        }
-                        .axis-add-group:hover .axis-add-label,
-                        .axis-add-group:focus-within .axis-add-label,
+
                         .axis-add-group.expanded .axis-add-label { opacity: 0; }
-                        .axis-add-group:hover .axis-add-options,
-                        .axis-add-group:focus-within .axis-add-options,
-                        .axis-add-group.expanded .axis-add-options { opacity: 1; pointer-events: auto; }
-                        .axis-add-group:active .axis-add-label { opacity: 0; transition: none; }
-                        .axis-add-group:active .axis-add-options { opacity: 1; pointer-events: auto; transition: none; }
                         .axis-add-options button {
                           flex: 1;
                           min-width: 1.45rem;
@@ -1934,7 +1937,7 @@ defmodule GeomextricWeb.CGA3Live do
                         .axis-add-options button:hover,
                         .axis-add-options button:focus-visible { color: #fff; background: #4b5563; outline: none; }
                         .axis-add-options button:disabled { opacity: .45; cursor: not-allowed; }
-            .derived-results { margin-top: .75rem; border-top: 1px solid #0002; }
+            .derived-results { margin-top: .75rem; }
             .derived-result { padding-top: .5rem; }
             .derived-result + .derived-result { margin-top: .25rem; border-top: 1px solid #0001; }
             .derived-result-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; align-items: center; gap: .4rem; }
@@ -2035,88 +2038,90 @@ defmodule GeomextricWeb.CGA3Live do
       </div>
       <div class="elements-panel" id="cga3-elements" phx-hook=".ElementPanels">
         <h2>Scene elements ({length(@elements)}/16)</h2>
-        <div
-          :for={{element, index} <- Enum.with_index(@elements)}
-          class="element-editor"
-          style={"--element-color: #{elem(element, 1)}"}
-        >
-          <details id={"cga3-element-panel-#{index}"} class="element-disclosure">
-            <summary>
-              <span class="element-summary-label">{element_label(element, index)}</span>
-              <span class="element-side-actions">
-                <span class="element-operations">
+        <div class={["elements-list", if(Enum.empty?(@elements), do: "empty")]}>
+          <div
+            :for={{element, index} <- Enum.with_index(@elements)}
+            class="element-editor"
+            style={"--element-color: #{elem(element, 1)}"}
+          >
+            <details id={"cga3-element-panel-#{index}"} class="element-disclosure">
+              <summary>
+                <span class="element-summary-label">{element_label(element, index)}</span>
+                <span class="element-side-actions">
+                  <span class="element-operations">
+                    <button
+                      id={"representation-element-#{index}"}
+                      type="button"
+                      class="element-operation"
+                      phx-click="toggle_representation"
+                      phx-value-index={index}
+                      aria-label={"Dualize #{element_label(element, index)}"}
+                      title="Dualize element"
+                    >Dual</button>
+                    <button
+                      id={"negate-element-#{index}"}
+                      type="button"
+                      class="element-operation"
+                      phx-click="negate_element"
+                      phx-value-index={index}
+                      aria-label={"Negate #{element_label(element, index)}"}
+                      title="Negate element"
+                    >Negate</button>
+                  </span>
                   <button
-                    id={"representation-element-#{index}"}
+                    id={"delete-element-#{index}"}
                     type="button"
-                    class="element-operation"
-                    phx-click="toggle_representation"
+                    class="delete-element"
+                    phx-click="delete_element"
                     phx-value-index={index}
-                    aria-label={"Dualize #{element_label(element, index)}"}
-                    title="Dualize element"
-                  >Dual</button>
-                  <button
-                    id={"negate-element-#{index}"}
-                    type="button"
-                    class="element-operation"
-                    phx-click="negate_element"
-                    phx-value-index={index}
-                    aria-label={"Negate #{element_label(element, index)}"}
-                    title="Negate element"
-                  >Negate</button>
+                    aria-label={"Remove #{element_label(element, index)}"}
+                    title="Remove element"
+                  >×</button>
                 </span>
-                <button
-                  id={"delete-element-#{index}"}
-                  type="button"
-                  class="delete-element"
-                  phx-click="delete_element"
-                  phx-value-index={index}
-                  aria-label={"Remove #{element_label(element, index)}"}
-                  title="Remove element"
-                >×</button>
-              </span>
-            </summary>
-            <input
-              id={"cga3-element-expression-#{index}"}
-              class="element-expression"
-              type="text"
-              readonly
-              value={element_expression(element)}
-              title={element_expression(element)}
-              aria-label={"Algebraic expression for #{element_label(element, index)}"}
-            />
-            <form id={"cga3-element-#{index}"} class="element-controls" phx-change="change_element">
-              <input type="hidden" name="index" value={index} />
-              <label class="element-row" for={"cga3-element-color-#{index}"}>
-                Color
-                <input
-                  id={"cga3-element-color-#{index}"}
-                  type="color"
-                  name="color"
-                  value={elem(element, 1)}
-                  aria-label={"Color for #{element_label(element, index)}"}
-                />
-              </label>
-              <label
-                :for={
-                  {label, name, value, min, max, step} <-
-                    element_controls(element)
-                }
-                class="element-control"
-                for={"cga3-element-#{index}-#{name}"}
-              >
-                {label}
-                <input
-                  id={"cga3-element-#{index}-#{name}"}
-                  type="range"
-                  name={name}
-                  min={min}
-                  max={max}
-                  step={step}
-                  value={value}
-                />
-              </label>
-            </form>
-          </details>
+              </summary>
+              <input
+                id={"cga3-element-expression-#{index}"}
+                class="element-expression"
+                type="text"
+                readonly
+                value={element_expression(element)}
+                title={element_expression(element)}
+                aria-label={"Algebraic expression for #{element_label(element, index)}"}
+              />
+              <form id={"cga3-element-#{index}"} class="element-controls" phx-change="change_element">
+                <input type="hidden" name="index" value={index} />
+                <label class="element-row" for={"cga3-element-color-#{index}"}>
+                  Color
+                  <input
+                    id={"cga3-element-color-#{index}"}
+                    type="color"
+                    name="color"
+                    value={elem(element, 1)}
+                    aria-label={"Color for #{element_label(element, index)}"}
+                  />
+                </label>
+                <label
+                  :for={
+                    {label, name, value, min, max, step} <-
+                      element_controls(element)
+                  }
+                  class="element-control"
+                  for={"cga3-element-#{index}-#{name}"}
+                >
+                  {label}
+                  <input
+                    id={"cga3-element-#{index}-#{name}"}
+                    type="range"
+                    name={name}
+                    min={min}
+                    max={max}
+                    step={step}
+                    value={value}
+                  />
+                </label>
+              </form>
+            </details>
+          </div>
         </div>
         <div class="derived-results" id="cga3-derived-results">
           <section class="derived-result" id="cga3-sum-result">
