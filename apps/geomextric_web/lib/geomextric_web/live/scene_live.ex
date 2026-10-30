@@ -286,24 +286,6 @@ defmodule GeomextricWeb.SceneLive do
         position: absolute;
         inset: 0;
       }
-      .line3d {
-        vector-effect: non-scaling-stroke;
-        stroke-linecap: round;
-        stroke-linecap: round;
-      }
-
-      .with-arrow line,
-      line[stroke="black"] {
-        marker-end: url("#vector-head");
-      }
-      .vectors line[stroke*="c"][stroke*="0"],
-      .vectors line[stroke="black"] {
-        stroke-width: 2;
-      }
-
-      .text-label {
-        transform: translate(0, -2px);
-      }
 
       .toolbar {
         flex-wrap: wrap-reverse;

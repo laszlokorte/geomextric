@@ -58,6 +58,7 @@ defmodule GeomextricWeb.CGA3Live do
        point_cloud_offset: %{x: 0.0, y: 0.0, z: 0.0},
        show_point_cloud: false,
        show_vector_field: false,
+       show_scene_elements: true,
        show_sum_all: false,
        show_meet_all: true,
        show_gp_all: false,
@@ -362,19 +363,22 @@ defmodule GeomextricWeb.CGA3Live do
   end
 
   defp vector_field_cloud do
-    count = @vector_field_count
+    half_count = div(@vector_field_count, 2)
     golden_angle = :math.pi() * (3 - :math.sqrt(5))
 
-    for index <- 0..(count - 1) do
-      direction_y = 1 - 2 * (index + 0.5) / count
-      ring_radius = :math.sqrt(1 - direction_y * direction_y)
-      angle = golden_angle * index
-      radius = 3.0 * :math.pow((index + 0.5) / count, 1 / 3)
-      x = radius * ring_radius * :math.cos(angle)
-      y = radius * direction_y
-      z = radius * ring_radius * :math.sin(angle)
-      CGA3.point(x, y, z)
+    for index <- 0..(half_count - 1), reduce: [] do
+      points ->
+        direction_y = 1 - 2 * (index + 0.5) / half_count
+        ring_radius = :math.sqrt(1 - direction_y * direction_y)
+        angle = golden_angle * index
+        radius = 3.0 * :math.pow((index + 0.5) / half_count, 1 / 3)
+        x = radius * ring_radius * :math.cos(angle)
+        y = radius * direction_y
+        z = radius * ring_radius * :math.sin(angle)
+
+        [CGA3.point(x, y, z), CGA3.point(-x, -y, -z) | points]
     end
+    |> Enum.reverse()
   end
 
   defp letter_point_cloud do
@@ -513,6 +517,10 @@ defmodule GeomextricWeb.CGA3Live do
   def handle_event("toggle_vector_field", %{"vector_field" => value}, socket) do
     socket = assign(socket, :show_vector_field, value == "on")
     {:noreply, schedule_vector_field(socket)}
+  end
+
+  def handle_event("toggle_scene_elements", %{"scene_elements" => value}, socket) do
+    {:noreply, assign(socket, :show_scene_elements, value == "on")}
   end
 
   def handle_event("apply_sum_all", %{}, socket) do
@@ -1750,7 +1758,7 @@ defmodule GeomextricWeb.CGA3Live do
     ~H"""
     <style :type={GeomextricWeb.ColocatedScopedCSS}>
       .screen { position: absolute; inset: 0; }
-      .scene { position: absolute; inset: 0; width: 100%; height: 100%; background: #fff; touch-action: none; }
+      .scene { position: absolute; inset: 0; touch-action: none; }
       .axis-indicator {
         position: fixed;
         z-index: 1000;
@@ -1759,14 +1767,9 @@ defmodule GeomextricWeb.CGA3Live do
         width: 7.5rem;
         height: 7.5rem;
         padding: .35rem;
-        border: 0;
-        border-radius: 50%;
-        background: rgb(0 0 0 / 16%);
-        box-shadow: none;
         pointer-events: none;
       }
-      .axis-indicator line { stroke-width: 3; stroke-linecap: round; }
-      .axis-indicator text { font: 700 9px ui-sans-serif, sans-serif; }
+
       .bar { z-index: 2; }
       .toolbar {
               position: fixed;
@@ -1784,47 +1787,26 @@ defmodule GeomextricWeb.CGA3Live do
               background: #0003;
               border-radius: 1ex;
             }
-      .grid-cell { stroke-width: .7; vector-effect: non-scaling-stroke; }
+
       @keyframes vector-field-fade-in {
         from { opacity: 0; }
         to { opacity: 1; }
       }
-      @keyframes vector-field-flow {
-        to { stroke-dashoffset: -.8; }
-      }
-      .vector-field-arrow-base {
-        fill: none;
-        stroke-width: 3;
-        stroke-linecap: round;
-        stroke-linejoin: round;
-        vector-effect: non-scaling-stroke;
-        opacity: .35;
-      }
       .vector-field-arrow {
-        fill: none;
-        stroke-width: 3;
-        stroke-dasharray: .32 .48;
-        stroke-linecap: round;
-        stroke-linejoin: round;
-        vector-effect: non-scaling-stroke;
-        animation: vector-field-fade-in .35s ease-out both,
-          vector-field-flow 1s linear .35s infinite;
+        animation: vector-field-fade-in .35s ease-out both;
       }
-      @media (prefers-reduced-motion: reduce) {
-        .vector-field-arrow { animation: none; stroke-dasharray: .32 .48; }
-      }
-      .ground-grid-cell { stroke-width: .55; vector-effect: non-scaling-stroke; }
-      .sphere-fill { stroke: none; opacity: .12; }
-      .sphere-fill-imaginary { opacity: .035; }
-      .sphere-ring { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; }
-      .sphere-ring-secondary { stroke-width: 1; opacity: .72; }
-      .sphere-ring-imaginary { stroke-dasharray: 5 3; }
-      .plane-fill { stroke: none; opacity: .1; }
-      .scene-line { stroke-width: 2; vector-effect: non-scaling-stroke; }
-      .scene-circle { fill-opacity: .12; stroke-width: 2; vector-effect: non-scaling-stroke; }
-      .point-pair-link { stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-      .point-pair-point { stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke; }
       .toolbar input[type="checkbox"] { display: none; }
+      .toolbar button {
+        align-self: stretch;
+        border: 0;
+        border-radius: .5ex;
+        padding: .5ex .75ex;
+        color: #fff;
+        background: #0008;
+        cursor: pointer;
+      }
+      .toolbar button:hover { background: #000c; }
+      .toolbar button:focus-visible { outline: 2px solid #fff; }
 
       .toolbar fieldset {
         display: flex;
@@ -2466,6 +2448,18 @@ defmodule GeomextricWeb.CGA3Live do
             /> Vector field
           </label>
         </form>
+        <form id="cga3-scene-elements-visibility" phx-change="toggle_scene_elements">
+          <input type="hidden" name="scene_elements" value="off" />
+          <label for="cga3-show-scene-elements">
+            <input
+              id="cga3-show-scene-elements"
+              name="scene_elements"
+              type="checkbox"
+              value="on"
+              checked={@show_scene_elements}
+            /> Scene elements
+          </label>
+        </form>
 
         <%= if @show_point_cloud do %>
           <form id="cga3-point-cloud-offset" phx-change="change_point_cloud_offset">
@@ -2491,10 +2485,17 @@ defmodule GeomextricWeb.CGA3Live do
             </fieldset>
           </form>
         <% end %>
+        <button
+          id="cga3-export-svg"
+          type="button"
+          phx-hook=".ExportSvg"
+        >Download SVG</button>
       </div>
       <svg
         id="cga3-scene"
         class="scene"
+        width="100%"
+        height="100%"
         viewBox="-100 -100 200 200"
         preserveAspectRatio="xMidYMid slice"
         phx-hook=".Orb"
@@ -2527,173 +2528,225 @@ defmodule GeomextricWeb.CGA3Live do
             <circle cx="5" cy="5" r="3" />
           </marker>
         </defs>
+        <rect x="-100" y="-100" width="200" height="200" fill="#fff" pointer-events="none" />
         <g :for={grid <- @ground_grid} id="cga3-ground-grid" stroke={grid.color} opacity="0.16">
           <polygon
             :for={points <- grid.cells}
             points={points |> Enum.map(fn {x, y, _} -> "#{fr(x)},#{fr(y)}" end) |> Enum.join(" ")}
             fill="none"
+            stroke-width="0.55"
+            vector-effect="non-scaling-stroke"
             class="ground-grid-cell"
           />
         </g>
-        <g :for={object <- @scene_elements} id={"scene-object-#{object.id}"} stroke={object.color}>
-          <%= cond do %>
-            <% object.type == :plane -> %>
-              <polygon
-                :if={object.fill}
-                points={
-                  object.fill |> Enum.map(fn {x, y, _} -> "#{fr(x)},#{fr(y)}" end) |> Enum.join(" ")
-                }
-                fill={object.color}
-                class="plane-fill"
-              />
-              <polygon
-                :for={points <- object.cells}
-                points={points |> Enum.map(fn {x, y, _} -> "#{fr(x)},#{fr(y)}" end) |> Enum.join(" ")}
-                fill="none"
-                class="grid-cell"
-              />
-            <% object.type == :sphere -> %>
-              <polygon
-                :if={object.fill && Map.has_key?(object.fill, :points)}
-                points={
-                  Enum.map_join(object.fill.points, " ", fn {x, y, _} -> "#{fr(x)},#{fr(y)}" end)
-                }
-                fill={object.color}
-                class={["sphere-fill", object.imaginary && "sphere-fill-imaginary"]}
-              />
-              <ellipse
-                :if={object.fill && !Map.has_key?(object.fill, :points)}
-                cx={fr(object.fill.center_x)}
-                cy={fr(object.fill.center_y)}
-                rx={fr(object.fill.radius_a)}
-                ry={fr(object.fill.radius_b)}
-                transform={"rotate(#{fr(object.fill.angle * 180 / :math.pi())} #{fr(object.fill.center_x)} #{fr(object.fill.center_y)})"}
-                fill={object.color}
-                class={["sphere-fill", object.imaginary && "sphere-fill-imaginary"]}
-              />
-              <circle
-                :if={object.tangent}
-                cx={fr(elem(object.tangent, 0))}
-                cy={fr(elem(object.tangent, 1))}
-                r="2"
-                fill={object.color}
-                class="sphere-tangent"
-              />
-              <polygon
-                :for={ellipse <- object.ellipses}
-                :if={Map.has_key?(ellipse, :points)}
-                points={Enum.map_join(ellipse.points, " ", fn {x, y, _} -> "#{fr(x)},#{fr(y)}" end)}
-                fill="none"
-                class={[
-                  "sphere-ring",
-                  ellipse.secondary && "sphere-ring-secondary",
-                  object.imaginary && "sphere-ring-imaginary"
-                ]}
-              />
-              <line
-                :for={ellipse <- object.ellipses}
-                :if={
-                  !Map.has_key?(ellipse, :points) && fr(ellipse.radius_b) <= 0.0 &&
-                    fr(ellipse.radius_a) > 0.0
-                }
-                x1={fr(ellipse.center_x) - fr(ellipse.radius_a)}
-                y1={fr(ellipse.center_y)}
-                x2={fr(ellipse.center_x) + fr(ellipse.radius_a)}
-                y2={fr(ellipse.center_y)}
-                transform={"rotate(#{fr(ellipse.angle * 180 / :math.pi())} #{fr(ellipse.center_x)} #{fr(ellipse.center_y)})"}
-                class={[
-                  "sphere-ring",
-                  ellipse.secondary && "sphere-ring-secondary",
-                  object.imaginary && "sphere-ring-imaginary"
-                ]}
-              />
-              <ellipse
-                :for={ellipse <- object.ellipses}
-                :if={
-                  !Map.has_key?(ellipse, :points) && fr(ellipse.radius_b) > 0.0 &&
-                    fr(ellipse.radius_a) > 0.0
-                }
-                cx={fr(ellipse.center_x)}
-                cy={fr(ellipse.center_y)}
-                rx={fr(ellipse.radius_a)}
-                ry={fr(ellipse.radius_b)}
-                transform={"rotate(#{fr(ellipse.angle * 180 / :math.pi())} #{fr(ellipse.center_x)} #{fr(ellipse.center_y)})"}
-                class={[
-                  "sphere-ring",
-                  ellipse.secondary && "sphere-ring-secondary",
-                  object.imaginary && "sphere-ring-imaginary"
-                ]}
-              />
-            <% object.type == :circle -> %>
-              <circle
-                :if={Map.get(object, :tangent, false)}
-                cx={fr(object.x)}
-                cy={fr(object.y)}
-                r="1.5"
-                fill={object.color}
-                class="scene-circle-tangent"
-              />
-              <polygon
-                :if={Map.has_key?(object, :polygon)}
-                points={Enum.map_join(object.polygon, " ", fn {x, y, _} -> "#{fr(x)},#{fr(y)}" end)}
-                fill={object.color}
-                class="scene-circle"
-              />
-              <ellipse
-                :if={Map.has_key?(object, :ellipse)}
-                cx={fr(object.ellipse.center_x)}
-                cy={fr(object.ellipse.center_y)}
-                rx={fr(object.ellipse.radius_a)}
-                ry={fr(object.ellipse.radius_b)}
-                transform={"rotate(#{fr(object.ellipse.angle * 180 / :math.pi())} #{fr(object.ellipse.center_x)} #{fr(object.ellipse.center_y)})"}
-                fill={object.color}
-                class="scene-circle"
-              />
-            <% object.type == :point -> %>
-              <circle
-                cx={fr(object.x)}
-                cy={fr(object.y)}
-                r={fr(3 / :math.sqrt(object.depth))}
-                fill={object.color}
-                stroke="none"
-                class="scene-point"
-              />
-            <% object.type == :point_pair -> %>
-              <line
-                x1={fr(elem(object.a, 0))}
-                y1={fr(elem(object.a, 1))}
-                x2={fr(elem(object.b, 0))}
-                y2={fr(elem(object.b, 1))}
-                opacity="0.25"
-                stroke-dasharray={"#{fr(70 / object.depth)} #{fr(40 / object.depth)}"}
-                class="point-pair-link"
-              />
-              <circle
-                :if={object.a_visible}
-                cx={fr(elem(object.a, 0))}
-                cy={fr(elem(object.a, 1))}
-                r={fr(5 / :math.sqrt(elem(object.a, 2)))}
-                fill={object.color}
-                class="point-pair-point"
-              />
-              <circle
-                :if={object.b_visible}
-                cx={fr(elem(object.b, 0))}
-                cy={fr(elem(object.b, 1))}
-                r={fr(5 / :math.sqrt(elem(object.b, 2)))}
-                fill={object.color}
-                class="point-pair-point"
-              />
-            <% object.type == :line -> %>
-              <line
-                x1={fr(object.x1)}
-                y1={fr(object.y1)}
-                x2={fr(object.x2)}
-                y2={fr(object.y2)}
-                class="scene-line"
-              />
-            <% true -> %>
-          <% end %>
+        <g
+          id="scene-elements"
+          display={if(@show_scene_elements, do: "inline", else: "none")}
+        >
+          <g :for={object <- @scene_elements} id={"scene-object-#{object.id}"} stroke={object.color}>
+            <%= cond do %>
+              <% object.type == :plane -> %>
+                <polygon
+                  :if={object.fill}
+                  points={
+                    object.fill |> Enum.map(fn {x, y, _} -> "#{fr(x)},#{fr(y)}" end) |> Enum.join(" ")
+                  }
+                  fill={object.color}
+                  stroke="none"
+                  opacity="0.1"
+                  class="plane-fill"
+                />
+                <polygon
+                  :for={points <- object.cells}
+                  points={
+                    points |> Enum.map(fn {x, y, _} -> "#{fr(x)},#{fr(y)}" end) |> Enum.join(" ")
+                  }
+                  fill="none"
+                  stroke-width="0.7"
+                  vector-effect="non-scaling-stroke"
+                  class="grid-cell"
+                />
+              <% object.type == :sphere -> %>
+                <polygon
+                  :if={object.fill && Map.has_key?(object.fill, :points)}
+                  points={
+                    Enum.map_join(object.fill.points, " ", fn {x, y, _} -> "#{fr(x)},#{fr(y)}" end)
+                  }
+                  fill={object.color}
+                  stroke="none"
+                  opacity={if(object.imaginary, do: "0.035", else: "0.12")}
+                  class={["sphere-fill", object.imaginary && "sphere-fill-imaginary"]}
+                />
+                <ellipse
+                  :if={object.fill && !Map.has_key?(object.fill, :points)}
+                  cx={fr(object.fill.center_x)}
+                  cy={fr(object.fill.center_y)}
+                  rx={fr(object.fill.radius_a)}
+                  ry={fr(object.fill.radius_b)}
+                  transform={"rotate(#{fr(object.fill.angle * 180 / :math.pi())} #{fr(object.fill.center_x)} #{fr(object.fill.center_y)})"}
+                  fill={object.color}
+                  stroke="none"
+                  opacity={if(object.imaginary, do: "0.035", else: "0.12")}
+                  class={["sphere-fill", object.imaginary && "sphere-fill-imaginary"]}
+                />
+                <circle
+                  :if={object.tangent}
+                  cx={fr(elem(object.tangent, 0))}
+                  cy={fr(elem(object.tangent, 1))}
+                  r="2"
+                  fill={object.color}
+                  stroke="none"
+                  class="sphere-tangent"
+                />
+                <polygon
+                  :for={ellipse <- object.ellipses}
+                  :if={Map.has_key?(ellipse, :points)}
+                  points={Enum.map_join(ellipse.points, " ", fn {x, y, _} -> "#{fr(x)},#{fr(y)}" end)}
+                  fill="none"
+                  stroke-width={if(ellipse.secondary, do: "1", else: "2")}
+                  opacity={if(ellipse.secondary, do: "0.72")}
+                  stroke-dasharray={if(object.imaginary, do: "5 3")}
+                  vector-effect="non-scaling-stroke"
+                  class={[
+                    "sphere-ring",
+                    ellipse.secondary && "sphere-ring-secondary",
+                    object.imaginary && "sphere-ring-imaginary"
+                  ]}
+                />
+                <line
+                  :for={ellipse <- object.ellipses}
+                  :if={
+                    !Map.has_key?(ellipse, :points) && fr(ellipse.radius_b) <= 0.0 &&
+                      fr(ellipse.radius_a) > 0.0
+                  }
+                  x1={fr(ellipse.center_x) - fr(ellipse.radius_a)}
+                  y1={fr(ellipse.center_y)}
+                  x2={fr(ellipse.center_x) + fr(ellipse.radius_a)}
+                  y2={fr(ellipse.center_y)}
+                  transform={"rotate(#{fr(ellipse.angle * 180 / :math.pi())} #{fr(ellipse.center_x)} #{fr(ellipse.center_y)})"}
+                  fill="none"
+                  stroke-width={if(ellipse.secondary, do: "1", else: "2")}
+                  opacity={if(ellipse.secondary, do: "0.72")}
+                  stroke-dasharray={if(object.imaginary, do: "5 3")}
+                  vector-effect="non-scaling-stroke"
+                  class={[
+                    "sphere-ring",
+                    ellipse.secondary && "sphere-ring-secondary",
+                    object.imaginary && "sphere-ring-imaginary"
+                  ]}
+                />
+                <ellipse
+                  :for={ellipse <- object.ellipses}
+                  :if={
+                    !Map.has_key?(ellipse, :points) && fr(ellipse.radius_b) > 0.0 &&
+                      fr(ellipse.radius_a) > 0.0
+                  }
+                  cx={fr(ellipse.center_x)}
+                  cy={fr(ellipse.center_y)}
+                  rx={fr(ellipse.radius_a)}
+                  ry={fr(ellipse.radius_b)}
+                  transform={"rotate(#{fr(ellipse.angle * 180 / :math.pi())} #{fr(ellipse.center_x)} #{fr(ellipse.center_y)})"}
+                  fill="none"
+                  stroke-width={if(ellipse.secondary, do: "1", else: "2")}
+                  opacity={if(ellipse.secondary, do: "0.72")}
+                  stroke-dasharray={if(object.imaginary, do: "5 3")}
+                  vector-effect="non-scaling-stroke"
+                  class={[
+                    "sphere-ring",
+                    ellipse.secondary && "sphere-ring-secondary",
+                    object.imaginary && "sphere-ring-imaginary"
+                  ]}
+                />
+              <% object.type == :circle -> %>
+                <circle
+                  :if={Map.get(object, :tangent, false)}
+                  cx={fr(object.x)}
+                  cy={fr(object.y)}
+                  r="1.5"
+                  fill={object.color}
+                  stroke="none"
+                  class="scene-circle-tangent"
+                />
+                <polygon
+                  :if={Map.has_key?(object, :polygon)}
+                  points={Enum.map_join(object.polygon, " ", fn {x, y, _} -> "#{fr(x)},#{fr(y)}" end)}
+                  fill={object.color}
+                  fill-opacity="0.12"
+                  stroke-width="2"
+                  vector-effect="non-scaling-stroke"
+                  class="scene-circle"
+                />
+                <ellipse
+                  :if={Map.has_key?(object, :ellipse)}
+                  cx={fr(object.ellipse.center_x)}
+                  cy={fr(object.ellipse.center_y)}
+                  rx={fr(object.ellipse.radius_a)}
+                  ry={fr(object.ellipse.radius_b)}
+                  transform={"rotate(#{fr(object.ellipse.angle * 180 / :math.pi())} #{fr(object.ellipse.center_x)} #{fr(object.ellipse.center_y)})"}
+                  fill={object.color}
+                  fill-opacity="0.12"
+                  stroke-width="2"
+                  vector-effect="non-scaling-stroke"
+                  class="scene-circle"
+                />
+              <% object.type == :point -> %>
+                <circle
+                  cx={fr(object.x)}
+                  cy={fr(object.y)}
+                  r={fr(3 / :math.sqrt(object.depth))}
+                  fill={object.color}
+                  stroke="none"
+                  class="scene-point"
+                />
+              <% object.type == :point_pair -> %>
+                <line
+                  x1={fr(elem(object.a, 0))}
+                  y1={fr(elem(object.a, 1))}
+                  x2={fr(elem(object.b, 0))}
+                  y2={fr(elem(object.b, 1))}
+                  opacity="0.25"
+                  stroke-dasharray={"#{fr(70 / object.depth)} #{fr(40 / object.depth)}"}
+                  stroke-width="3"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  vector-effect="non-scaling-stroke"
+                  class="point-pair-link"
+                />
+                <circle
+                  :if={object.a_visible}
+                  cx={fr(elem(object.a, 0))}
+                  cy={fr(elem(object.a, 1))}
+                  r={fr(5 / :math.sqrt(elem(object.a, 2)))}
+                  fill={object.color}
+                  stroke="#fff"
+                  stroke-width="2"
+                  vector-effect="non-scaling-stroke"
+                  class="point-pair-point"
+                />
+                <circle
+                  :if={object.b_visible}
+                  cx={fr(elem(object.b, 0))}
+                  cy={fr(elem(object.b, 1))}
+                  r={fr(5 / :math.sqrt(elem(object.b, 2)))}
+                  fill={object.color}
+                  stroke="#fff"
+                  stroke-width="2"
+                  vector-effect="non-scaling-stroke"
+                  class="point-pair-point"
+                />
+              <% object.type == :line -> %>
+                <line
+                  x1={fr(object.x1)}
+                  y1={fr(object.y1)}
+                  x2={fr(object.x2)}
+                  y2={fr(object.y2)}
+                  stroke-width="2"
+                  vector-effect="non-scaling-stroke"
+                  class="scene-line"
+                />
+              <% true -> %>
+            <% end %>
+          </g>
         </g>
         <g
           :if={@show_point_cloud}
@@ -2723,6 +2776,12 @@ defmodule GeomextricWeb.CGA3Live do
             d={vector_field_paths_path(arrow.paths)}
             pathLength="1"
             data-step-count="10"
+            fill="none"
+            stroke-width="3"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            vector-effect="non-scaling-stroke"
+            opacity="0.35"
             class="vector-field-arrow-base"
           />
           <path
@@ -2732,8 +2791,23 @@ defmodule GeomextricWeb.CGA3Live do
             marker-end={if(arrow.complete?, do: "url(##{arrow.marker_id})")}
             pathLength="1"
             data-step-count="10"
+            fill="none"
+            stroke-width="3"
+            stroke-dasharray="0.32 0.48"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            vector-effect="non-scaling-stroke"
             class="vector-field-arrow"
-          />
+          >
+            <animate
+              attributeName="stroke-dashoffset"
+              from="0"
+              to="-0.8"
+              dur="1s"
+              begin="0.35s"
+              repeatCount="indefinite"
+            />
+          </path>
         </g>
         <g
           :if={@show_point_cloud}
@@ -2772,6 +2846,7 @@ defmodule GeomextricWeb.CGA3Live do
           </marker>
         </defs>
         <title>Global XYZ orientation</title>
+        <circle cx="50" cy="50" r="50" fill="#000" fill-opacity="0.16" />
         <circle cx="50" cy="50" r="2.5" fill="#444" />
         <g :for={axis <- @global_axes} class={"axis-#{axis.axis}"}>
           <line
@@ -2780,12 +2855,17 @@ defmodule GeomextricWeb.CGA3Live do
             x2={fr(50 + axis.x)}
             y2={fr(50 + axis.y)}
             stroke={axis.color}
+            stroke-width="3"
+            stroke-linecap="round"
             marker-end="url(#cga3-axis-arrow)"
           />
           <text
             x={fr(56 + axis.x)}
             y={fr(44 + axis.y)}
             fill={axis.color}
+            font-family="ui-sans-serif, sans-serif"
+            font-size="9"
+            font-weight="700"
             text-anchor="start"
             dominant-baseline="middle"
           >
@@ -2824,6 +2904,40 @@ defmodule GeomextricWeb.CGA3Live do
       export default {
         mounted() {
           this.el.addEventListener("input", event => this.pushEvent("zoom", {value: event.target.value}));
+        }
+      };
+    </script>
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".ExportSvg">
+      export default {
+        mounted() {
+          this.el.addEventListener("click", () => {
+            const svg = document.querySelector("#cga3-scene");
+            if (!svg) return;
+
+            const exported = svg.cloneNode(true);
+            exported.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+            exported.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+            [exported, ...exported.querySelectorAll("*")].forEach(element => {
+              for (const attribute of [...element.attributes]) {
+                if (attribute.name.startsWith("phx-") || attribute.name.startsWith("data-phx-")) {
+                  element.removeAttribute(attribute.name);
+                }
+              }
+            });
+
+            const markup = new XMLSerializer().serializeToString(exported);
+            const file = new Blob(
+              [`<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n`, markup],
+              { type: "image/svg+xml;charset=utf-8" },
+            );
+            const url = URL.createObjectURL(file);
+            const link = document.createElement("a");
+            link.href = url;
+            const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+            link.download = `geomextric-cga3-${timestamp}.svg`;
+            link.click();
+            URL.revokeObjectURL(url);
+          });
         }
       };
     </script>

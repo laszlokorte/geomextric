@@ -19,6 +19,7 @@ defmodule GeomextricWeb.Geometry do
   attr :edges, :boolean, default: true
   attr :vertices, :boolean, default: true
   attr :quad_ellipse, :boolean, default: false
+  attr :arrows, :boolean, default: false
   attr :motor, :map, default: PGA3.new(scalar: 1)
 
   def geometry(assigns) do
@@ -74,6 +75,10 @@ defmodule GeomextricWeb.Geometry do
           <line
             class="line3d"
             stroke={color}
+            stroke-width={if(@arrows, do: "3", else: if(color == "black", do: "1"))}
+            stroke-linecap="round"
+            vector-effect="non-scaling-stroke"
+            marker-end={if(@arrows or color == "black", do: "url(#vector-head)")}
             x1={fr(x1)}
             y1={fr(y1)}
             x2={fr(x2)}
@@ -96,12 +101,11 @@ defmodule GeomextricWeb.Geometry do
       <%= for {color, p, l} when is_binary(l) <- @geo.labels, @labels do %>
         <%= with {screen_x, screen_y, z} <- project(@camera, rot(@rotation, scale_point(p, @scale)) |> PGA3.transform(@motor))  do %>
           <text
-            class="text-label"
             font-size={fr(24 / z)}
             fill={color}
             x={fr(screen_x)}
             y={fr(screen_y)}
-            font-size={6}
+            dy="-2"
             stroke="white"
             stroke-width="1"
             stroke-linejoin="round"
@@ -116,12 +120,11 @@ defmodule GeomextricWeb.Geometry do
             <% end %>
           </text>
           <text
-            class="text-label"
             font-size={fr(24 / z)}
             fill={color}
             x={fr(screen_x)}
             y={fr(screen_y)}
-            font-size={6}
+            dy="-2"
             text-anchor="middle"
             phx-no-format
           >

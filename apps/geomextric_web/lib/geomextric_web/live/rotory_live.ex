@@ -272,20 +272,6 @@ defmodule GeomextricWeb.RotoryLive do
         position: absolute;
         inset: 0;
       }
-      .line3d {
-        vector-effect: non-scaling-stroke;
-        stroke-linecap: round;
-        stroke-linecap: round;
-      }
-
-      line[stroke="black"] {
-        marker-end: url("#vector-head");
-        stroke-width: 1;
-      }
-
-      .text-label {
-        transform: translate(0, -2px);
-      }
 
       .toolbar {
         flex-wrap: wrap-reverse;

@@ -302,6 +302,22 @@ defmodule GeomextricWeb.CGA3LiveTest do
     refute has_element?(view, "#scene-object-gp-all-result")
   end
 
+  test "toggles scene elements independently from the scene overlays", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/cga3")
+
+    assert has_element?(view, "#cga3-show-scene-elements:checked")
+    assert has_element?(view, "#scene-elements[display='inline']")
+
+    render_change(
+      element(view, "#cga3-scene-elements-visibility"),
+      %{"scene_elements" => "off"}
+    )
+
+    refute has_element?(view, "#cga3-show-scene-elements:checked")
+    assert has_element?(view, "#scene-elements[display='none']")
+    assert has_element?(view, "#cga3-ground-grid")
+  end
+
   test "toggles the independent vector-field point cloud", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/cga3")
 

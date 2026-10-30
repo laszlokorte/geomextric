@@ -238,11 +238,6 @@ defmodule GeomextricWeb.TutLive do
 
     ~H"""
     <style rel="stylesheet" :type={GeomextricWeb.ColocatedScopedCSS}>
-      .vectors .line3d {
-        marker-end: url("#vector-head");
-        stroke-width: 3;
-      }
-
       .scenes {
         background: #fff;
         width: 100%;
@@ -272,19 +267,6 @@ defmodule GeomextricWeb.TutLive do
         display: grid;
         position: absolute;
         inset: 0;
-      }
-      .line3d {
-        vector-effect: non-scaling-stroke;
-        stroke-linecap: round;
-        stroke-linecap: round;
-      }
-
-      line[stroke="black"] {
-        marker-end: url("#vector-head");
-        stroke-width: 1;
-      }
-      .text-label {
-        transform: translate(0, -2px);
       }
 
       .toolbar {
@@ -615,24 +597,28 @@ defmodule GeomextricWeb.TutLive do
           <g class="vectors with-arrow">
             <.geometry
               labels={false}
+              arrows={true}
               id="vector"
               camera={@camera}
               geo={Geomextric.Bodies.gen_vector(@x, @y, @z, name: "v")}
             />
             <.geometry
               labels={false}
+              arrows={true}
               id="vector-x"
               camera={@camera}
               geo={Geomextric.Bodies.gen_vector(@x, 0, 0, color: "#c00", name: "v_x")}
             />
             <.geometry
               labels={false}
+              arrows={true}
               id="vector-y"
               camera={@camera}
               geo={Geomextric.Bodies.gen_vector(0, @y, 0, color: "#0c0", name: "v_y")}
             />
             <.geometry
               labels={false}
+              arrows={true}
               id="vector-z"
               camera={@camera}
               geo={Geomextric.Bodies.gen_vector(0, 0, @z, color: "#00c", name: "v_z")}
@@ -727,6 +713,7 @@ defmodule GeomextricWeb.TutLive do
           <g class="vectors">
             <.geometry
               labels={false}
+              arrows={true}
               quad_ellipse={@show_ellipse}
               edges={not @show_ellipse}
               id="vector-2"
@@ -743,6 +730,7 @@ defmodule GeomextricWeb.TutLive do
             />
             <.geometry
               labels={false}
+              arrows={true}
               quad_ellipse={@show_ellipse}
               edges={not @show_ellipse}
               id="vector-x-2"
@@ -759,6 +747,7 @@ defmodule GeomextricWeb.TutLive do
             />
             <.geometry
               labels={false}
+              arrows={true}
               quad_ellipse={@show_ellipse}
               edges={not @show_ellipse}
               id="vector-y-2"
@@ -775,6 +764,7 @@ defmodule GeomextricWeb.TutLive do
             />
             <.geometry
               labels={false}
+              arrows={true}
               quad_ellipse={@show_ellipse}
               edges={not @show_ellipse}
               id="vector-z-2"
@@ -895,6 +885,7 @@ defmodule GeomextricWeb.TutLive do
           <g class="vectors">
             <.geometry
               labels={false}
+              arrows={true}
               id="vector-x-3"
               camera={@camera}
               geo={
